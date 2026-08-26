@@ -1,0 +1,17 @@
+{
+  "name": "telvyn-portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Telvyn DID Portal PROMAX — enterprise DID management control plane",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.11.0",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @telvyn/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  }
+}

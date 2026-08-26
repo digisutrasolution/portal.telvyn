@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telvyn PROMAX Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ================= TELVYN PROMAX DESIGN TOKENS =================
+   Three-mode theming: :root = light, [data-theme=dark] = dark,
+   system mode via prefers-color-scheme with the not([data-theme=light]) guard. */
+:root {
+  /* Brand & typography */
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", "Consolas", ui-monospace, monospace;
+
+  /* Neutral ink scale — light */
+  --bg: #F5F7FA;
+  --surface: #FFFFFF;
+  --surface-2: #EEF1F5;
+  --surface-3: #E3E8EF;
+  --line: #D8DEE6;
+  --line-strong: #AFB9C6;
+  --text: #0E1420;
+  --text-2: #3D4A61;
+  --muted: #5E6B81;
+
+  /* Telvyn Signal accent */
+  --accent: #0E7490;
+  --accent-strong: #155E75;
+  --accent-soft: #E0F2F7;
+  --on-accent: #FFFFFF;
+
+  /* Semantic status — light (AA on surface) */
+  --ok: #15803D;        --ok-soft: #E9F6EE;
+  --warn: #B45309;      --warn-soft: #FCF3E5;
+  --danger: #B91C1C;    --danger-soft: #FBEAEA;
+  --info: #1D4ED8;      --info-soft: #E8EEFC;
+  --frozen: #6D28D9;    --frozen-soft: #F1EBFB;
+  --neutral-status: #5E6B81; --neutral-soft: #EDF0F4;
+
+  /* Geometry */
+  --r-sm: 4px; --r-md: 6px; --r-lg: 8px;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+  --row-compact: 32px; --row-default: 40px; --row-comfortable: 48px;
+
+  /* Elevation (light: subtle shadow + hairline) */
+  --elev-1: 0 1px 2px rgba(14,20,32,.06), 0 0 0 1px var(--line);
+  --elev-2: 0 8px 24px rgba(14,20,32,.14), 0 0 0 1px var(--line);
+  --scrim: rgba(10,14,22,.5);
+
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B0F16; --surface: #111723; --surface-2: #18202F; --surface-3: #1F2A3C;
+    --line: #232D3F; --line-strong: #3A4A66;
+    --text: #E7ECF4; --text-2: #A8B3C5; --muted: #8593A9;
+    --accent: #22D3EE; --accent-strong: #67E8F9; --accent-soft: #10333D; --on-accent: #06181E;
+    --ok: #4ADE80; --ok-soft: #102A1C;
+    --warn: #FBBF24; --warn-soft: #2E2410;
+    --danger: #F87171; --danger-soft: #331416;
+    --info: #93C5FD; --info-soft: #12233D;
+    --frozen: #C4B5FD; --frozen-soft: #241C3C;
+    --neutral-status: #8593A9; --neutral-soft: #1B2432;
+    --elev-1: 0 0 0 1px var(--line);
+    --elev-2: 0 16px 40px rgba(0,0,0,.5), 0 0 0 1px var(--line-strong);
+    --scrim: rgba(2,4,8,.66);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B0F16; --surface: #111723; --surface-2: #18202F; --surface-3: #1F2A3C;
+  --line: #232D3F; --line-strong: #3A4A66;
+  --text: #E7ECF4; --text-2: #A8B3C5; --muted: #8593A9;
+  --accent: #22D3EE; --accent-strong: #67E8F9; --accent-soft: #10333D; --on-accent: #06181E;
+  --ok: #4ADE80; --ok-soft: #102A1C;
+  --warn: #FBBF24; --warn-soft: #2E2410;
+  --danger: #F87171; --danger-soft: #331416;
+  --info: #93C5FD; --info-soft: #12233D;
+  --frozen: #C4B5FD; --frozen-soft: #241C3C;
+  --neutral-status: #8593A9; --neutral-soft: #1B2432;
+  --elev-1: 0 0 0 1px var(--line);
+  --elev-2: 0 16px 40px rgba(0,0,0,.5), 0 0 0 1px var(--line-strong);
+  --scrim: rgba(2,4,8,.66);
+  color-scheme: dark;
+}
+
+/* ================= BASE ================= */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: var(--font-ui); font-size: 14px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased; padding: var(--sp-6) var(--sp-5) 96px;
+}
+main { max-width: 1080px; margin: 0 auto; }
+h1,h2,h3 { font-family: var(--font-display); line-height: 1.2; margin: 0; }
+h1 { font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
+h2 { font-size: 19px; font-weight: 600; margin: var(--sp-7) 0 var(--sp-4); padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+h3 { font-size: 14px; font-weight: 600; color: var(--text-2); margin: var(--sp-5) 0 var(--sp-3); text-transform: uppercase; letter-spacing: .06em; }
+p { margin: 0 0 var(--sp-3); color: var(--text-2); max-width: 72ch; }
+.mono, code, .num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+a { color: var(--accent); }
+:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--r-sm); }
+
+/* ================= HEADER ================= */
+.masthead { display:flex; align-items:flex-end; justify-content:space-between; gap: var(--sp-4); flex-wrap: wrap; margin-bottom: var(--sp-2); }
+.brand { display:flex; align-items:center; gap: 12px; }
+.brand-mark { width: 40px; height: 40px; border-radius: var(--r-md); background: var(--text); color: var(--bg); display:grid; place-items:center; font-family: var(--font-display); font-weight: 700; font-size: 20px; }
+.brand small { display:block; color: var(--muted); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-family: var(--font-ui); }
+.theme-switch { display:flex; border:1px solid var(--line); border-radius: var(--r-md); overflow:hidden; background: var(--surface); }
+.theme-switch button { border:0; background:transparent; color: var(--text-2); font: 500 12px var(--font-ui); padding: 7px 14px; cursor:pointer; min-height: 32px; }
+.theme-switch button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight:600; }
+
+/* ================= SWATCHES ================= */
+.grid { display:grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fill,minmax(150px,1fr)); }
+.swatch { border-radius: var(--r-md); box-shadow: var(--elev-1); background: var(--surface); overflow:hidden; }
+.swatch .chip { height: 52px; }
+.swatch .meta { padding: 8px 10px; font-size: 12px; }
+.swatch .meta b { display:block; font-weight:600; }
+.swatch .meta code { color: var(--muted); font-size: 11px; }
+
+/* ================= TYPE SPECIMEN ================= */
+.spec { display:grid; gap: var(--sp-2); }
+.spec-row { display:flex; align-items: baseline; gap: var(--sp-4); border-bottom: 1px dashed var(--line); padding-bottom: var(--sp-2); }
+.spec-row code { color: var(--muted); font-size: 11px; min-width: 200px; }
+
+/* ================= BUTTONS ================= */
+.btn { font: 500 13px/1 var(--font-ui); min-height: 32px; padding: 0 14px; border-radius: var(--r-md);
+  border: 1px solid transparent; cursor: pointer; display:inline-flex; align-items:center; gap: 8px; }
+.btn:disabled { opacity:.45; cursor:not-allowed; }
+.btn-primary { background: var(--accent); color: var(--on-accent); }
+.btn-primary:hover:not(:disabled) { background: var(--accent-strong); }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--line-strong); }
+.btn-secondary:hover:not(:disabled) { background: var(--surface-2); }
+.btn-ghost { background: transparent; color: var(--text-2); }
+.btn-ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.btn-danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+.btn-danger:hover:not(:disabled) { background: var(--danger-soft); }
+.btn-row { display:flex; gap: var(--sp-3); flex-wrap: wrap; align-items:center; }
+
+/* ================= INPUTS ================= */
+.field { display:grid; gap: 6px; max-width: 320px; }
+.field label { font-size: 12px; font-weight: 600; color: var(--text-2); }
+.field .help { font-size: 12px; color: var(--muted); }
+.field .err { font-size: 12px; color: var(--danger); font-weight: 500; }
+.input, select.input {
+  font: 400 13px var(--font-ui); color: var(--text); background: var(--surface);
+  border: 1px solid var(--line-strong); border-radius: var(--r-md);
+  min-height: 34px; padding: 0 10px; width: 100%;
+}
+.input::placeholder { color: var(--muted); }
+.input:focus-visible { border-color: var(--accent); box-shadow: var(--focus-ring); }
+.input[aria-invalid="true"] { border-color: var(--danger); }
+.input-mono { font-family: var(--font-data); }
+.form-grid { display:grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); }
+
+/* ================= STATUS ================= */
+.status { display:inline-flex; align-items:center; gap: 7px; font: 500 12px var(--font-ui); }
+.status .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.st-ok { color: var(--ok); } .st-warn { color: var(--warn); } .st-danger { color: var(--danger); }
+.st-info { color: var(--info); } .st-frozen { color: var(--frozen); } .st-neutral { color: var(--neutral-status); }
+
+.badge { display:inline-flex; align-items:center; gap:6px; font: 600 11px/1 var(--font-ui); letter-spacing:.04em;
+  padding: 4px 8px; border-radius: var(--r-sm); border: 1px solid transparent; text-transform: uppercase; }
+.bd-ok { color: var(--ok); background: var(--ok-soft); }
+.bd-warn { color: var(--warn); background: var(--warn-soft); }
+.bd-danger { color: var(--danger); background: var(--danger-soft); }
+.bd-info { color: var(--info); background: var(--info-soft); }
+.bd-frozen { color: var(--frozen); background: var(--frozen-soft); }
+.bd-neutral { color: var(--neutral-status); background: var(--neutral-soft); }
+
+/* Health rollup */
+.health { display:flex; gap: var(--sp-3); flex-wrap:wrap; }
+.health-tile { background: var(--surface); box-shadow: var(--elev-1); border-radius: var(--r-md);
+  padding: 10px 14px; display:flex; align-items:center; gap: 10px; min-width: 190px; }
+.health-tile .num { font-size: 18px; font-weight: 600; }
+.health-tile .lbl { font-size: 12px; color: var(--muted); }
+.pulse { width:10px;height:10px;border-radius:50%; position:relative; }
+.pulse::after { content:""; position:absolute; inset:-4px; border-radius:50%; border:2px solid currentColor; opacity:.3; }
+
+/* ================= TABLE ================= */
+.table-wrap { background: var(--surface); box-shadow: var(--elev-1); border-radius: var(--r-lg); overflow-x:auto; }
+.table-toolbar { display:flex; gap: var(--sp-3); align-items:center; padding: 10px 12px; border-bottom: 1px solid var(--line); flex-wrap:wrap; }
+.chipbar { display:flex; gap: 8px; flex-wrap:wrap; }
+.chip-filter { font: 500 12px var(--font-ui); color: var(--text-2); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.chip-filter[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { text-align: left; font: 600 11px var(--font-ui); letter-spacing:.06em; text-transform: uppercase;
+  color: var(--muted); padding: 0 12px; height: 34px; border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
+td { padding: 0 12px; height: var(--row-default); border-bottom: 1px solid var(--line); white-space: nowrap; }
+tr:hover td { background: var(--surface-2); }
+td.num, th.num { text-align: right; }
+.rowact { visibility: hidden; }
+tr:hover .rowact, .rowact:focus-visible { visibility: visible; }
+
+/* ================= CARDS / ALERTS ================= */
+.card { background: var(--surface); box-shadow: var(--elev-1); border-radius: var(--r-lg); padding: var(--sp-4); }
+.alert { display:flex; gap: 10px; padding: 10px 14px; border-radius: var(--r-md); font-size: 13px;
+  border: 1px solid; align-items: flex-start; margin-bottom: var(--sp-3); max-width: 620px; }
+.alert b { font-weight: 600; }
+.al-warn { color: var(--warn); background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.al-danger { color: var(--danger); background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.al-info { color: var(--info); background: var(--info-soft); border-color: color-mix(in srgb, var(--info) 35%, transparent); }
+.alert .body { color: var(--text-2); }
+
+/* Toast */
+.toast { display:inline-flex; gap:10px; align-items:center; background: var(--surface); color: var(--text);
+  box-shadow: var(--elev-2); border-radius: var(--r-md); padding: 10px 14px; font-size: 13px; }
+.toast .bar { width: 3px; align-self: stretch; border-radius: 2px; background: var(--ok); }
+
+/* Tabs */
+.tabs { display:flex; gap: 2px; border-bottom: 1px solid var(--line); }
+.tab { font: 500 13px var(--font-ui); color: var(--muted); background:none; border:0; padding: 9px 14px;
+  cursor:pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; min-height: 36px; }
+.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.tab:hover { color: var(--text); }
+
+/* Drawer / modal mock */
+.mock-stage { position: relative; height: 300px; border-radius: var(--r-lg); overflow: hidden;
+  background: var(--bg); box-shadow: var(--elev-1); }
+.mock-scrim { position:absolute; inset:0; background: var(--scrim); }
+.mock-drawer { position:absolute; top:0; right:0; bottom:0; width: 55%; min-width: 260px; background: var(--surface);
+  box-shadow: var(--elev-2); padding: var(--sp-4); display:flex; flex-direction:column; gap: var(--sp-3); }
+.mock-modal { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width: min(400px, 86%);
+  background: var(--surface); box-shadow: var(--elev-2); border-radius: var(--r-lg); padding: var(--sp-4); }
+.kv { display:flex; justify-content:space-between; gap: var(--sp-4); font-size: 13px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.kv b { font-weight: 500; color: var(--muted); }
+
+/* Command palette mock */
+.palette { max-width: 520px; margin: 0 auto; background: var(--surface); box-shadow: var(--elev-2); border-radius: var(--r-lg); overflow:hidden; }
+.palette-input { display:flex; align-items:center; gap:10px; padding: 12px 14px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.palette-input input { border:0; outline:0; background:transparent; color: var(--text); font: 400 14px var(--font-ui); flex:1; }
+.palette li { list-style:none; display:flex; justify-content:space-between; align-items:center; padding: 9px 14px; font-size: 13px; }
+.palette li[aria-selected="true"] { background: var(--accent-soft); }
+.palette ul { margin:0; padding: 6px 0; }
+.kbd { font: 500 11px var(--font-data); color: var(--muted); border: 1px solid var(--line-strong);
+  border-bottom-width: 2px; border-radius: 4px; padding: 1px 6px; background: var(--surface-2); }
+
+/* Nav mock */
+.nav-mock { display:flex; border-radius: var(--r-lg); overflow:hidden; box-shadow: var(--elev-1); min-height: 240px; background: var(--surface); }
+.rail { width: 200px; background: var(--surface-2); border-right: 1px solid var(--line); padding: var(--sp-3) var(--sp-2); }
+.rail a { display:flex; align-items:center; gap: 10px; padding: 8px 10px; border-radius: var(--r-md);
+  color: var(--text-2); text-decoration:none; font: 500 13px var(--font-ui); margin-bottom: 2px; }
+.rail a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.rail a:hover { background: var(--surface-3); }
+.rail .cnt { margin-left:auto; font: 600 11px var(--font-data); background: var(--warn-soft); color: var(--warn); border-radius: 999px; padding: 1px 7px; }
+.nav-body { flex:1; padding: var(--sp-4); }
+.crumbs { font-size: 12px; color: var(--muted); margin-bottom: var(--sp-2); }
+.crumbs b { color: var(--text); font-weight: 600; }
+
+/* Charts */
+.chart-card { background: var(--surface); box-shadow: var(--elev-1); border-radius: var(--r-lg); padding: var(--sp-4); }
+.chart-card h4 { margin:0 0 4px; font: 600 13px var(--font-ui); }
+.chart-card .sub { font-size: 12px; color: var(--muted); margin-bottom: var(--sp-3); }
+.legend { display:flex; gap: var(--sp-4); font-size: 12px; color: var(--text-2); margin-top: var(--sp-2); }
+.legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; }
+
+.note { font-size: 12px; color: var(--muted); }
+.two-col { display:grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit,minmax(320px,1fr)); }
+.skeleton { border-radius: var(--r-sm); background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: sk 1.4s infinite linear; }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+@keyframes sk { to { background-position: -200% 0; } }
+</style>
+</head>
+<body>
+<main>
+  <header class="masthead">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">T</div>
+      <div>
+        <h1>Telvyn PROMAX Design System</h1>
+        <small>Carrier NOC · Fintech control plane · Enterprise SaaS — v0.1 (proposed)</small>
+      </div>
+    </div>
+    <div class="theme-switch" role="group" aria-label="Theme mode">
+      <button aria-pressed="false" onclick="setTheme('light',this)">Light</button>
+      <button aria-pressed="false" onclick="setTheme('dark',this)">Dark</button>
+      <button aria-pressed="true"  onclick="setTheme('system',this)">System</button>
+    </div>
+  </header>
+  <p>Reference sheet for the centralized design system. Every value here is a token —
+  components never hardcode color, spacing, or type. WCAG 2.2 AA verified per theme.</p>
+
+  <h2>01 · Color — neutral ink scale + Telvyn Signal accent</h2>
+  <div class="grid">
+    <div class="swatch"><div class="chip" style="background:var(--bg)"></div><div class="meta"><b>--bg</b><code>app canvas</code></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--surface)"></div><div class="meta"><b>--surface</b><code>cards, tables</code></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--surface-2)"></div><div class="meta"><b>--surface-2</b><code>hover, wells</code></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--line)"></div><div class="meta"><b>--line</b><code>hairlines</code></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--text)"></div><div class="meta"><b>--text</b><code>primary ≥13:1</code></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--text-2)"></div><div class="meta"><b>--text-2</b><code>secondary ≥7:1</code></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--muted)"></div><div class="meta"><b>--muted</b><code>labels ≥4.5:1</code></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--accent)"></div><div class="meta"><b>--accent</b><code>Telvyn Signal</code></div></div>
+  </div>
+
+  <h3>Semantic status ramp (never color-only — always dot/icon + label)</h3>
+  <div class="btn-row">
+    <span class="status st-ok"><span class="dot"></span>Active</span>
+    <span class="status st-info"><span class="dot"></span>Pending</span>
+    <span class="status st-warn"><span class="dot"></span>Degraded</span>
+    <span class="status st-danger"><span class="dot"></span>Failed</span>
+    <span class="status st-frozen"><span class="dot"></span>Frozen</span>
+    <span class="status st-neutral"><span class="dot"></span>Released</span>
+  </div>
+
+  <h2>02 · Typography — Space Grotesk / IBM Plex Sans / IBM Plex Mono</h2>
+  <div class="spec">
+    <div class="spec-row"><code>display · Space Grotesk 700 · 28px</code><span style="font-family:var(--font-display);font-size:28px;font-weight:700">Number operations, engineered.</span></div>
+    <div class="spec-row"><code>h2 · Space Grotesk 600 · 19px</code><span style="font-family:var(--font-display);font-size:19px;font-weight:600">DID Inventory — US East</span></div>
+    <div class="spec-row"><code>body · IBM Plex Sans 400 · 14px</code><span>Routing changes apply within seconds and are audited under your operator identity.</span></div>
+    <div class="spec-row"><code>label · IBM Plex Sans 600 · 12px</code><span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Monthly recurring</span></div>
+    <div class="spec-row"><code>data · IBM Plex Mono · tabular</code><span class="mono">+1 415 555 0142 &nbsp; $1,284.50 &nbsp; 00:04:31</span></div>
+  </div>
+  <p class="note">Scale: 12 · 13 · 14 · 16 · 19 · 24 · 28. Body min 14px (16px on reading surfaces), 12px for micro-labels only. All numerics render tabular.</p>
+
+  <h2>03 · Buttons, inputs &amp; forms</h2>
+  <div class="btn-row" style="margin-bottom:var(--sp-4)">
+    <button class="btn btn-primary">Assign DID</button>
+    <button class="btn btn-secondary">Export CSV</button>
+    <button class="btn btn-ghost">View ledger</button>
+    <button class="btn btn-danger">Release number</button>
+    <button class="btn btn-primary" disabled>Processing…</button>
+  </div>
+  <div class="form-grid">
+    <div class="field">
+      <label for="f1">Forwarding destination</label>
+      <input class="input input-mono" id="f1" placeholder="+1 … or sip:…" value="+14155550188">
+      <span class="help">E.164 or SIP URI. Change is audited.</span>
+    </div>
+    <div class="field">
+      <label for="f2">Monthly spend limit</label>
+      <input class="input input-mono" id="f2" aria-invalid="true" value="$25,000.00">
+      <span class="err">Exceeds account maximum ($10,000.00). Enter a lower limit or request an increase.</span>
+    </div>
+    <div class="field">
+      <label for="f3">Carrier</label>
+      <select class="input" id="f3"><option>— Select carrier —</option><option selected>Carrier A (primary)</option><option>Carrier B</option></select>
+      <span class="help">Determines inventory source and porting path.</span>
+    </div>
+  </div>
+
+  <h2>04 · Health indicators — operational cockpit language</h2>
+  <div class="health">
+    <div class="health-tile"><span class="pulse" style="background:var(--ok);color:var(--ok)"></span><div><div class="num">99.99%</div><div class="lbl">API availability · 24h</div></div></div>
+    <div class="health-tile"><span class="pulse" style="background:var(--warn);color:var(--warn)"></span><div><div class="num">3</div><div class="lbl">Ports needing action</div></div></div>
+    <div class="health-tile"><span class="pulse" style="background:var(--danger);color:var(--danger)"></span><div><div class="num">1</div><div class="lbl">Fraud limit tripped</div></div></div>
+    <div class="health-tile"><span class="pulse" style="background:var(--ok);color:var(--ok)"></span><div><div class="num">$12,480.00</div><div class="lbl">Ledger = cache ✓ 12:04:31</div></div></div>
+  </div>
+
+  <h2>05 · Dense data table — the primary NOC surface</h2>
+  <div class="table-wrap">
+    <div class="table-toolbar">
+      <input class="input" style="max-width:220px" placeholder="Search E.164, label, customer…" aria-label="Search DIDs">
+      <div class="chipbar">
+        <button class="chip-filter" aria-pressed="true">All · 1,284</button>
+        <button class="chip-filter" aria-pressed="false">Active · 1,190</button>
+        <button class="chip-filter" aria-pressed="false">Pending · 61</button>
+        <button class="chip-filter" aria-pressed="false">Failed · 8</button>
+      </div>
+      <span style="margin-left:auto" class="note">as of <span class="mono">12:04:31 UTC</span></span>
+    </div>
+    <table>
+      <thead><tr>
+        <th aria-sort="ascending">Number</th><th>Label</th><th>Status</th><th>Routing</th><th class="num">MRC</th><th class="num">30d calls</th><th></th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="mono">+1 415 555 0142</td><td>SF sales line</td><td><span class="status st-ok"><span class="dot"></span>Active</span></td><td class="mono">+1 415 555 0188</td><td class="num mono">$1.50</td><td class="num mono">4,281</td><td><button class="btn btn-ghost rowact">Edit</button></td></tr>
+        <tr><td class="mono">+1 212 555 0119</td><td>NYC support</td><td><span class="status st-ok"><span class="dot"></span>Active</span></td><td class="mono">sip:desk@example.com</td><td class="num mono">$1.50</td><td class="num mono">1,032</td><td><button class="btn btn-ghost rowact">Edit</button></td></tr>
+        <tr><td class="mono">+44 20 7183 8750</td><td>London office</td><td><span class="status st-info"><span class="dot"></span>Porting in</span></td><td class="mono">—</td><td class="num mono">$2.10</td><td class="num mono">—</td><td><button class="btn btn-ghost rowact">Track</button></td></tr>
+        <tr><td class="mono">+971 4 555 0100</td><td>Dubai hotline</td><td><span class="status st-danger"><span class="dot"></span>Failed</span></td><td class="mono">+971 4 555 0101</td><td class="num mono">$4.75</td><td class="num mono">212</td><td><button class="btn btn-ghost rowact">Retry</button></td></tr>
+        <tr><td class="mono">+1 646 555 0177</td><td>—</td><td><span class="status st-neutral"><span class="dot"></span>Unassigned</span></td><td class="mono">—</td><td class="num mono">$1.50</td><td class="num mono">0</td><td><button class="btn btn-ghost rowact">Assign</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note" style="margin-top:var(--sp-2)">Row heights: compact 32 / default 40 / comfortable 48 px (user-selectable). Headers sticky &amp; sortable; wide tables scroll in-container, never the page.</p>
+
+  <h2>06 · Alerts &amp; toast</h2>
+  <div class="alert al-danger" role="alert"><div><b>Fraud limit tripped.</b> <span class="body">Outbound spend on +971 4 555 0100 hit $500/hr. Routing paused — review and unlock in Fraud Center.</span></div></div>
+  <div class="alert al-warn"><div><b>Port SLA at risk.</b> <span class="body">Carrier response for +44 20 7183 8750 overdue by 6h.</span></div></div>
+  <div class="alert al-info"><div><b>Maintenance window.</b> <span class="body">Carrier A API maintenance Sat 02:00–02:30 UTC. Orders will queue.</span></div></div>
+  <div class="toast"><span class="bar"></span><span><b>Routing updated.</b> +1 415 555 0142 → +1 415 555 0188 · <a href="#">Undo</a></span></div>
+
+  <h2>07 · Tabs, navigation &amp; command palette</h2>
+  <div class="tabs" role="tablist" style="margin-bottom:var(--sp-4)">
+    <button class="tab" role="tab" aria-selected="true">Overview</button>
+    <button class="tab" role="tab" aria-selected="false">Routing</button>
+    <button class="tab" role="tab" aria-selected="false">Ledger</button>
+    <button class="tab" role="tab" aria-selected="false">History</button>
+  </div>
+  <div class="two-col">
+    <div class="nav-mock">
+      <nav class="rail" aria-label="Primary">
+        <a href="#"><span>◧</span>Operations</a>
+        <a href="#" aria-current="page"><span>#</span>Numbers</a>
+        <a href="#"><span>⇄</span>Porting<span class="cnt">3</span></a>
+        <a href="#"><span>$</span>Billing</a>
+        <a href="#"><span>▤</span>CDRs</a>
+        <a href="#"><span>⚙</span>Admin</a>
+      </nav>
+      <div class="nav-body">
+        <div class="crumbs">Numbers / <b>+1 415 555 0142</b></div>
+        <div class="skeleton" style="height:14px;width:60%;margin-bottom:10px"></div>
+        <div class="skeleton" style="height:14px;width:82%;margin-bottom:10px"></div>
+        <div class="skeleton" style="height:14px;width:44%"></div>
+        <p class="note" style="margin-top:var(--sp-4)">Rail: ≤7 top-level items, icon+label always, queue badges, current page highlighted. Skeletons mirror real layout.</p>
+      </div>
+    </div>
+    <div>
+      <div class="palette" role="dialog" aria-label="Command palette">
+        <div class="palette-input">⌕<input placeholder="Search numbers, customers, actions…" value="+1 415"><span class="kbd">esc</span></div>
+        <ul>
+          <li aria-selected="true"><span class="mono">+1 415 555 0142</span><span class="kbd">↵ open</span></li>
+          <li><span class="mono">+1 415 555 0199</span><span class="note">Unassigned</span></li>
+          <li><span>Action: Order numbers in 415…</span><span class="kbd">→</span></li>
+        </ul>
+      </div>
+      <p class="note" style="margin-top:var(--sp-3);text-align:center"><span class="kbd">⌘K</span> anywhere. E.164-aware matching (with/without +, spaces).</p>
+    </div>
+  </div>
+
+  <h2>08 · Drawer &amp; modal</h2>
+  <div class="two-col">
+    <div class="mock-stage" aria-label="Drawer example">
+      <div class="mock-scrim"></div>
+      <div class="mock-drawer">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <b style="font-family:var(--font-display)">+1 415 555 0142</b>
+          <button class="btn btn-ghost" aria-label="Close drawer">✕</button>
+        </div>
+        <div class="kv"><b>Status</b><span class="status st-ok"><span class="dot"></span>Active</span></div>
+        <div class="kv"><b>Customer</b><span>Acme Communications</span></div>
+        <div class="kv"><b>Routing</b><span class="mono">+1 415 555 0188</span></div>
+        <div class="kv"><b>MRC</b><span class="mono">$1.50</span></div>
+        <div class="btn-row" style="margin-top:auto"><button class="btn btn-primary">Edit routing</button><button class="btn btn-ghost">Full page ↗</button></div>
+      </div>
+    </div>
+    <div class="mock-stage" aria-label="Modal example">
+      <div class="mock-scrim"></div>
+      <div class="mock-modal">
+        <b style="font-family:var(--font-display)">Release +1 646 555 0177?</b>
+        <p style="margin:8px 0 4px">This returns the number to the available pool.</p>
+        <p class="mono" style="font-size:13px;margin-bottom:12px">MRC $1.50 stops · balance $240.50 → unchanged</p>
+        <div class="btn-row" style="justify-content:flex-end"><button class="btn btn-ghost">Cancel</button><button class="btn btn-danger">Release number</button></div>
+      </div>
+    </div>
+  </div>
+  <p class="note">Drawers preserve list context for detail/edit (deep-linkable). Modals are for confirmation only — always consequence-explicit for money/provisioning, focus-trapped, ESC-dismissable.</p>
+
+  <h2>09 · Charts — answers, not decoration</h2>
+  <div class="two-col">
+    <div class="chart-card">
+      <h4>Inbound minutes · 14d</h4>
+      <div class="sub">All numbers · as of <span class="mono">12:04 UTC</span></div>
+      <svg viewBox="0 0 320 96" width="100%" height="96" role="img" aria-label="Inbound minutes trend, rising from 3,100 to 4,800 over 14 days">
+        <g stroke="var(--line)" stroke-width="1"><line x1="0" y1="72" x2="320" y2="72"/><line x1="0" y1="40" x2="320" y2="40"/><line x1="0" y1="8" x2="320" y2="8"/></g>
+        <polyline fill="none" stroke="var(--accent)" stroke-width="2" points="0,66 24,60 48,63 72,52 96,55 120,44 144,48 168,38 192,42 216,30 240,34 264,22 288,26 320,14"/>
+        <circle cx="320" cy="14" r="3.5" fill="var(--accent)"/>
+      </svg>
+      <div class="legend"><span><i style="background:var(--accent)"></i>Minutes</span><span class="mono" style="margin-left:auto">4,800 today</span></div>
+    </div>
+    <div class="chart-card">
+      <h4>Spend by destination · 30d</h4>
+      <div class="sub">Top 4 · direct labels, no pie</div>
+      <svg viewBox="0 0 320 96" width="100%" height="96" role="img" aria-label="Bar chart: US $6,210; UK $2,890; UAE $1,940; Other $1,440">
+        <g font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--text-2)">
+          <rect x="0" y="6"  width="200" height="14" fill="var(--accent)"/><text x="206" y="17">US $6,210</text>
+          <rect x="0" y="28" width="93"  height="14" fill="var(--info)"/><text x="99" y="39">UK $2,890</text>
+          <rect x="0" y="50" width="62"  height="14" fill="var(--frozen)"/><text x="68" y="61">UAE $1,940</text>
+          <rect x="0" y="72" width="46"  height="14" fill="var(--neutral-status)"/><text x="52" y="83">Other $1,440</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <h2>10 · Elevation, radius &amp; density rules</h2>
+  <div class="two-col">
+    <div class="card">
+      <b>Elevation</b>
+      <p class="note" style="margin-top:6px">L0 flat (page) · L1 <code>--elev-1</code> (cards, tables, popovers) · L2 <code>--elev-2</code> (drawers, modals, palette, toasts). Dark mode elevates by <em>surface lightening + hairline</em>, not heavy shadows. Z-scale: 0 / 10 / 40 (drawer) / 50 (modal) / 100 (toast).</p>
+    </div>
+    <div class="card">
+      <b>Radius &amp; borders</b>
+      <p class="note" style="margin-top:6px">4px badges/chips-sm · 6px controls · 8px containers · 999px only filter chips + status dots. 1px hairlines carry structure; no huge cards, no gradients, no glass. Focus: 2px accent ring, 2px offset, both themes (WCAG 2.2 focus-appearance). Targets ≥24×24px CSS (2.5.8), primary controls ≥32px height.</p>
+    </div>
+  </div>
+</main>
+<script>
+function setTheme(mode, btn){
+  const root = document.documentElement;
+  if (mode === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', mode);
+  document.querySelectorAll('.theme-switch button').forEach(b=>b.setAttribute('aria-pressed', b===btn ? 'true':'false'));
+}
+</script>
+</body>
+</html>
