@@ -4,9 +4,10 @@
  * privilege escalation, unauthorized API access, and client-supplied tenant
  * ids being ignored. Requires the seed to have run (system roles present).
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import * as argon2 from "argon2";
+import Redis from "ioredis";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { PrismaClient } from "@prisma/client";
 
@@ -20,10 +21,16 @@ import { createApp } from "../src/main";
 import { ARGON2_OPTIONS } from "../src/auth/account-flows.service";
 
 const prisma = new PrismaClient();
+const redis = new Redis(process.env.REDIS_URL!);
 let app: NestExpressApplication;
 let http: ReturnType<NestExpressApplication["getHttpServer"]>;
 const PASSWORD = "correct-horse-battery-staple-9";
 const TRANSPORT = { "x-token-transport": "body" } as const;
+
+async function flushRateLimits(): Promise<void> {
+  const keys = await redis.keys("rl:*");
+  if (keys.length) await redis.del(keys);
+}
 
 async function systemRole(key: string): Promise<string> {
   return (await prisma.role.findFirstOrThrow({ where: { tenantId: null, key } })).id;
@@ -35,7 +42,7 @@ async function provision(tag: string, roleKey: string): Promise<{ token: string;
   const user = await prisma.user.create({
     data: { email, passwordHash: await argon2.hash(PASSWORD, ARGON2_OPTIONS), status: "ACTIVE" },
   });
-  const tenant = await prisma.tenant.create({ data: { slug: `${tag}-${user.id.slice(0, 8)}`, name: tag, type: "CUSTOMER" } });
+  const tenant = await prisma.tenant.create({ data: { slug: `${tag}-${user.id}`, name: tag, type: "CUSTOMER" } });
   const membership = await prisma.membership.create({ data: { userId: user.id, tenantId: tenant.id, status: "ACTIVE" } });
   await prisma.membershipRole.create({ data: { membershipId: membership.id, roleId: await systemRole(roleKey) } });
   await prisma.user.update({ where: { id: user.id }, data: { tenantId: tenant.id } });
@@ -50,10 +57,13 @@ beforeAll(async () => {
   http = app.getHttpServer();
 });
 
+beforeEach(flushRateLimits);
+
 afterAll(async () => {
   await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
   await prisma.tenant.deleteMany({ where: { name: { in: ["alpha", "beta", "noperms"] } } });
   await prisma.$disconnect();
+  await redis.quit();
   await app.close();
 });
 
@@ -138,7 +148,7 @@ describe("privilege escalation", () => {
   it("a member with no roles is denied every guarded route (403)", async () => {
     const email = `noperms.${Date.now()}@telvyn.test`;
     const user = await prisma.user.create({ data: { email, passwordHash: await argon2.hash(PASSWORD, ARGON2_OPTIONS), status: "ACTIVE" } });
-    const tenant = await prisma.tenant.create({ data: { slug: `noperms-${user.id.slice(0, 8)}`, name: "noperms", type: "CUSTOMER" } });
+    const tenant = await prisma.tenant.create({ data: { slug: `noperms-${user.id}`, name: "noperms", type: "CUSTOMER" } });
     await prisma.membership.create({ data: { userId: user.id, tenantId: tenant.id, status: "ACTIVE" } });
     await prisma.user.update({ where: { id: user.id }, data: { tenantId: tenant.id } });
     const login = await request(http).post("/v1/auth/login").set(TRANSPORT).send({ email, password: PASSWORD });

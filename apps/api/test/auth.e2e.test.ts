@@ -5,10 +5,11 @@
  * revocation & device list, lockout, password reset, email verification,
  * login history, security events.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { authenticator } from "otplib";
 import * as argon2 from "argon2";
+import Redis from "ioredis";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { PrismaClient } from "@prisma/client";
 
@@ -23,8 +24,15 @@ import { createApp } from "../src/main";
 import { ARGON2_OPTIONS } from "../src/auth/account-flows.service";
 
 const prisma = new PrismaClient();
+const redis = new Redis(process.env.REDIS_URL!);
 let app: NestExpressApplication;
 let http: ReturnType<NestExpressApplication["getHttpServer"]>;
+
+/** Clear rate-limit buckets so one test's login volume can't throttle the next. */
+async function flushRateLimits(): Promise<void> {
+  const keys = await redis.keys("rl:*");
+  if (keys.length) await redis.del(keys);
+}
 
 const EMAIL = `op.${Date.now()}@telvyn.test`;
 const PASSWORD = "correct-horse-battery-staple-9";
@@ -43,9 +51,12 @@ beforeAll(async () => {
   await createUser(EMAIL, PASSWORD);
 });
 
+beforeEach(flushRateLimits);
+
 afterAll(async () => {
   await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
   await prisma.$disconnect();
+  await redis.quit();
   await app.close();
 });
 

@@ -30,8 +30,16 @@ export class ProblemFilter implements ExceptionFilter {
         title = body;
       } else if (typeof body === "object" && body !== null) {
         const b = body as Record<string, unknown>;
-        title = typeof b.error === "string" ? b.error : (typeof b.message === "string" ? b.message : title);
-        detail = Array.isArray(b.message) ? b.message.join("; ") : typeof b.message === "string" && b.message !== title ? b.message : undefined;
+        // NestJS shape: { statusCode, message, error }. The meaningful text is
+        // `message`; `error` is only the generic HTTP status name. Prefer message.
+        if (typeof b.message === "string") {
+          title = b.message;
+        } else if (Array.isArray(b.message)) {
+          title = typeof b.error === "string" ? b.error : title;
+          detail = b.message.join("; ");
+        } else if (typeof b.error === "string") {
+          title = b.error;
+        }
       }
     } else {
       this.logger.error(exception instanceof Error ? exception.stack ?? exception.message : String(exception));

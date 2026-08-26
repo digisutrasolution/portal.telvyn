@@ -72,5 +72,5 @@ npx pnpm@9 --filter @telvyn/api test                          # unit + auth + au
 Enable RLS defense-in-depth in production (after `prisma migrate deploy`), run as a NOBYPASSRLS role:
 
 ```bash
-psql "$DATABASE_URL" -f apps/api/prisma/migrations/rls/enable-rls.sql
+psql "$DATABASE_URL" -f apps/api/prisma/rls/enable-rls.sql
 ```

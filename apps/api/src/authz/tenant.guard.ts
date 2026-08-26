@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from "@
 import { PrismaService } from "@/infra/prisma.service";
 import type { AuthedRequest } from "@/auth/jwt-auth.guard";
 import { expandGrants } from "./authorization";
-import { runWithTenantContext, type TenantContext } from "./tenant-context";
+import { setTenantContext, type TenantContext } from "./tenant-context";
 
 /**
  * Resolves the server-derived tenant context from the authenticated session's
@@ -49,7 +49,9 @@ export class TenantGuard implements CanActivate {
     };
     req.tenantContext = ctx;
 
-    // Continue the request inside the ALS context (scoped Prisma reads it).
-    return runWithTenantContext(ctx, () => true);
+    // Fill the request store (seeded by TenantContextMiddleware) so the scoped
+    // Prisma client sees the context in the route handler.
+    setTenantContext(ctx);
+    return true;
   }
 }

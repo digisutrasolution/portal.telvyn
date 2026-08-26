@@ -146,7 +146,7 @@ Two enforced layers, tenant id always server-derived:
    every op on a tenant-owned model (`Membership`/`Role`/`AuditLog`) through
    `applyTenantScope`, injecting the context tenantId and **throwing on an
    unscoped access** (deny-by-default). Services use `prisma.scoped.*`.
-2. **Database layer (defense-in-depth)**: `prisma/migrations/rls/enable-rls.sql`
+2. **Database layer (defense-in-depth)**: `prisma/rls/enable-rls.sql`
    enables RLS `FORCE` with a `current_setting('app.tenant_id')` policy; the API
    runs as a NOBYPASSRLS role in prod (enabled at deploy — Phase 20).
 
