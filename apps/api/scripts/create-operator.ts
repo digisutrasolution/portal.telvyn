@@ -9,7 +9,10 @@ import * as argon2 from "argon2";
 import { ARGON2_OPTIONS } from "../src/auth/account-flows.service";
 
 async function main(): Promise<void> {
-  const [email, password, ...nameParts] = process.argv.slice(2);
+  // Some pnpm versions forward the `--` separator as a literal arg — drop it.
+  const argv = process.argv.slice(2);
+  if (argv[0] === "--") argv.shift();
+  const [email, password, ...nameParts] = argv;
   if (!email || !password) {
     console.error("Usage: create-operator <email> <password> [full name]");
     process.exit(1);

@@ -7,7 +7,9 @@
 import { PrismaClient } from "@prisma/client";
 
 async function main(): Promise<void> {
-  const [slug, name, email, roleKey = "owner"] = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  if (argv[0] === "--") argv.shift();
+  const [slug, name, email, roleKey = "owner"] = argv;
   if (!slug || !name || !email) {
     console.error('Usage: create-tenant <slug> "<name>" <userEmail> [roleKey]');
     process.exit(1);
