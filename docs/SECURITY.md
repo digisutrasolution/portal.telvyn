@@ -179,3 +179,55 @@ in PROJECT_STATE.md before merge.
 Tenancy isolation (SEC-001/DB-002) still CRITICAL-open — `User.tenantId` is a
 reserved nullable column so Phase 3 is additive. RBAC (Phase 4) not yet wired;
 current guard authenticates but does not yet check permissions.
+
+---
+
+## Phase 3+4 — Authorization foundation IMPLEMENTED (2026-08-27)
+
+Tenancy + RBAC per ADR-0004. **SEC-001 (CRITICAL) → CLOSED.**
+
+### SEC-001 → CLOSED — tenant isolation, server-enforced
+- Active tenant is derived from the session's membership, stamped into the
+  access-token `tid` claim, and re-verified against a **live membership** on
+  every request (`TenantGuard`). Request body/params/query NEVER supply a
+  tenant id for scoping — the "client-supplied tenant id is ignored" e2e case
+  asserts a body `tenantId` cannot redirect a write.
+- Data-layer choke point: scoped Prisma extension injects the context tenantId
+  and **throws on unscoped access** to tenant-owned models (deny-by-default).
+- Defense-in-depth: PostgreSQL RLS FORCE migration (`prisma/migrations/rls/`)
+  for prod under a NOBYPASSRLS role.
+
+### Attack coverage (the five requested), tested
+| Attack | Control | Test |
+|---|---|---|
+| Cross-tenant access | server-derived tenant + scoped reads | e2e: each owner sees only its tenant / member list excludes other tenants |
+| IDOR | unique reads wrapped in `AND tenantId` → foreign id 404s | e2e: role-assign & role-delete on another tenant's id → 404, no mutation |
+| Privilege escalation | deny-by-default RBAC; custom role cannot grant beyond creator's own grants | e2e: operator can't create roles (403); admin can't grant `wallet.credit` (403); roleless member 403 everywhere |
+| Unauthorized API access | JwtAuthGuard on all tenant routes | e2e: no token → 401 |
+| Unauthorized UI actions | frontend gates off the same permission set (`me`/context) — server is the authority | server-side enforced; UI gating lands with the admin screens (Phase 6) |
+
+### Controls added to the baseline (→ EXISTING)
+- **Authorization**: deny-by-default `@RequirePermissions` + `PermissionGuard`;
+  `resource.action` permissions with wildcard grants; route↔permission coverage
+  is explicit in the controller.
+- **RBAC**: seeded permission catalog + system roles (owner/admin/operator/
+  auditor); tenant **custom roles**; permission **groups**; assignment via
+  membership.
+- **Audit**: `AuditLog` written (scoped) on every authz mutation (tenant update,
+  role create/delete, membership role assignment); owner-visible `audit-logs`
+  endpoint gated by `audit.read`.
+- **IDOR/least privilege**: custom-role creation refuses permissions the creator
+  does not itself hold (no escalation), and unknown permission keys (400).
+
+### Verification
+`tsc` clean · **26 unit tests** (authorization wildcard/deny logic, tenant-scope
+injection + deny-without-context, catalog integrity incl. auditor-has-no-mutate)
+· build → dist · web tests still 13/13. The **authz e2e suite**
+(`test/authz.e2e.test.ts` — cross-tenant, IDOR, privilege escalation,
+unauthorized access, client-tenant-id-ignored, audit) requires the seeded data
+plane and was **not run here** (no DB access in this environment); run per
+RUNBOOK.md.
+
+### Open
+SEC-002 (toll-fraud spec) unchanged — due with Phase 12. SEC-005 (payment
+rails) unchanged. RLS is coded but enablement is a deploy step (Phase 20).

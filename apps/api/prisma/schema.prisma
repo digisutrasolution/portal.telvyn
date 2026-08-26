@@ -21,7 +21,10 @@ enum UserStatus {
 
 model User {
   id              String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  tenantId        String?    @db.Uuid // reserved — populated by the Phase 3 tenancy migration
+  // Primary/home tenant (ADR-0004): the tenant a session defaults to at login.
+  // Access to any tenant is granted via Membership, never by this column alone.
+  tenantId        String?    @db.Uuid
+  primaryTenant   Tenant?    @relation("UserPrimaryTenant", fields: [tenantId], references: [id])
   email           String     @unique
   passwordHash    String
   fullName        String?
@@ -37,6 +40,7 @@ model User {
   recoveryCodes  MfaRecoveryCode[]
   loginAttempts  LoginAttempt[]
   securityEvents SecurityEvent[]
+  memberships    Membership[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -45,10 +49,155 @@ model User {
   @@index([tenantId])
 }
 
+// ---------------------------------------------------------------------------
+// Tenancy & RBAC (ADR-0004). Tenant isolation is enforced server-side: the
+// tenant id is derived from the session's membership, never from the client.
+// ---------------------------------------------------------------------------
+
+enum TenantType {
+  PLATFORM // the operator's own tenant
+  RESELLER
+  CUSTOMER
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+model Tenant {
+  id       String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  slug     String       @unique
+  name     String
+  type     TenantType   @default(CUSTOMER)
+  status   TenantStatus @default(ACTIVE)
+
+  memberships   Membership[]
+  roles         Role[]
+  primaryUsers  User[]       @relation("UserPrimaryTenant")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([status])
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+// A user's access to a tenant. Roles are assigned per membership (per tenant),
+// so the same user can hold different roles in different tenants.
+model Membership {
+  id       String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId   String           @db.Uuid
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId String           @db.Uuid
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status   MembershipStatus @default(ACTIVE)
+
+  roles MembershipRole[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+}
+
+// A role. tenantId null + isSystem = a shared system-role template; a row with
+// tenantId set + isSystem false = a tenant's CUSTOM role.
+model Role {
+  id          String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId    String? @db.Uuid
+  tenant      Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  key         String
+  name        String
+  description String?
+  isSystem    Boolean @default(false)
+
+  permissions     RolePermission[]
+  membershipRoles MembershipRole[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([tenantId, key])
+}
+
+model PermissionGroup {
+  id          String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  key         String       @unique
+  name        String
+  description String?
+  permissions Permission[]
+
+  createdAt DateTime @default(now())
+}
+
+// Resource + action permission. `key` = "resource.action" (e.g. did.assign).
+model Permission {
+  id          String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  key         String           @unique
+  resource    String
+  action      String
+  description String
+  groupId     String?          @db.Uuid
+  group       PermissionGroup? @relation(fields: [groupId], references: [id])
+
+  roles RolePermission[]
+
+  createdAt DateTime @default(now())
+
+  @@index([resource])
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String     @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model MembershipRole {
+  membershipId String     @db.Uuid
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  roleId       String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, roleId])
+}
+
+// Tenant-scoped mutation audit trail (constitution: audit all mutations).
+model AuditLog {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId   String?  @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String // e.g. tenant.created, role.created, membership.role_assigned
+  resource   String
+  resourceId String?
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([resource, resourceId])
+}
+
 model Session {
   id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
   userId        String    @db.Uuid
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Active tenant for this session (ADR-0004) — set server-side at login.
+  tenantId      String?   @db.Uuid
   deviceLabel   String?
   userAgent     String?
   ipAddress     String?

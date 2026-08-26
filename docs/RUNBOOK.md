@@ -53,3 +53,24 @@ Run the API in dev (listens on :3311, health at /healthz):
 ```bash
 npx pnpm@9 --dir "D:/Claude Dev/portal.telvyn.co" --filter @telvyn/api dev
 ```
+
+---
+
+## Tenancy + RBAC bootstrap (Phases 3+4)
+
+After the auth data plane is up and migrated:
+
+```bash
+cd "D:/Claude Dev/portal.telvyn.co"
+npx pnpm@9 --filter @telvyn/api exec prisma migrate dev --name tenancy_rbac
+npx pnpm@9 --filter @telvyn/api exec prisma db seed          # permission catalog + system roles
+npx pnpm@9 --filter @telvyn/api create-operator -- ops@telvyn.co 'a-strong-passphrase' 'Ops One'
+npx pnpm@9 --filter @telvyn/api create-tenant   -- telvyn "Telvyn Platform" ops@telvyn.co owner
+npx pnpm@9 --filter @telvyn/api test                          # unit + auth + authz e2e
+```
+
+Enable RLS defense-in-depth in production (after `prisma migrate deploy`), run as a NOBYPASSRLS role:
+
+```bash
+psql "$DATABASE_URL" -f apps/api/prisma/migrations/rls/enable-rls.sql
+```

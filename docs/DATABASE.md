@@ -120,3 +120,43 @@ migration set.
 ## ERD
 
 None — to be generated from the schema once it exists.
+
+---
+
+## Phase 3+4 — Tenancy & RBAC schema IMPLEMENTED (2026-08-27)
+
+Prisma schema `apps/api/prisma/schema.prisma`. Resolves **DB-002 (CRITICAL)**
+via ADR-0004.
+
+### New models
+- **Tenant** (slug unique, type PLATFORM/RESELLER/CUSTOMER, status, soft delete)
+- **Membership** (user↔tenant, unique[userId,tenantId], status) — access to a
+  tenant is via membership, never `User.tenantId` alone
+- **Role** (tenantId null+isSystem = shared template; tenantId set = custom role;
+  unique[tenantId,key])
+- **Permission** (key `resource.action`, unique) + **PermissionGroup**
+- **RolePermission**, **MembershipRole** (join tables)
+- **AuditLog** (tenantId, actorId, action, resource, resourceId, metadata, ip)
+- `User.tenantId` repurposed as **primary/home tenant** (was reserved in
+  ADR-0003 — additive, no rewrite); `Session.tenantId` added (active tenant).
+
+### DB-002 → CLOSED (isolation mechanism decided, ADR-0004)
+Two enforced layers, tenant id always server-derived:
+1. **Application layer**: a Prisma client extension (`scoped-prisma.ts`) routes
+   every op on a tenant-owned model (`Membership`/`Role`/`AuditLog`) through
+   `applyTenantScope`, injecting the context tenantId and **throwing on an
+   unscoped access** (deny-by-default). Services use `prisma.scoped.*`.
+2. **Database layer (defense-in-depth)**: `prisma/migrations/rls/enable-rls.sql`
+   enables RLS `FORCE` with a `current_setting('app.tenant_id')` policy; the API
+   runs as a NOBYPASSRLS role in prod (enabled at deploy — Phase 20).
+
+### Findings movement
+- **DB-002 CRITICAL → CLOSED** (mechanism decided + implemented + tested).
+- Checklist dimensions now BUILT (against the auth+authz schema): tables,
+  relations, FKs, indexes, constraints, UUIDv7, soft deletes, audit logging,
+  tenant isolation, user/RBAC data. Still NOT BUILT (later phases): wallet/
+  billing integrity, CDR, rate tables, DID/carrier/routing/payment data.
+- Migrations still to be applied against a live DB (no DB access in this env);
+  `prisma migrate dev` + `prisma db seed` + the RLS SQL are the deploy steps
+  (RUNBOOK.md). Partial-unique recycling for soft-deleted natural keys
+  (Tenant.slug, Role[tenantId,key]) remains a raw-SQL follow-up before prod.

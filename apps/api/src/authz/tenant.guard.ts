@@ -1,0 +1,55 @@
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from "@nestjs/common";
+import { PrismaService } from "@/infra/prisma.service";
+import type { AuthedRequest } from "@/auth/jwt-auth.guard";
+import { expandGrants } from "./authorization";
+import { runWithTenantContext, type TenantContext } from "./tenant-context";
+
+/**
+ * Resolves the server-derived tenant context from the authenticated session's
+ * `tid` claim (ADR-0004) — NEVER from request body/params/query. Re-verifies a
+ * live membership on every request and loads the expanded permission set, then
+ * runs the rest of the request inside the AsyncLocalStorage context so the
+ * scoped Prisma client can enforce isolation. Runs after JwtAuthGuard.
+ */
+@Injectable()
+export class TenantGuard implements CanActivate {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const req = context.switchToHttp().getRequest<AuthedRequest & { tenantContext?: TenantContext }>();
+    const tenantId = req.auth.tid;
+    if (!tenantId) throw new ForbiddenException("No active tenant for this session");
+
+    // Membership is the authority — a revoked/suspended membership loses access
+    // immediately, regardless of what the token claims.
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_tenantId: { userId: req.auth.sub, tenantId } },
+      include: {
+        tenant: { select: { status: true, deletedAt: true } },
+        roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
+      },
+    });
+
+    if (
+      !membership ||
+      membership.status !== "ACTIVE" ||
+      membership.deletedAt ||
+      membership.tenant.deletedAt ||
+      membership.tenant.status !== "ACTIVE"
+    ) {
+      throw new ForbiddenException("No active membership for this tenant");
+    }
+
+    const grants = membership.roles.flatMap((mr) => mr.role.permissions.map((rp) => rp.permission.key));
+    const ctx: TenantContext = {
+      userId: req.auth.sub,
+      tenantId,
+      membershipId: membership.id,
+      permissions: new Set(expandGrants(grants)),
+    };
+    req.tenantContext = ctx;
+
+    // Continue the request inside the ALS context (scoped Prisma reads it).
+    return runWithTenantContext(ctx, () => true);
+  }
+}

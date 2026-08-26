@@ -9,6 +9,8 @@ import { SecurityEventsService } from "./security-events.service";
 export interface AccessClaims {
   sub: string;
   sid: string;
+  /** Active tenant (ADR-0004), derived server-side from membership; null if none. */
+  tid: string | null;
   purpose: "access";
 }
 
@@ -41,8 +43,8 @@ export class TokenService {
     private readonly events: SecurityEventsService,
   ) {}
 
-  signAccess(userId: string, sessionId: string): { accessToken: string; expiresIn: number } {
-    const claims: AccessClaims = { sub: userId, sid: sessionId, purpose: "access" };
+  signAccess(userId: string, sessionId: string, tenantId: string | null): { accessToken: string; expiresIn: number } {
+    const claims: AccessClaims = { sub: userId, sid: sessionId, tid: tenantId, purpose: "access" };
     return {
       accessToken: this.jwt.sign(claims, { expiresIn: this.env.JWT_ACCESS_TTL_SECONDS }),
       expiresIn: this.env.JWT_ACCESS_TTL_SECONDS,
@@ -75,13 +77,14 @@ export class TokenService {
   }
 
   /** Create a session + first refresh token (login / MFA completion). */
-  async createSession(userId: string, ctx: RequestContext): Promise<IssuedTokens> {
+  async createSession(userId: string, ctx: RequestContext, tenantId: string | null): Promise<IssuedTokens> {
     const refreshToken = randomToken();
     const expiresAt = new Date(Date.now() + this.env.REFRESH_TTL_DAYS * 86_400_000);
 
     const session = await this.prisma.session.create({
       data: {
         userId,
+        tenantId,
         userAgent: ctx.userAgent,
         ipAddress: ctx.ipAddress,
         deviceLabel: deviceLabel(ctx.userAgent),
@@ -90,7 +93,7 @@ export class TokenService {
       },
     });
 
-    const access = this.signAccess(userId, session.id);
+    const access = this.signAccess(userId, session.id, tenantId);
     return { ...access, refreshToken, sessionId: session.id };
   }
 
@@ -140,7 +143,7 @@ export class TokenService {
       });
     });
 
-    const access = this.signAccess(session.userId, session.id);
+    const access = this.signAccess(session.userId, session.id, session.tenantId);
     return { ...access, refreshToken: nextToken, sessionId: session.id };
   }
 }

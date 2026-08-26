@@ -11,7 +11,11 @@
     "test": "vitest run",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "create-operator": "tsx scripts/create-operator.ts"
+    "create-operator": "tsx scripts/create-operator.ts",
+    "create-tenant": "tsx scripts/create-tenant.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.20",

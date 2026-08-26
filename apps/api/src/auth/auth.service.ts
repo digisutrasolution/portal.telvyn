@@ -20,6 +20,23 @@ export class AuthService {
     private readonly events: SecurityEventsService,
   ) {}
 
+  /**
+   * Resolve the active tenant for a session (ADR-0004) — server-side only.
+   * Prefers the user's primary tenant when it has an active membership;
+   * otherwise the first active membership; null if the user belongs to none.
+   */
+  private async resolveActiveTenant(userId: string): Promise<string | null> {
+    const memberships = await this.prisma.membership.findMany({
+      where: { userId, status: "ACTIVE", deletedAt: null, tenant: { status: "ACTIVE", deletedAt: null } },
+      select: { tenantId: true },
+      orderBy: { createdAt: "asc" },
+    });
+    if (memberships.length === 0) return null;
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { tenantId: true } });
+    if (user?.tenantId && memberships.some((m) => m.tenantId === user.tenantId)) return user.tenantId;
+    return memberships[0].tenantId;
+  }
+
   async login(email: string, password: string, ctx: RequestContext): Promise<LoginOutcome> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     const fail = async (reason: string, userId?: string | null): Promise<never> => {
@@ -70,9 +87,10 @@ export class AuthService {
       return { kind: "mfa", mfaToken: this.tokens.signMfaToken(user.id) };
     }
 
-    const tokens = await this.tokens.createSession(user.id, ctx);
+    const tenantId = await this.resolveActiveTenant(user.id);
+    const tokens = await this.tokens.createSession(user.id, ctx, tenantId);
     await this.events.recordLoginAttempt({ emailTried: email, userId: user.id, success: true, ctx });
-    await this.events.record("auth.login", ctx, user.id, { sessionId: tokens.sessionId });
+    await this.events.record("auth.login", ctx, user.id, { sessionId: tokens.sessionId, tenantId });
     return { kind: "tokens", tokens };
   }
 
@@ -84,9 +102,10 @@ export class AuthService {
       await this.events.recordLoginAttempt({ emailTried: user.email, userId, success: false, failureReason: "bad_mfa_code", ctx });
       throw new UnauthorizedException("Invalid code");
     }
-    const tokens = await this.tokens.createSession(userId, ctx);
+    const tenantId = await this.resolveActiveTenant(userId);
+    const tokens = await this.tokens.createSession(userId, ctx, tenantId);
     await this.events.recordLoginAttempt({ emailTried: user.email, userId, success: true, ctx });
-    await this.events.record("auth.login_mfa", ctx, userId, { sessionId: tokens.sessionId });
+    await this.events.record("auth.login_mfa", ctx, userId, { sessionId: tokens.sessionId, tenantId });
     return tokens;
   }
 

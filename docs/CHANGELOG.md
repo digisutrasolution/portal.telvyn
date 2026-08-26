@@ -58,3 +58,20 @@ Format: Keep a Changelog; SemVer once releases begin.
   (requires the dev data plane; not executed in the build environment).
 - No migration required: the prior null-session shell seam was designed for
   this wiring — backward-compatible by construction.
+
+### Phases 3+4 (tenancy + RBAC authorization foundation) — IMPLEMENTED 2026-08-27
+- ADR-0004: tenant isolation = server-derived context + mandatory data-layer
+  scoping (Prisma extension, deny-by-default) + PostgreSQL RLS defense-in-depth.
+  Resolves the CRITICAL gate DB-002/SEC-001.
+- Models: Tenant, Membership, Role, Permission, PermissionGroup, RolePermission,
+  MembershipRole, AuditLog; Session.tenantId + access-token `tid` claim.
+- RBAC: seeded permission catalog + groups, system roles (owner/admin/operator/
+  auditor), tenant custom roles, wildcard grants, deny-by-default route guards.
+- Endpoints (v1): tenant get/update, members, member roles, roles list/create/
+  delete, permission catalog, audit-logs — triple-gated (auth → tenant → perm).
+- Audit log on every authz mutation; owner-visible audit endpoint.
+- Tests: 19 new unit (authorization, tenant-scope, catalog) = 26 API unit total;
+  authz e2e suite (cross-tenant, IDOR, privilege escalation, unauthorized
+  access, client-tenant-id-ignored, audit) authored — run against the seeded
+  data plane per RUNBOOK.md (not executed in the build environment).
+- Seed script, create-tenant CLI, RLS enablement SQL.
