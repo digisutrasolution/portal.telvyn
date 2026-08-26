@@ -35,3 +35,11 @@ Format: Keep a Changelog; SemVer once releases begin.
   … → DevOps) with gate decisions, dependency spine, and cross-cutting rules.
 - 2026-08-26 — Design system v0.1 APPROVED by owner — UX-002 gate closed; the
   spec in UI_UX.md is now binding for all UI work.
+
+### Phase 1 (frontend shell) — SHIPPED 2026-08-26
+- Application shell: pnpm monorepo scaffold, git initialized (commit 2b18890),
+  Next.js 15 + React 19 + Tailwind v4 + token-skinned Radix/cmdk component
+  layer per ADR-0002; sidebar, topbar, breadcrumbs, global search, Ctrl+K
+  palette (E.164-aware), notifications, user menu, tenant + region selectors,
+  health indicator, theme selector, mobile sheet nav; honest phase-gated
+  module pages; 13 tests + typecheck + build green; runtime-verified.

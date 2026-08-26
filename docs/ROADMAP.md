@@ -20,7 +20,7 @@
 
 | # | Phase | Scope (deliverables) | Gate decisions required first | Status |
 |---|---|---|---|---|
-| 1 | **Application Shell** | Repo scaffold (git + monorepo), stack foundation, CI (lint/typecheck/test/dep-audit/secret-scan), docker dev data plane, `.env.example`, base API + web apps, health endpoints, portal shell (rail/header/⌘K frame) on the design system | **ADR-0002 stack**; hosting direction for CI target | Not started |
+| 1 | **Application Shell** | Repo scaffold (git + monorepo), stack foundation, CI (lint/typecheck/test/dep-audit/secret-scan), docker dev data plane, `.env.example`, base API + web apps, health endpoints, portal shell (rail/header/⌘K frame) on the design system | ADR-0002 (frontend) ✔; backend-stack ADR + hosting still open | **Frontend shell SHIPPED 2026-08-26** (commit 2b18890); backend scaffold + CI pending |
 | 2 | **Authentication** | argon2id, JWT access + rotating refresh w/ reuse detection, server-side sessions, TOTP MFA + step-up, login/MFA screens, session management UI | — (design locked) | Not started |
 | 3 | **Tenant system** | Tenancy model implementation, tenant/customer entities, data-layer isolation (app-scope or RLS) + cross-tenant leak test suite | **Tenancy ADR (DB-002/SEC-001 — CRITICAL)** | Not started |
 | 4 | **RBAC** | Permission catalogue (seeded), roles, per-route guards (deny-by-default), route↔permission coverage tests, role assignment | Roles/personas defined by owner | Not started |

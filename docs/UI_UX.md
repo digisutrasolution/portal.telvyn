@@ -10,7 +10,7 @@
 - **Visual reference sheet** — [`docs/design/telvyn-design-system.html`](design/telvyn-design-system.html):
   self-contained, all tokens + component examples, live Light/Dark/System
   toggle. Render-verified (no console errors, both themes resolve).
-- **No application UI exists.** No portal screens are built; ADR-0001 forbids
+- **Application shell SHIPPED (Phase 1, 2026-08-26)** — see "Component inventory" section at the end of this file. ADR-0001 forbids
   reusing any other project's design system (pre-implementation reuse
   inspection re-confirmed 2026-08-26: zero existing components in this repo).
 
@@ -216,3 +216,35 @@ both themes verified; WCAG 2.2 AA per §9.
 - Formal logo/wordmark (v0.1 uses a provisional "T" mark + Space Grotesk type direction)
 - Component stack (follows ADR-0002)
 - Operator task inventory (follows roles/tenancy decisions — UX-005)
+
+---
+
+## Component inventory — EXISTING (Phase 1, shipped 2026-08-26)
+
+Verified: `tsc` clean · 13/13 Vitest tests · `next build` clean (102 kB first
+load, all-static) · runtime-verified in-browser (a11y tree, Ctrl+K palette
+open/close, dark-mode tokens, /numbers routing, 375 px mobile: sidebar hidden,
+sheet-nav button shown, no horizontal overflow, zero console errors).
+
+Reusable primitives (`apps/web/src/components/ui/`): button (primary/
+secondary/ghost/danger, sm/md/lg/icon), badge, status (dot+label), kbd,
+tooltip, dropdown-menu, popover, dialog + sheet, command (cmdk), separator.
+
+Shell (`apps/web/src/components/shell/`): app-shell (providers + skip-link +
+layout), sidebar (collapsible rail, persisted), topbar, breadcrumbs (pure
+`breadcrumbsForPath`, tested), search-button, command-palette (Ctrl/Cmd-K,
+E.164-aware `paletteMatch`, tested), notifications (honest empty state),
+user-menu (auth seam, Phase 2), tenant-selector (Phase 3 seam),
+region-selector, health-indicator ("No telemetry" until Phases 16/20),
+theme-selector (Light/Dark/System via next-themes `data-theme`), mobile-nav
+(sheet), module-gate (honest phase-gated module pages), brand.
+
+Integration seams (`src/lib/shell-config.ts`): session/tenants/regions/
+telemetry typed against future API contracts — no business logic in UI, no
+mock data; each seam is replaced by the generated API client when its phase
+lands. Nav + palette + breadcrumbs share one config (`src/lib/nav.ts`).
+
+Not yet implemented from the section-10 contracts (arrive with their
+consuming phases): input/select/form fields, data table, drawer (detail),
+tabs, alert, toast, charts. UX-006 (axe + both-theme CI checks) still open —
+lands with CI.

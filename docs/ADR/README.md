@@ -7,3 +7,4 @@ ADR that references the old one. Template: `template.md`.
 | # | Title | Status |
 |---|---|---|
 | 0001 | Telvyn is a fully independent product and codebase | Accepted |
+| 0002 | Frontend stack: Next.js + TypeScript + Tailwind + shadcn/ui | Accepted |
