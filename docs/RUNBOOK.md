@@ -74,3 +74,23 @@ Enable RLS defense-in-depth in production (after `prisma migrate deploy`), run a
 ```bash
 psql "$DATABASE_URL" -f apps/api/prisma/rls/enable-rls.sql
 ```
+
+---
+
+## Local dev WITHOUT Docker (this machine — PostgreSQL 17 + Redis already running)
+
+Docker isn't installed here; the workspace's local PostgreSQL 17 (:5432) and
+Redis (:6379) are used instead. PG17 lacks native `uuidv7()`, so a polyfill is
+applied once. `apps/api/.env` points at :5432/:6379 (gitignored).
+
+```bash
+# 1. As the postgres superuser — create the role + database (one time):
+& "D:\Claude Dev\pgsql\bin\psql.exe" -U postgres -h localhost -p 5432 -v ON_ERROR_STOP=1 -c "CREATE ROLE telvyn LOGIN PASSWORD 'telvyn_dev' CREATEDB;" -c "CREATE DATABASE telvyn OWNER telvyn;"
+# 2. Install the uuidv7() polyfill into the telvyn DB (one time):
+$env:PGPASSWORD='telvyn_dev'; & "D:\Claude Dev\pgsql\bin\psql.exe" -U telvyn -h localhost -p 5432 -d telvyn -f "D:\Claude Dev\portal.telvyn.co\apps\api\prisma\pg17-uuidv7.sql"
+# 3. Point the session at the local ports (overrides any stale env), then migrate/seed/test:
+$env:DATABASE_URL='postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public'; $env:REDIS_URL='redis://localhost:6379'
+npx pnpm@9 --filter @telvyn/api exec prisma migrate dev
+npx pnpm@9 --filter @telvyn/api exec prisma db seed
+npx pnpm@9 --filter @telvyn/api test
+```
