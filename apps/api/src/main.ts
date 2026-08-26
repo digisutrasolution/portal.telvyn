@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import "dotenv/config"; // load apps/api/.env into process.env before env validation
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import cookieParser from "cookie-parser";

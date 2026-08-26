@@ -1,3 +1,4 @@
+import "dotenv/config";
 /**
  * Bootstrap CLI — create a tenant and attach an existing user as a member with
  * a system role (default: owner). Sets the user's primary tenant if unset.

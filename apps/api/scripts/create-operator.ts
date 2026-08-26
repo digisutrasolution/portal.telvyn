@@ -1,3 +1,4 @@
+import "dotenv/config";
 /**
  * Bootstrap CLI — creates (or resets the password of) an operator account.
  * Usage:
