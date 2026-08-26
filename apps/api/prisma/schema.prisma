@@ -1,0 +1,163 @@
+// Telvyn auth domain (Phase 2). Conventions per constitution: UUIDv7 PKs
+// (PostgreSQL 18 native uuidv7()), audit timestamps, soft delete on business
+// entities, FKs + indexes everywhere. `tenantId` is a reserved nullable
+// column: the Phase 3 tenancy migration (DB-002 ADR) populates and constrains
+// it additively — the documented backward-compatible path.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+}
+
+model User {
+  id              String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId        String?    @db.Uuid // reserved — populated by the Phase 3 tenancy migration
+  email           String     @unique
+  passwordHash    String
+  fullName        String?
+  status          UserStatus @default(ACTIVE)
+  emailVerifiedAt DateTime?
+  mfaEnabled      Boolean    @default(false)
+  mfaSecretEnc    String? // AES-256-GCM under APP_ENCRYPTION_KEY (secret-manager upgrade path in SECURITY.md)
+  failedLogins    Int        @default(0)
+  lockedUntil     DateTime?
+
+  sessions       Session[]
+  emailTokens    EmailToken[]
+  recoveryCodes  MfaRecoveryCode[]
+  loginAttempts  LoginAttempt[]
+  securityEvents SecurityEvent[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId])
+}
+
+model Session {
+  id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId        String    @db.Uuid
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceLabel   String?
+  userAgent     String?
+  ipAddress     String?
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String?
+  lastSeenAt    DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+
+  refreshTokens RefreshToken[]
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+// Rotation chain: each refresh marks the presented token used and issues a
+// successor. A presented token that is already used = reuse → revoke session.
+model RefreshToken {
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sessionId    String    @db.Uuid
+  session      Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique // sha256 — raw token never stored
+  expiresAt    DateTime
+  usedAt       DateTime?
+  replacedById String?   @db.Uuid
+  createdAt    DateTime  @default(now())
+
+  @@index([sessionId])
+  @@index([expiresAt])
+}
+
+enum EmailTokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+model EmailToken {
+  id        String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId    String         @db.Uuid
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      EmailTokenType
+  tokenHash String         @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime       @default(now())
+
+  @@index([userId, type])
+  @@index([expiresAt])
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model LoginAttempt {
+  id            String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId        String?  @db.Uuid
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  emailTried    String
+  success       Boolean
+  failureReason String?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([emailTried, createdAt])
+}
+
+// Auth-domain audit trail (constitution: audit on all mutations).
+model SecurityEvent {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId    String?  @db.Uuid
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type      String // e.g. auth.login, auth.refresh_reuse, auth.mfa_enabled
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+}
+
+enum OutboxStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// Honest email seam: rows are queued here; SMTP/worker wiring is deploy
+// configuration (Phase 20). Bodies contain links with raw tokens — the DB
+// stores those message bodies transiently; delivery worker purges on send.
+model EmailOutbox {
+  id        String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  toEmail   String
+  subject   String
+  body      String
+  purpose   String
+  status    OutboxStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+  sentAt    DateTime?
+
+  @@index([status, createdAt])
+}

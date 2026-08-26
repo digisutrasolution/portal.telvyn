@@ -43,3 +43,18 @@ Format: Keep a Changelog; SemVer once releases begin.
   palette (E.164-aware), notifications, user menu, tenant + region selectors,
   health indicator, theme selector, mobile sheet nav; honest phase-gated
   module pages; 13 tests + typecheck + build green; runtime-verified.
+
+### Phase 2 (authentication foundation) — IMPLEMENTED 2026-08-27
+- ADR-0003 backend stack (NestJS 11 + Prisma 6 + PostgreSQL 18 + Redis 7).
+- Contract-first `packages/contracts/openapi/telvyn.v1.yaml`.
+- `apps/api`: login/logout/logout-all, JWT access + rotating refresh w/ reuse
+  detection, session & device management + immediate revocation, TOTP MFA +
+  recovery codes + step-up disable, password reset + email verification via
+  EmailOutbox seam, Redis fail-closed rate limiting + progressive brute-force
+  lockout, argon2id, SecurityEvent/LoginAttempt audit + owner-visible history,
+  RFC 7807 errors, httpOnly SameSite=Strict refresh cookie.
+- `docker-compose.dev.yml` (PG18 + Redis), `.env.example`, create-operator CLI.
+- Tests: 7 unit (crypto, lockout) green; 13-scenario e2e suite authored
+  (requires the dev data plane; not executed in the build environment).
+- No migration required: the prior null-session shell seam was designed for
+  this wiring — backward-compatible by construction.

@@ -109,3 +109,73 @@ Standard v4.
 - Compliance obligations (KYC/AML, data protection, PCI applicability) —
   follow from UNKNOWN launch markets and payment rails (SEC-005).
 - Secret-manager choice — follows hosting decision (SEC-006).
+
+---
+
+## Phase 2 — Authentication foundation IMPLEMENTED (2026-08-27)
+
+Backend: NestJS API (`apps/api`) + PostgreSQL (Prisma) + Redis, per ADR-0003.
+Contract-first: `packages/contracts/openapi/telvyn.v1.yaml` authored first.
+
+### Inspection result (migration analysis)
+The only prior "auth" was the frontend shell's typed **null-session seam**
+(`shell-config.ts`, `user-menu.tsx`) — no implementation existed, so **nothing
+was broken and NO migration was required**. The seam was designed for exactly
+this wiring; the web client consumes the new API unchanged in shape.
+
+### Findings closed / advanced
+
+| ID | Prior severity | Now |
+|---|---|---|
+| SEC-003 | HIGH — no git/CI enforcement vehicle | **Partly closed**: git initialized (Phase 1); env is boundary-validated (Zod, fail-fast); dep set pinned. CI pipeline still to wire (Phase 20 / DEVOPS). |
+| SEC-006 | MEDIUM — no secret store / env contract | **Closed for dev**: `.env.example` documents every var; secrets Zod-validated at boot; `.env` gitignored; MFA secrets encrypted at rest (AES-256-GCM). Managed secret store still a prod deploy decision. |
+| DB-007 | LOW — UUIDv7 mechanism unpinned | **Closed**: PostgreSQL 18 native `uuidv7()` pinned (ADR-0003). |
+
+### Controls implemented (SECURITY.md baseline → EXISTING)
+
+- **Authentication**: argon2id (m=64MiB,t=3,p=4), opportunistic rehash on login,
+  constant-ish-time failure for unknown emails (dummy-hash verify), generic
+  "Invalid email or password" (no enumeration).
+- **JWT**: HS256 access tokens, 15-min TTL, issuer/audience pinned, `purpose`
+  claim separates access vs the 5-min MFA-challenge token.
+- **Refresh rotation + reuse detection**: 256-bit opaque tokens stored only as
+  SHA-256 digests; every use rotates and marks the prior used; replay of a used
+  token → **session revoked + `auth.refresh_reuse_detected` event**; concurrent
+  rotation race resolved by a guarded `updateMany` (single winner).
+- **Sessions / devices**: server-side `Session` rows (device label, IP, UA,
+  lastSeen), list endpoint, per-session revoke, logout, logout-all. Access-token
+  guard checks **live-session** on every request → revocation is immediate,
+  not deferred to JWT expiry.
+- **MFA/2FA**: TOTP (otplib, ±1 window), secret AES-256-GCM encrypted at rest,
+  8 single-use recovery codes (hashed), disable requires **step-up** (password
+  AND code).
+- **Password reset / email verification**: 256-bit hashed single-use TTL tokens;
+  reset revokes ALL sessions; requests always 202 (no enumeration); messages
+  written to `EmailOutbox` seam (no fake sends).
+- **Secure cookies**: refresh token in `httpOnly` `SameSite=Strict` cookie
+  scoped to `/v1/auth`; `Secure` gated by `COOKIE_SECURE`; non-browser clients
+  opt into body transport (`x-token-transport: body`).
+- **Rate limiting**: Redis fixed-window per-IP + per-account budgets on login,
+  MFA verify, refresh, reset, verification — **fail CLOSED** (503) if Redis is down.
+- **Brute force**: progressive account lockout (5→1m, 8→5m, 10→15m, 15→1h),
+  reset on success.
+- **Audit**: `SecurityEvent` + `LoginAttempt` tables on every auth mutation;
+  owner-visible login-history + security-events endpoints.
+- **Error handling**: RFC 7807 problem+json filter — no stack traces, unexpected
+  errors logged server-side as generic 500.
+
+### Verification
+`tsc` clean · 7 unit tests pass (crypto round-trip/tamper, lockout policy) ·
+`prisma generate` + schema valid · `tsc -p build` → `dist/main.js` · env
+fail-fast verified. The **13-scenario e2e suite** (`test/auth.e2e.test.ts` —
+login, no-enumeration, refresh rotation + reuse revocation, sessions/revoke/
+logout-all, lockout, full MFA incl. recovery-code single-use, reset+session
+revocation, email verification, history/audit) runs against the real
+Postgres+Redis data plane; it was **not executed in this environment** (no
+container runtime; DB credential access gated here). Run it with the commands
+in PROJECT_STATE.md before merge.
+
+### Open (unchanged)
+Tenancy isolation (SEC-001/DB-002) still CRITICAL-open — `User.tenantId` is a
+reserved nullable column so Phase 3 is additive. RBAC (Phase 4) not yet wired;
+current guard authenticates but does not yet check permissions.

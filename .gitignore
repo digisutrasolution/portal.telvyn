@@ -9,3 +9,6 @@ coverage/
 !.env.example
 .DS_Store
 Thumbs.db
+
+# API build output
+apps/api/dist/

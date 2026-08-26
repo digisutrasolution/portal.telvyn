@@ -1,0 +1,362 @@
+openapi: 3.1.0
+info:
+  title: Telvyn DID Portal API
+  version: 0.2.0
+  description: >
+    Telvyn PROMAX control-plane API. Contract-first: this document is authored
+    before implementation; clients are generated from it. Errors are RFC 7807
+    application/problem+json. Auth: short-lived Bearer access token; opaque
+    rotating refresh token in an httpOnly SameSite=Strict cookie (tv_refresh,
+    path=/v1/auth) or request body for non-browser clients.
+servers:
+  - url: http://localhost:3311
+    description: local development
+tags:
+  - name: auth
+security:
+  - bearerAuth: []
+paths:
+  /v1/auth/login:
+    post:
+      tags: [auth]
+      security: []
+      summary: Login with email + password (step 1; MFA challenge when enabled)
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Tokens issued, or MFA challenge required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "423": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /v1/auth/mfa/verify:
+    post:
+      tags: [auth]
+      security: []
+      summary: Complete an MFA-challenged login (step 2)
+      operationId: mfaVerify
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MfaVerifyRequest" }
+      responses:
+        "200":
+          description: Tokens issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /v1/auth/refresh:
+    post:
+      tags: [auth]
+      security: []
+      summary: Rotate the refresh token; reuse is detected and revokes the session
+      operationId: refresh
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string, description: "Only for non-cookie clients" }
+      responses:
+        "200":
+          description: New token pair
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke the current session and clear the refresh cookie
+      operationId: logout
+      responses:
+        "204": { description: Logged out }
+  /v1/auth/logout-all:
+    post:
+      tags: [auth]
+      summary: Revoke every session of the current user
+      operationId: logoutAll
+      responses:
+        "204": { description: All sessions revoked }
+  /v1/auth/me:
+    get:
+      tags: [auth]
+      summary: Current authenticated user
+      operationId: me
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /v1/auth/sessions:
+    get:
+      tags: [auth]
+      summary: List sessions/devices for the current user
+      operationId: listSessions
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Session" }
+  /v1/auth/sessions/{id}:
+    delete:
+      tags: [auth]
+      summary: Revoke one session (device sign-out)
+      operationId: revokeSession
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Revoked }
+        "404": { $ref: "#/components/responses/Problem" }
+  /v1/auth/login-history:
+    get:
+      tags: [auth]
+      summary: Recent login attempts for the current user
+      operationId: loginHistory
+      responses:
+        "200":
+          description: Attempts, newest first (max 50)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LoginAttempt" }
+  /v1/auth/security-events:
+    get:
+      tags: [auth]
+      summary: Recent security events for the current user
+      operationId: securityEvents
+      responses:
+        "200":
+          description: Events, newest first (max 50)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SecurityEvent" }
+  /v1/auth/password-reset/request:
+    post:
+      tags: [auth]
+      security: []
+      summary: Request a password-reset email (always 202 — no account enumeration)
+      operationId: passwordResetRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "202": { description: Accepted (queued if the account exists) }
+        "429": { $ref: "#/components/responses/Problem" }
+  /v1/auth/password-reset/confirm:
+    post:
+      tags: [auth]
+      security: []
+      summary: Set a new password with a reset token; revokes all sessions
+      operationId: passwordResetConfirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token: { type: string }
+                newPassword: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        "204": { description: Password updated }
+        "400": { $ref: "#/components/responses/Problem" }
+  /v1/auth/email-verification/request:
+    post:
+      tags: [auth]
+      summary: Send (queue) an email-verification message for the current user
+      operationId: emailVerificationRequest
+      responses:
+        "202": { description: Queued }
+  /v1/auth/email-verification/confirm:
+    post:
+      tags: [auth]
+      security: []
+      summary: Confirm email ownership with a verification token
+      operationId: emailVerificationConfirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "204": { description: Email verified }
+        "400": { $ref: "#/components/responses/Problem" }
+  /v1/auth/mfa/enroll:
+    post:
+      tags: [auth]
+      summary: Begin TOTP enrollment (returns otpauth URI; not yet enabled)
+      operationId: mfaEnroll
+      responses:
+        "200":
+          description: Enrollment data
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [otpauthUri]
+                properties:
+                  otpauthUri: { type: string }
+  /v1/auth/mfa/enable:
+    post:
+      tags: [auth]
+      summary: Enable MFA by proving a TOTP code; returns one-time recovery codes
+      operationId: mfaEnable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, minLength: 6, maxLength: 6 }
+      responses:
+        "200":
+          description: MFA enabled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recoveryCodes]
+                properties:
+                  recoveryCodes:
+                    type: array
+                    items: { type: string }
+        "400": { $ref: "#/components/responses/Problem" }
+  /v1/auth/mfa/disable:
+    post:
+      tags: [auth]
+      summary: Disable MFA (step-up — requires current password AND a valid code)
+      operationId: mfaDisable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, code]
+              properties:
+                password: { type: string }
+                code: { type: string, description: "TOTP or recovery code" }
+      responses:
+        "204": { description: MFA disabled }
+        "400": { $ref: "#/components/responses/Problem" }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  responses:
+    Problem:
+      description: RFC 7807 problem
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+  schemas:
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        issues: { type: array, items: { type: object } }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, maxLength: 128 }
+    LoginResult:
+      oneOf:
+        - $ref: "#/components/schemas/TokenPair"
+        - type: object
+          required: [mfaRequired, mfaToken]
+          properties:
+            mfaRequired: { type: boolean, const: true }
+            mfaToken: { type: string, description: "5-minute single-purpose JWT" }
+    MfaVerifyRequest:
+      type: object
+      required: [mfaToken, code]
+      properties:
+        mfaToken: { type: string }
+        code: { type: string, description: "TOTP or recovery code" }
+    TokenPair:
+      type: object
+      required: [accessToken, expiresIn]
+      properties:
+        accessToken: { type: string }
+        expiresIn: { type: integer, description: seconds }
+        refreshToken:
+          type: string
+          description: Present only for non-cookie clients; browsers get the httpOnly cookie.
+    Me:
+      type: object
+      required: [id, email, mfaEnabled, emailVerified]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string, nullable: true }
+        mfaEnabled: { type: boolean }
+        emailVerified: { type: boolean }
+    Session:
+      type: object
+      required: [id, createdAt, lastSeenAt, current]
+      properties:
+        id: { type: string, format: uuid }
+        deviceLabel: { type: string, nullable: true }
+        ipAddress: { type: string, nullable: true }
+        userAgent: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+        current: { type: boolean }
+    LoginAttempt:
+      type: object
+      required: [id, success, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        success: { type: boolean }
+        failureReason: { type: string, nullable: true }
+        ipAddress: { type: string, nullable: true }
+        userAgent: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    SecurityEvent:
+      type: object
+      required: [id, type, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string }
+        metadata: { type: object, nullable: true }
+        ipAddress: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }

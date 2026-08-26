@@ -27,3 +27,29 @@ copy-paste-runnable commands with real paths and hosts (never placeholders).
 | Production URL | https://portal.telvyn.co | not live |
 | Hosting | — | UNKNOWN |
 | Escalation | — | UNKNOWN |
+
+---
+
+## Local auth data plane + e2e (Phase 2)
+
+Bring up Postgres 18 + Redis, apply the schema, create an operator, run the suite:
+
+```bash
+cd "D:/Claude Dev/portal.telvyn.co"
+docker compose -f docker-compose.dev.yml up -d
+cp .env.example .env   # then set JWT_ACCESS_SECRET + APP_ENCRYPTION_KEY (openssl rand)
+npx pnpm@9 --filter @telvyn/api exec prisma migrate dev --name init_auth
+npx pnpm@9 --filter @telvyn/api test          # 13-scenario auth e2e + unit
+```
+
+Create/reset an operator login (no hardcoded credentials — supply at call time):
+
+```bash
+npx pnpm@9 --dir "D:/Claude Dev/portal.telvyn.co" --filter @telvyn/api create-operator -- ops@telvyn.co 'a-strong-passphrase-here' 'Ops One'
+```
+
+Run the API in dev (listens on :3311, health at /healthz):
+
+```bash
+npx pnpm@9 --dir "D:/Claude Dev/portal.telvyn.co" --filter @telvyn/api dev
+```
