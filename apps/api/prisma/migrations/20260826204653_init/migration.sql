@@ -1,3 +1,27 @@
+-- uuidv7() compatibility shim (ADR-0003/0004). Idempotent + version-adaptive:
+-- on PostgreSQL 18 the native pg_catalog.uuidv7() already exists, so this is a
+-- no-op; on PG < 18 it installs a correct v7 generator in the public schema so
+-- the column DEFAULTs below resolve (works in the shadow DB, CI, and prod).
+DO $shim$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'uuidv7') THEN
+    EXECUTE $fn$
+      CREATE FUNCTION uuidv7() RETURNS uuid AS $body$
+      DECLARE
+        ts_millis bigint := (extract(epoch FROM clock_timestamp()) * 1000)::bigint;
+        b bytea := uuid_send(gen_random_uuid());
+      BEGIN
+        b := overlay(b placing substring(int8send(ts_millis) FROM 3 FOR 6) FROM 1 FOR 6);
+        b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112);
+        b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128);
+        RETURN encode(b, 'hex')::uuid;
+      END;
+      $body$ LANGUAGE plpgsql VOLATILE;
+    $fn$;
+  END IF;
+END
+$shim$;
+
 -- CreateEnum
 CREATE TYPE "UserStatus" AS ENUM ('ACTIVE', 'INVITED', 'DISABLED');
 
