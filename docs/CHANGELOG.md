@@ -75,3 +75,15 @@ Format: Keep a Changelog; SemVer once releases begin.
   access, client-tenant-id-ignored, audit) authored — run against the seeded
   data plane per RUNBOOK.md (not executed in the build environment).
 - Seed script, create-tenant CLI, RLS enablement SQL.
+
+### Audit
+- 2026-08-29 — **Phase 1–11 completion audit** (independent verification).
+  Backend auth+tenancy+RBAC (roadmap Phases 2–4) verified real and well-built;
+  26 unit tests PASS + typecheck clean (both apps). 22 integration/e2e tests
+  NOT EXECUTABLE this session — local Postgres/Redis data plane down (env, not
+  code); previously green 48/48. Key gaps: Phase-5 auth FRONTEND not implemented
+  (static shell, no backend calls — honest null-session seam, no fake auth); no
+  CI/CD (SEC-003 still open); no HTTP security headers (helmet/CSP/HSTS); RLS
+  written but not operative (app-layer scoping is active + tested). No P0/P1
+  security or data-integrity defects found. Verdict: NOT READY for next phase
+  until e2e re-run green + CI + security headers land. Full report in session.
