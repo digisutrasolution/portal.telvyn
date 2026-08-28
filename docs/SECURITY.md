@@ -5,11 +5,16 @@
 
 ## Current state — EXISTING
 
-**No application code exists**, therefore no implemented controls and no
-exploitable runtime surface. This document records: (1) the defensive security
-audit of what *does* exist (repository content), (2) the severity-classified
-findings register, (3) the committed control set, and (4) the 30-area security
-baseline every feature must ship against.
+> **Updated 2026-08-29.** The original pre-code audit below (2026-08-26) is
+> retained as history. Application code now exists (auth + tenancy + RBAC
+> backend, static web shell). Implemented controls and the pre-Phase-12
+> hardening are recorded in **"Implemented controls (2026-08-29)"** near the
+> end of this document; read that section for what is actually in force today.
+
+This document records: (1) the original defensive audit of repository content,
+(2) the severity-classified findings register, (3) the committed control set,
+(4) the 30-area security baseline every feature must ship against, and (5) the
+**implemented** control set as of the pre-Phase-12 hardening pass.
 
 ---
 
@@ -231,3 +236,78 @@ RUNBOOK.md.
 ### Open
 SEC-002 (toll-fraud spec) unchanged — due with Phase 12. SEC-005 (payment
 rails) unchanged. RLS is coded but enablement is a deploy step (Phase 20).
+
+---
+
+# Implemented controls (2026-08-29) — pre-Phase-12 hardening
+
+What is actually in force in the code today, verified against the running
+system. Supersedes the "NOT BUILT" status of the auth/authz/headers rows in
+the 30-area baseline above.
+
+## HTTP security headers
+
+**API (NestJS/Express, JSON-only)** — `helmet` in `apps/api/src/main.ts`,
+tuned for an API that renders no HTML:
+- `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` — an API response must never load a resource, so the strictest policy is correct and cannot break anything.
+- `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cross-Origin-Resource-Policy: same-site`, `Cross-Origin-Opener-Policy: same-origin`, `X-Powered-By` removed.
+- `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()`.
+- **Verified** on 200, 401 (auth) and 404 responses by `test/security-headers.e2e.test.ts` (3 tests).
+
+**Web (Next.js)** — non-CSP headers in `apps/web/next.config.ts`
+(`X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
+`Permissions-Policy` as above); CSP is per-request in `apps/web/src/middleware.ts`.
+
+## CSP (web)
+
+Nonce-based, **production only**, in `apps/web/src/middleware.ts`. Dev has no
+CSP so Next HMR/eval keeps working.
+
+- `script-src 'self' 'nonce-<per-request>' 'strict-dynamic'` — **no `unsafe-eval`, no `unsafe-inline` for scripts.** Next.js stamps the nonce onto its hydration/RSC scripts; `next-themes` gets the same nonce via a prop in `layout.tsx` → `app-shell.tsx`.
+- `style-src 'self' 'unsafe-inline'` — **technically necessary**: Radix UI writes inline `style` attributes that cannot carry a nonce. Accepted: style-injection is far lower risk than script.
+- `default-src 'self'`, `img-src 'self' data:`, `font-src 'self'` (fonts self-hosted via `next/font`), `connect-src 'self'`, `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`, `frame-src 'none'`, `form-action 'self'`, `worker-src 'self'`, `manifest-src 'self'`, `upgrade-insecure-requests`.
+- **Verified against the running production build**: all script tags nonced (11/11), the `next-themes` inline script executed (`data-theme` applied), React hydrated, **zero console CSP violations**.
+- **Follow-up (next phase):** when the auth frontend calls the API on another origin, add that origin to `connect-src` in the middleware.
+
+## HSTS
+
+**Production only, at every layer that terminates TLS, but authored to avoid
+conflict:**
+- API: `helmet` emits `Strict-Transport-Security: max-age=31536000; includeSubDomains` only when `NODE_ENV=production` (off in dev/test — verified by the header test).
+- Web: `next.config.ts` emits the same header only when `NODE_ENV=production`.
+- **Responsibility & deployment requirement:** the **edge (Cloudflare / reverse proxy) is the canonical HSTS authority** for `portal.telvyn.co`. The app-level HSTS is a defensive fallback for direct-origin traffic; keep `max-age` and `includeSubDomains` consistent across edge and app. `preload` is intentionally OFF until the domain is committed to HTTPS-only (enabling preload is a one-way door). Local HTTP dev is never pinned (prod-gated).
+
+## PostgreSQL RLS — DEFERRED (see ADR-0005)
+
+RLS is **not operative**, by explicit decision (**ADR-0005**). The app-layer
+scoped Prisma client is the sufficient, tested isolation control at this stage.
+Blockers: (1) app runs as the table-owner role, not a dedicated `NOBYPASSRLS`
+role; (2) per-transaction `SET LOCAL app.tenant_id` wiring is a real data-layer
+refactor under Prisma pooling; (3) system/admin/worker cross-tenant paths are
+undesigned (none exist yet). `enable-rls.sql` is the staged artifact; a 5-step
+activation plan is in ADR-0005, to revisit before multi-worker / prod launch.
+**RLS is defense-in-depth and never replaces application authorization.**
+
+## Authentication frontend — INCOMPLETE (next phase)
+
+Not built in this hardening pass by design. The web app is a static shell with
+**zero backend calls** and an honest `session.user = null` seam
+(`apps/web/src/lib/shell-config.ts`) — **no fake auth, no client-stored
+tokens**. Required frontend work (its own phase): login form → API `/v1/auth/login`,
+MFA challenge/verify UI, session restoration (silent refresh via the httpOnly
+cookie), logout / logout-all, session & device management screens, password
+reset + email verification flows, tenant selection (from memberships), and an
+RBAC/permission context to gate UI actions (backend enforcement already exists
+and remains the source of truth — UI gating is convenience only).
+
+## Security assumptions & deployment requirements
+
+- **TLS terminates at the edge**; the API and web run behind it. HSTS is owned
+  at the edge (app fallback only). Set `COOKIE_SECURE=true` in production so the
+  refresh cookie carries `Secure`.
+- **CORS** is locked to `WEB_ORIGIN`; set it to the real portal origin in prod.
+- Secrets come from the environment / a secret manager — never git; `.env` is
+  gitignored and untracked. `JWT_ACCESS_SECRET` and `APP_ENCRYPTION_KEY` must be
+  strong per-environment values.
+- The CSP `connect-src` and (future) WebRTC `Permissions-Policy: microphone`
+  must be revisited when the auth frontend and the telecom softphone land.

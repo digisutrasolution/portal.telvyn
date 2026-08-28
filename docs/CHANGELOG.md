@@ -87,3 +87,17 @@ Format: Keep a Changelog; SemVer once releases begin.
   written but not operative (app-layer scoping is active + tested). No P0/P1
   security or data-integrity defects found. Verdict: NOT READY for next phase
   until e2e re-run green + CI + security headers land. Full report in session.
+
+### Security
+- 2026-08-29 — **Pre-Phase-12 security hardening.** API: `helmet` tuned for a
+  JSON API (`default-src 'none'`, DENY frames, no-referrer, CORP same-site,
+  Permissions-Policy; HSTS prod-only) + 3 header regression tests. Web:
+  nonce-based CSP (production-only) via `middleware.ts` — `script-src` nonce +
+  `strict-dynamic`, no `unsafe-eval`/script-`unsafe-inline` (style-`unsafe-inline`
+  documented-necessary for Radix); `next.config.ts` gains Permissions-Policy +
+  prod-only HSTS; nonce threaded to `next-themes`. Verified against the running
+  production build (11/11 scripts nonced, theme script executed, hydrated, zero
+  CSP violations). RLS: **deferred** with a staged plan (ADR-0005) — app-layer
+  scoping remains the tested control. Auth frontend: documented INCOMPLETE (next
+  phase). Regression: API 51/51 (48 baseline + 3 header), web 13/13, typecheck +
+  lint clean, web prod build green. No security control weakened.

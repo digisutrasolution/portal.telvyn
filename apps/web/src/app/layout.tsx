@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Space_Grotesk, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { AppShell } from "@/components/shell/app-shell";
 import "./globals.css";
@@ -29,7 +30,9 @@ export const metadata: Metadata = {
   description: "Telvyn PROMAX — enterprise DID management control plane.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Nonce set by middleware in production (undefined in dev, where there is no CSP).
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html
       lang="en"
@@ -37,7 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${spaceGrotesk.variable} ${plexSans.variable} ${plexMono.variable}`}
     >
       <body>
-        <AppShell>{children}</AppShell>
+        <AppShell nonce={nonce}>{children}</AppShell>
       </body>
     </html>
   );

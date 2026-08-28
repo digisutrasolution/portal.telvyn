@@ -9,9 +9,9 @@ import { Topbar } from "./topbar";
 import { CommandPalette } from "./command-palette";
 
 /** Application shell: theme + tooltip + shell state providers, rail, topbar, palette. */
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, nonce }: { children: React.ReactNode; nonce?: string }) {
   return (
-    <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange nonce={nonce}>
       <TooltipProvider delayDuration={300}>
         <ShellProvider>
           <a
