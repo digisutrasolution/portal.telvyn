@@ -1,0 +1,103 @@
+# Telvyn CI — the SEC-003 enforcement gate. Runs on every push and PR.
+# Blocks the merge unless typecheck, lint, the FULL test suite (unit + e2e
+# against real Postgres + Redis), and the web production build all pass.
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: typecheck · lint · test · build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine # native uuidv7(); the migration shim is a no-op here
+        env:
+          POSTGRES_USER: telvyn
+          POSTGRES_PASSWORD: telvyn_dev
+          POSTGRES_DB: telvyn
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U telvyn -d telvyn"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-secret-ci-secret-ci-secret-ci-secret-01
+      APP_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      COOKIE_SECURE: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma generate
+        run: pnpm --filter @telvyn/api exec prisma generate
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Lint
+        run: pnpm -r lint
+
+      - name: Apply migrations + seed
+        run: |
+          pnpm --filter @telvyn/api exec prisma migrate deploy
+          pnpm --filter @telvyn/api exec prisma db seed
+
+      - name: Test (unit + e2e against live Postgres + Redis)
+        run: pnpm -r test
+
+      - name: Web production build
+        run: pnpm --filter @telvyn/web build
+
+  audit:
+    name: dependency audit (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      # Advisory for now (does not block merges); tighten to a hard gate once
+      # the dependency tree is triaged. Reports high+ severity advisories.
+      - name: pnpm audit
+        run: pnpm audit --audit-level high || true

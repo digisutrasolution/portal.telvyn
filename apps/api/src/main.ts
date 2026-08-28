@@ -28,7 +28,6 @@ async function bootstrap(): Promise<void> {
   const env = loadEnv();
   const app = await createApp();
   await app.listen(env.API_PORT);
-  // eslint-disable-next-line no-console
   console.log(`telvyn-api listening on :${env.API_PORT}`);
 }
 

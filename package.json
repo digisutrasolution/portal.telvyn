@@ -12,6 +12,13 @@
     "dev": "pnpm --filter @telvyn/web dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9",
+    "eslint": "^9",
+    "globals": "^17.11.0",
+    "typescript-eslint": "^8"
   }
 }

@@ -12,7 +12,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "create-operator": "tsx scripts/create-operator.ts",
-    "create-tenant": "tsx scripts/create-tenant.ts"
+    "create-tenant": "tsx scripts/create-tenant.ts",
+    "lint": "eslint ."
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
