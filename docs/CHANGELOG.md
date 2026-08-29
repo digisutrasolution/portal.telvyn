@@ -101,3 +101,16 @@ Format: Keep a Changelog; SemVer once releases begin.
   scoping remains the tested control. Auth frontend: documented INCOMPLETE (next
   phase). Regression: API 51/51 (48 baseline + 3 header), web 13/13, typecheck +
   lint clean, web prod build green. No security control weakened.
+
+### Phase 12
+- 2026-08-29 — **Phase 12A — Telecom control-plane architecture + domain
+  boundaries** (documentation only; no schema, no code). ADRs added: 0006
+  (control plane vs data plane), 0007 (provider-neutral engine abstraction +
+  honest NOT-IMPLEMENTED adapters), 0008 (carrier platform/wholesale vs tenant
+  + system-or-tenant read mode), 0009 (TelecomCredential vault — secrets
+  separated from config, never exposed/logged/audited, external-manager
+  compatible), 0010 (node config vs runtime + provider-neutral health model,
+  no fabricated health). TELECOM.md expanded with the 15 domain boundaries and
+  the table-vs-deferred split (Endpoint/CodecPolicy/NumberingPlan/FailoverPolicy
+  = fields; Registration/CallSession = non-persisted runtime). No application
+  code changed; baseline intact.
