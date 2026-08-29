@@ -1,9 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { TenantType } from "@prisma/client";
 
 /** Request-scoped authorization context, derived server-side (never from client input). */
 export interface TenantContext {
   userId: string;
   tenantId: string;
+  /** Active tenant's type — gates platform-only telecom infrastructure. */
+  tenantType: TenantType;
   membershipId: string;
   /** Expanded, concrete permission keys granted to this membership. */
   permissions: ReadonlySet<string>;

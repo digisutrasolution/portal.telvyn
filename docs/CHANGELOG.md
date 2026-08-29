@@ -129,3 +129,11 @@ Format: Keep a Changelog; SemVer once releases begin.
   static capability profiles (honest software facts, e.g. Kamailio declares no
   RTP). `TelecomModule` wired into AppModule (providers only, no controllers/DB
   yet). +7 unit tests. Regression: API 58/58 (51 + 7), typecheck ✓, lint ✓.
+- 2026-08-29 — **Phase 12D — Region + Node model (platform telecom infra).**
+  Services + `/v1/telecom/{regions,engines,nodes}` CRUD (+ engine capabilities,
+  node health read). New `PlatformGuard` (+`tenantType` on TenantContext, loaded
+  by TenantGuard) restricts platform infra to PLATFORM-tenant members — a
+  customer owner with `*` is refused. Zod validation, referential checks,
+  audited mutations, honest health (UNKNOWN) + honest adapter metadata. +4 e2e
+  (platform-scope, permission gating, CRUD/integrity/health, audit). Regression:
+  API 62/62 (58 + 4), typecheck ✓, lint ✓. No schema changes (uses 12B tables).

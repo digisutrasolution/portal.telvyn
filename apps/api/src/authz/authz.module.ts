@@ -7,11 +7,12 @@ import { RolesService } from "./roles.service";
 import { AuditService } from "./audit.service";
 import { TenantGuard } from "./tenant.guard";
 import { PermissionGuard } from "./permission.guard";
+import { PlatformGuard } from "./platform.guard";
 
 @Module({
   imports: [AuthModule],
   controllers: [AuthzController],
-  providers: [PrismaService, TenancyService, RolesService, AuditService, TenantGuard, PermissionGuard],
-  exports: [TenantGuard, PermissionGuard, AuditService],
+  providers: [PrismaService, TenancyService, RolesService, AuditService, TenantGuard, PermissionGuard, PlatformGuard],
+  exports: [TenantGuard, PermissionGuard, PlatformGuard, AuditService],
 })
 export class AuthzModule {}

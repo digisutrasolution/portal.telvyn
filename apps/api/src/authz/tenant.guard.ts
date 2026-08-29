@@ -25,7 +25,7 @@ export class TenantGuard implements CanActivate {
     const membership = await this.prisma.membership.findUnique({
       where: { userId_tenantId: { userId: req.auth.sub, tenantId } },
       include: {
-        tenant: { select: { status: true, deletedAt: true } },
+        tenant: { select: { status: true, deletedAt: true, type: true } },
         roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
       },
     });
@@ -44,6 +44,7 @@ export class TenantGuard implements CanActivate {
     const ctx: TenantContext = {
       userId: req.auth.sub,
       tenantId,
+      tenantType: membership.tenant.type,
       membershipId: membership.id,
       permissions: new Set(expandGrants(grants)),
     };
