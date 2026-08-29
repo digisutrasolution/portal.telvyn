@@ -41,3 +41,30 @@ describe("applyTenantScope (data-layer isolation, ADR-0004)", () => {
     expect(TENANT_SCOPED_MODELS.has("AuditLog")).toBe(true);
   });
 });
+
+import { authorizeDualNatureWrite, ownerTenantIdForCreate, systemOrTenantWhere } from "./tenant-scope";
+
+describe("system-or-tenant scope (ADR-0008)", () => {
+  const TA = "11111111-1111-7111-8111-111111111111";
+  const TB = "22222222-2222-7222-8222-222222222222";
+
+  it("read filter returns own-tenant OR system rows", () => {
+    expect(systemOrTenantWhere(TA)).toEqual({ OR: [{ tenantId: TA }, { tenantId: null }] });
+  });
+
+  it("create stamps system (null) for platform, own tenant otherwise", () => {
+    expect(ownerTenantIdForCreate({ tenantId: TA, isPlatform: true })).toBeNull();
+    expect(ownerTenantIdForCreate({ tenantId: TA, isPlatform: false })).toBe(TA);
+  });
+
+  it("authorizes writes: own=allow, system=platform-only, foreign=not_found", () => {
+    // own tenant row
+    expect(authorizeDualNatureWrite(TA, { tenantId: TA, isPlatform: false })).toBe("allow");
+    // system row: platform allowed, tenant forbidden
+    expect(authorizeDualNatureWrite(null, { tenantId: TA, isPlatform: true })).toBe("allow");
+    expect(authorizeDualNatureWrite(null, { tenantId: TA, isPlatform: false })).toBe("forbidden_system");
+    // another tenant's row → IDOR-safe not_found
+    expect(authorizeDualNatureWrite(TB, { tenantId: TA, isPlatform: false })).toBe("not_found");
+    expect(authorizeDualNatureWrite(TB, { tenantId: TA, isPlatform: true })).toBe("not_found");
+  });
+});

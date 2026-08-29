@@ -141,3 +141,27 @@ Every transition audited and permission-gated.
 ## Integrations
 
 None — documented per carrier as each is contracted.
+
+## Carrier foundation — EXISTING (Phase 12E, 2026-08-29)
+
+Carriers are **dual-nature** (ADR-0008): `tenantId = null` → **SYSTEM**
+(platform/wholesale, operator-owned); `tenantId` set → **TENANT**-owned. Scope
+is derived from the authenticated context via the `systemOrTenantWhere` /
+`authorizeDualNatureWrite` / `ownerTenantIdForCreate` helpers — never from a
+client field. A caller reads its own carriers + system carriers; may write only
+its own (a tenant writing a system carrier → 403; another tenant's id → 404,
+IDOR-safe); a PLATFORM caller creates/manages system carriers. Scope is
+**immutable** (no tenant→system escalation — the DTO has no tenantId/scope field).
+
+**Credential vault relationship (ADR-0009):** carriers reference a
+`TelecomCredential` by id; secrets live only in the vault (AES-256-GCM). Carrier
+APIs expose safe metadata only (`credentialId`, type, label, non-secret hint,
+scope) — never the secret, in responses, lists, logs, or audit. Decryption is
+confined to `TelecomCredentialService.revealForAdapter` (adapter boundary; no
+API path reaches it; secrets are not cached). Credential attachment is
+ownership-checked: own = allowed, system = platform-only, foreign tenant = 404.
+
+**Status vs health:** administrative `status` (ACTIVE/SUSPENDED/DISABLED) is a
+config field; **health is separate and honest** — reported `UNKNOWN` (no carrier
+health check exists yet). **Delete is soft** (`deletedAt`) — history preserved,
+no cascade destruction. LCR / rate cards / routing remain out of scope.

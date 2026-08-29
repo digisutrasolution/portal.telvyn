@@ -137,3 +137,12 @@ Format: Keep a Changelog; SemVer once releases begin.
   audited mutations, honest health (UNKNOWN) + honest adapter metadata. +4 e2e
   (platform-scope, permission gating, CRUD/integrity/health, audit). Regression:
   API 62/62 (58 + 4), typecheck ✓, lint ✓. No schema changes (uses 12B tables).
+- 2026-08-29 — **Phase 12E — Carrier foundation.** `/v1/telecom/carriers` CRUD
+  on the 12B tables (no schema change). Dual-nature scope (ADR-0008) via new
+  `systemOrTenantWhere`/`authorizeDualNatureWrite`/`ownerTenantIdForCreate`
+  helpers (unit-tested); `TelecomCredentialService` vault (ADR-0009) — secrets
+  encrypted at rest, never selected/returned/logged/audited, decrypt only at the
+  adapter boundary. Cursor pagination + filters (status/region/scope/q). RBAC
+  reuses 12B `carrier.*`. +11 tests (8 carrier e2e: isolation/IDOR/system-scope/
+  credential-secrecy/validation/pagination + 3 scope-helper units). Regression:
+  API 73/73 (62 + 11), web 13/13, typecheck ✓, lint ✓. No migration.

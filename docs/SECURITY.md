@@ -311,3 +311,18 @@ and remains the source of truth — UI gating is convenience only).
   strong per-environment values.
 - The CSP `connect-src` and (future) WebRTC `Permissions-Policy: microphone`
   must be revisited when the auth frontend and the telecom softphone land.
+
+## Carrier + credential security (Phase 12E, 2026-08-29)
+
+- **Dual-nature isolation (ADR-0008):** carrier scope is server-derived; a
+  tenant cannot read/update/delete/enumerate another tenant's carrier (IDOR →
+  404) nor mutate a system carrier (403), nor escalate its own carrier's scope
+  (client `tenantId`/`scope`/`system` fields are stripped by the Zod DTO —
+  mass-assignment safe). e2e-proven.
+- **Credential secrecy (ADR-0009):** the encrypted secret (`secretEnc`) is never
+  selected into a carrier query (explicit credential `select` omits it) and
+  never appears in any response, list, audit metadata, or error. Cross-tenant
+  credential attachment → 404; tenant attaching a system credential → 403.
+  e2e assertions verify the secret string is absent from responses and audit.
+- Decryption is isolated to `revealForAdapter` (adapter boundary only); secrets
+  are not cached in Redis or long-lived memory.

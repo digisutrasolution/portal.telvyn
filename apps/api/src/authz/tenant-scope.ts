@@ -9,6 +9,50 @@
 /** Models that carry a tenantId and must always be tenant-scoped. */
 export const TENANT_SCOPED_MODELS = new Set(["Membership", "Role", "AuditLog"]);
 
+// ---------------------------------------------------------------------------
+// System-or-tenant scope (ADR-0008). Dual-nature models (Carrier,
+// TelecomCredential, …) may be platform-owned (tenantId = null) OR tenant-owned
+// (tenantId set). The auto-scoping client above cannot express "own tenant OR
+// system", so these models use the RAW client with the helpers below —
+// expressed ONCE, here, and unit-tested — instead of scattered raw `OR` filters.
+// ---------------------------------------------------------------------------
+
+/** READ filter: a caller sees its own rows plus system (platform) rows. */
+export function systemOrTenantWhere(tenantId: string): {
+  OR: [{ tenantId: string }, { tenantId: null }];
+} {
+  return { OR: [{ tenantId }, { tenantId: null }] };
+}
+
+/** Outcome of authorizing a WRITE against a dual-nature row. */
+export type DualNatureWrite = "allow" | "forbidden_system" | "not_found";
+
+/**
+ * WRITE authorization for a dual-nature row:
+ *   - system row (tenantId null): only a PLATFORM caller may write; a tenant
+ *     caller is `forbidden_system` (it can read the row but not mutate it).
+ *   - own tenant row: allowed.
+ *   - another tenant's row: `not_found` — IDOR-safe (never disclose existence).
+ * Scope is derived from the authenticated context, never from client input.
+ */
+export function authorizeDualNatureWrite(
+  rowTenantId: string | null,
+  ctx: { tenantId: string; isPlatform: boolean },
+): DualNatureWrite {
+  if (rowTenantId === null) return ctx.isPlatform ? "allow" : "forbidden_system";
+  if (rowTenantId === ctx.tenantId) return "allow";
+  return "not_found";
+}
+
+/**
+ * Owner tenantId to STAMP on a newly created dual-nature row, derived from
+ * context: a PLATFORM caller creates a system row (null); any other tenant
+ * creates a row it owns. The client never supplies this.
+ */
+export function ownerTenantIdForCreate(ctx: { tenantId: string; isPlatform: boolean }): string | null {
+  return ctx.isPlatform ? null : ctx.tenantId;
+}
+
 /** Thrown when a tenant-owned model is accessed without a tenant context. */
 export class TenantScopeError extends Error {
   constructor(model: string, operation: string) {

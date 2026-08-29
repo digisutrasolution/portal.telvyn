@@ -12,17 +12,22 @@ import { EnginesService } from "./engines/engines.service";
 import { EnginesController } from "./engines/engines.controller";
 import { NodesService } from "./nodes/nodes.service";
 import { NodesController } from "./nodes/nodes.controller";
+import { TelecomCredentialService } from "./secrets/telecom-credential.service";
+import { CarriersService } from "./carriers/carriers.service";
+import { CarriersController } from "./carriers/carriers.controller";
 
 /**
  * Telecom control plane (Phase 12).
  * 12C — provider-neutral engine abstraction (adapter registry + stubs).
  * 12D — platform infrastructure: Region, TelecomEngine (+capabilities),
- *       TelecomNode (+health). All routes are JWT + tenant + PLATFORM-scope +
- *       permission gated and audited via the existing AuditService.
+ *       TelecomNode (+health). PLATFORM-scoped.
+ * 12E — carrier foundation: dual-nature (system/tenant) carriers with the
+ *       TelecomCredential vault (secrets never exposed). Tenant-facing.
+ * All mutations are audited via the existing AuditService.
  */
 @Module({
   imports: [AuthModule, AuthzModule],
-  controllers: [RegionsController, EnginesController, NodesController],
+  controllers: [RegionsController, EnginesController, NodesController, CarriersController],
   providers: [
     PrismaService,
     KamailioAdapter,
@@ -32,7 +37,9 @@ import { NodesController } from "./nodes/nodes.controller";
     RegionsService,
     EnginesService,
     NodesService,
+    TelecomCredentialService,
+    CarriersService,
   ],
-  exports: [EngineRegistryService],
+  exports: [EngineRegistryService, TelecomCredentialService],
 })
 export class TelecomModule {}

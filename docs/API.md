@@ -64,3 +64,23 @@ framework, 12I). Lists are bounded (take 500); cursor pagination lands with the
 high-cardinality tenant resources (DIDs, 12G). **Note:** the hand-authored
 OpenAPI YAML currently covers `/v1/auth` only; authz + telecom endpoints are
 documented here (pre-existing gap, tracked — YAML expansion is future work).
+
+## Carrier API — EXISTING (Phase 12E, 2026-08-29)
+
+`/v1/telecom/carriers` — JWT + tenant + permission gated; system-vs-tenant scope
+enforced in the service (not a client field). Mutations audited (credentialId
+reference only, never the secret).
+
+| Method & path | Permission |
+|---|---|
+| `GET /v1/telecom/carriers` (cursor pagination; filters `status`, `regionId`, `scope=all\|system\|tenant`, `q`) | `carrier.read` |
+| `GET /v1/telecom/carriers/:id` | `carrier.read` |
+| `POST /v1/telecom/carriers` (inline `credential` XOR `credentialId`) | `carrier.create` |
+| `PATCH /v1/telecom/carriers/:id` | `carrier.update` |
+| `DELETE /v1/telecom/carriers/:id` (soft delete) | `carrier.delete` |
+
+Response is a safe DTO: `scope` (SYSTEM/TENANT, computed), config fields, a safe
+`credential` summary (`id`, type, label, hint, scope — never the secret), and
+honest `health` (UNKNOWN). Routing note: telecom resources live under
+`/v1/telecom/*` (12D convention) rather than the prompt's `/v1/carriers` example.
+OpenAPI YAML still covers `/v1/auth` only (tracked debt) — endpoints documented here.
