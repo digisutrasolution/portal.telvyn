@@ -182,3 +182,11 @@ Tenancy: `SipTrunk`, `RoutingProfile` are strictly tenant-owned (required
 (platform/pool vs tenant) per ADR-0008. Data-layer scope registration + the
 system-or-tenant read helper land with each resource's service (12E–12H), and
 each carries cross-tenant/IDOR tests then.
+
+## SipTrunk carrier link — EXISTING (Phase 12F, 2026-08-29)
+
+Additive migration `sip_trunk_carrier_link`: `SipTrunk.carrierId` (required, FK →
+Carrier, `ON DELETE RESTRICT`) + `SipTrunk_carrierId_idx`. Reviewed via
+`--create-only` before apply — table verified empty (0 rows), so the NOT NULL add
+is safe; no destructive ops, no changes to other tables. `SipTrunk` joins
+`TENANT_SCOPED_MODELS` (strictly tenant-owned → auto-scoped).

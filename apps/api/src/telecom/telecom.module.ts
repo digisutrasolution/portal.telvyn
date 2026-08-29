@@ -15,6 +15,8 @@ import { NodesController } from "./nodes/nodes.controller";
 import { TelecomCredentialService } from "./secrets/telecom-credential.service";
 import { CarriersService } from "./carriers/carriers.service";
 import { CarriersController } from "./carriers/carriers.controller";
+import { SipTrunksService } from "./sip-trunks/sip-trunks.service";
+import { SipTrunksController } from "./sip-trunks/sip-trunks.controller";
 
 /**
  * Telecom control plane (Phase 12).
@@ -27,7 +29,7 @@ import { CarriersController } from "./carriers/carriers.controller";
  */
 @Module({
   imports: [AuthModule, AuthzModule],
-  controllers: [RegionsController, EnginesController, NodesController, CarriersController],
+  controllers: [RegionsController, EnginesController, NodesController, CarriersController, SipTrunksController],
   providers: [
     PrismaService,
     KamailioAdapter,
@@ -39,6 +41,7 @@ import { CarriersController } from "./carriers/carriers.controller";
     NodesService,
     TelecomCredentialService,
     CarriersService,
+    SipTrunksService,
   ],
   exports: [EngineRegistryService, TelecomCredentialService],
 })

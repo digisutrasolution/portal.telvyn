@@ -6,8 +6,13 @@
  * behavior is unit-tested without a database.
  */
 
-/** Models that carry a tenantId and must always be tenant-scoped. */
-export const TENANT_SCOPED_MODELS = new Set(["Membership", "Role", "AuditLog"]);
+/**
+ * Models that carry a REQUIRED tenantId and must always be tenant-scoped by the
+ * auto-scoping client (deny-by-default + IDOR-safe). Dual-nature models
+ * (Carrier, TelecomCredential) are NOT here — they use the system-or-tenant
+ * helpers below instead.
+ */
+export const TENANT_SCOPED_MODELS = new Set(["Membership", "Role", "AuditLog", "SipTrunk"]);
 
 // ---------------------------------------------------------------------------
 // System-or-tenant scope (ADR-0008). Dual-nature models (Carrier,

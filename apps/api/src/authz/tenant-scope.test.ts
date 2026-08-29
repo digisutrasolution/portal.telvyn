@@ -68,3 +68,14 @@ describe("system-or-tenant scope (ADR-0008)", () => {
     expect(authorizeDualNatureWrite(TB, { tenantId: TA, isPlatform: true })).toBe("not_found");
   });
 });
+
+describe("SipTrunk is auto-scoped (12F)", () => {
+  it("is in the scoped set and gets tenantId injected on reads", () => {
+    expect(TENANT_SCOPED_MODELS.has("SipTrunk")).toBe(true);
+    const scoped = applyTenantScope("SipTrunk", "findMany", { where: { status: "ACTIVE" } }, "t-1");
+    expect(scoped.where).toEqual({ status: "ACTIVE", tenantId: "t-1" });
+  });
+  it("refuses an unscoped SipTrunk query (deny-by-default)", () => {
+    expect(() => applyTenantScope("SipTrunk", "findMany", {}, undefined)).toThrow(TenantScopeError);
+  });
+});

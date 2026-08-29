@@ -165,3 +165,32 @@ ownership-checked: own = allowed, system = platform-only, foreign tenant = 404.
 config field; **health is separate and honest** — reported `UNKNOWN` (no carrier
 health check exists yet). **Delete is soft** (`deletedAt`) — history preserved,
 no cascade destruction. LCR / rate cards / routing remain out of scope.
+
+## SIP trunk foundation — EXISTING (Phase 12F, 2026-08-29)
+
+**Control-plane configuration only — NO live SIP/RTP connectivity.** SIP trunks
+are **strictly tenant-owned** (required `tenantId`) and use the auto-scoping
+client (`prisma.scoped.sipTrunk`) for deny-by-default tenant isolation + IDOR
+(foreign id → 404). Additive migration `sip_trunk_carrier_link` added the
+required `carrierId` FK (the trunk↔carrier link 12B lacked).
+
+- **Carrier relationship:** every trunk references a carrier that must be
+  accessible in the caller's scope (own or system, via `systemOrTenantWhere`);
+  a foreign/deleted/nonexistent carrier → 400.
+- **Credential (ADR-0009):** SIP passwords live in the vault; the trunk holds a
+  `credentialId`. Referenced credentials are type-checked (must be
+  `SIP_PASSWORD`) and ownership-checked (foreign → 404, system → 403); inline
+  credentials are vaulted as SIP_PASSWORD. Secrets never appear in
+  responses/lists/audit/logs (credential `select` omits `secretEnc`).
+- **Auth modes:** `IP` and `CREDENTIALS` (12B enum) — `NONE`/`REGISTRATION` are
+  future (runtime registration remains non-persisted, Phase 12A). Transport
+  (`UDP/TCP/TLS`), TLS, SRTP, DTMF, codecs are declarative config; **no cert
+  provisioning, no media/RTP, no live registration**.
+- **Endpoint (SSRF posture):** host/URI validated as attacker-controlled — no
+  control chars, no CRLF/header injection, valid host/IP, `sip:`/`sips:` scheme
+  only. **No outbound connection is ever made in 12F.** A future health/probe
+  service MUST add allowlisting, egress/private-network restrictions, DNS-
+  rebinding protection, IP validation, timeouts, and auditability before
+  contacting any user-supplied endpoint (documented boundary).
+- **Status vs health:** administrative `status` is config; health is honest
+  `UNKNOWN`. **Soft delete** (`deletedAt`); no cascade destruction.

@@ -326,3 +326,17 @@ and remains the source of truth — UI gating is convenience only).
   e2e assertions verify the secret string is absent from responses and audit.
 - Decryption is isolated to `revealForAdapter` (adapter boundary only); secrets
   are not cached in Redis or long-lived memory.
+
+## SIP trunk security (Phase 12F, 2026-08-29)
+
+- **Tenant isolation:** trunks are auto-scoped (`TENANT_SCOPED_MODELS`); B cannot
+  read/update/delete/enumerate A's trunk (IDOR → 404). e2e-proven.
+- **Mass assignment:** client `tenantId`/`scope`/`deletedAt` are stripped by the
+  Zod DTO — ownership/scope immutable; no tenant/system escalation.
+- **Carrier/credential authorization:** carrier must be caller-accessible;
+  credential ownership + SIP_PASSWORD type enforced; secret never returned/logged/
+  audited (verified absent in responses + audit).
+- **SSRF/CRLF input hardening:** SIP host/URI reject control chars, CRLF/header
+  injection, whitespace, and non-`sip(s):` schemes. **12F makes no outbound
+  connections**; future probing requires egress allowlisting + private-network/
+  DNS-rebinding protection (documented boundary in TELECOM.md).

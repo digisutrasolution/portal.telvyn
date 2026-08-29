@@ -578,6 +578,7 @@ model Carrier {
   credential   TelecomCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
 
   sipEndpoints CarrierSipEndpoint[]
+  sipTrunks    SipTrunk[]
   dids         Did[]
   routingRules RoutingRule[]
 
@@ -612,6 +613,10 @@ model SipTrunk {
   id                 String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
   tenantId           String            @db.Uuid
   tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Every trunk connects to a carrier (Phase 12F). Restrict: a carrier with
+  // trunks cannot be hard-deleted (carriers soft-delete in practice).
+  carrierId          String            @db.Uuid
+  carrier            Carrier           @relation(fields: [carrierId], references: [id], onDelete: Restrict)
   name               String
   direction          SipTrunkDirection @default(BIDIRECTIONAL)
   sipUri             String?
@@ -636,6 +641,7 @@ model SipTrunk {
   deletedAt DateTime?
 
   @@index([tenantId, status])
+  @@index([carrierId])
 }
 
 // --- DID (nullable tenant: null = platform inventory pool, set = assigned) --

@@ -84,3 +84,21 @@ Response is a safe DTO: `scope` (SYSTEM/TENANT, computed), config fields, a safe
 honest `health` (UNKNOWN). Routing note: telecom resources live under
 `/v1/telecom/*` (12D convention) rather than the prompt's `/v1/carriers` example.
 OpenAPI YAML still covers `/v1/auth` only (tracked debt) — endpoints documented here.
+
+## SIP trunk API — EXISTING (Phase 12F, 2026-08-29)
+
+`/v1/telecom/sip-trunks` — JWT + tenant + permission gated; strictly tenant-owned
+(auto-scoped). Mutations audited (carrierId/credentialId/transport/direction
+references only — never secrets).
+
+| Method & path | Permission |
+|---|---|
+| `GET /v1/telecom/sip-trunks` (cursor pagination; filters `status`, `direction`, `transport`, `carrierId`, `q`) | `sip_trunk.read` |
+| `GET /v1/telecom/sip-trunks/:id` | `sip_trunk.read` |
+| `POST /v1/telecom/sip-trunks` (inline `credential` XOR `credentialId`) | `sip_trunk.create` |
+| `PATCH /v1/telecom/sip-trunks/:id` | `sip_trunk.update` |
+| `DELETE /v1/telecom/sip-trunks/:id` (soft delete) | `sip_trunk.delete` |
+
+Response is a safe DTO (config + carrier summary + safe credential metadata +
+honest `health: UNKNOWN`) — never `secretEnc`/passwords. OpenAPI YAML still
+covers `/v1/auth` only (tracked debt) — endpoints documented here.

@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { TelecomCredential, TelecomCredentialType } from "@prisma/client";
 import { PrismaService } from "@/infra/prisma.service";
 import { loadEnv } from "@/config/env";
@@ -80,15 +80,22 @@ export class TelecomCredentialService {
    *   - system credential → only a PLATFORM caller
    *   - another tenant's → NotFound (IDOR-safe)
    */
-  async assertAttachable(credentialId: string, ctx: CredentialScopeCtx): Promise<string> {
+  async assertAttachable(
+    credentialId: string,
+    ctx: CredentialScopeCtx,
+    expectedType?: TelecomCredentialType,
+  ): Promise<string> {
     const c = await this.prisma.telecomCredential.findFirst({
       where: { id: credentialId, deletedAt: null },
-      select: { id: true, tenantId: true },
+      select: { id: true, tenantId: true, type: true },
     });
     if (!c) throw new NotFoundException("Credential not found");
     const decision = authorizeDualNatureWrite(c.tenantId, ctx);
     if (decision === "not_found") throw new NotFoundException("Credential not found");
     if (decision === "forbidden_system") throw new ForbiddenException("Cannot attach a system credential to this resource");
+    if (expectedType && c.type !== expectedType) {
+      throw new BadRequestException(`Credential type ${c.type} is not compatible (expected ${expectedType})`);
+    }
     return c.id;
   }
 

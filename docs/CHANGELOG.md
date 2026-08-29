@@ -146,3 +146,12 @@ Format: Keep a Changelog; SemVer once releases begin.
   reuses 12B `carrier.*`. +11 tests (8 carrier e2e: isolation/IDOR/system-scope/
   credential-secrecy/validation/pagination + 3 scope-helper units). Regression:
   API 73/73 (62 + 11), web 13/13, typecheck ✓, lint ✓. No migration.
+- 2026-08-29 — **Phase 12F — SIP trunk foundation** (control-plane config only,
+  no live connectivity). Additive migration `sip_trunk_carrier_link`
+  (`SipTrunk.carrierId` FK + index; reviewed --create-only, table empty). New
+  `/v1/telecom/sip-trunks` CRUD; SipTrunk added to `TENANT_SCOPED_MODELS`
+  (auto-scoped, IDOR-safe). Carrier-accessibility + credential ownership/type
+  (SIP_PASSWORD) checks; secrets vault-only, never exposed. SSRF/CRLF-hardened
+  host/URI validation; no outbound connections. RBAC reuses 12B `sip_trunk.*`.
+  +11 tests (9 e2e + 2 scope). Regression: API 84/84 (73 + 11), web 13/13,
+  typecheck ✓, lint ✓, build ✓.
