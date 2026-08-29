@@ -77,6 +77,13 @@ model Tenant {
   roles         Role[]
   primaryUsers  User[]       @relation("UserPrimaryTenant")
 
+  // Telecom control plane (Phase 12). Back-relations only — no new column on Tenant.
+  carriers           Carrier[]
+  sipTrunks          SipTrunk[]
+  dids               Did[]
+  routingProfiles    RoutingProfile[]
+  telecomCredentials TelecomCredential[]
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -309,4 +316,431 @@ model EmailOutbox {
   sentAt    DateTime?
 
   @@index([status, createdAt])
+}
+
+// ===========================================================================
+// TELECOM CONTROL PLANE (Phase 12 — ADR-0006..0010).
+// Control-plane CONFIGURATION only; no SIP/RTP execution lives here. Runtime
+// concepts (Registration, CallSession) are NOT persisted (data plane).
+// Secret material lives ONLY in TelecomCredential (AES-256-GCM); config tables
+// reference a credentialId — never a plaintext secret.
+// ===========================================================================
+
+enum TelecomEngineType {
+  KAMAILIO
+  ASTERISK
+  FREESWITCH
+}
+
+enum TelecomEnvironment {
+  DEVELOPMENT
+  STAGING
+  PRODUCTION
+}
+
+// Administrative status of a telecom resource (config), distinct from health.
+enum TelecomStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+// Runtime health (ADR-0010). UNKNOWN until a real adapter probe exists.
+enum HealthStatus {
+  HEALTHY
+  DEGRADED
+  UNHEALTHY
+  UNKNOWN
+  DISABLED
+}
+
+// Explicit engine capabilities (ADR-0007) — never inferred from engine type.
+enum EngineCapabilityKey {
+  SIP
+  RTP
+  WEBRTC
+  REGISTRATION
+  INBOUND_CALLS
+  OUTBOUND_CALLS
+  IVR
+  RECORDING
+  TRANSCRIPTION
+  TTS
+  SRTP
+  TLS
+  CALL_TRANSFER
+  CALL_FORWARDING
+}
+
+enum Codec {
+  PCMU
+  PCMA
+  G722
+  G729
+  OPUS
+  AMR
+  AMR_WB
+}
+
+enum CarrierType {
+  ORIGINATION
+  TERMINATION
+  BIDIRECTIONAL
+}
+
+enum SipTransport {
+  UDP
+  TCP
+  TLS
+}
+
+enum SipTrunkDirection {
+  INBOUND
+  OUTBOUND
+  BIDIRECTIONAL
+}
+
+enum SipAuthMode {
+  IP
+  CREDENTIALS
+}
+
+// DID lifecycle (per constitution + owner-approved set). Transitions are
+// guarded + audited; engine execution is deferred to a later phase.
+enum DidStatus {
+  AVAILABLE
+  RESERVED
+  ASSIGNED
+  ACTIVE
+  SUSPENDED
+  PORTING
+  RELEASED
+}
+
+enum RoutingDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum TelecomCredentialType {
+  SIP_PASSWORD
+  CARRIER_API
+}
+
+enum ConfigChangeType {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+}
+
+enum HealthEntityType {
+  NODE
+  CARRIER
+  ENGINE
+}
+
+// --- Region (platform) -----------------------------------------------------
+model Region {
+  id             String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  code           String        @unique // e.g. "us-east"
+  name           String
+  country        String        @db.Char(2) // ISO-3166-1 alpha-2
+  timezone       String // IANA
+  providerRegion String? // upstream provider's region id
+  status         TelecomStatus @default(ACTIVE)
+
+  failoverRegionId String?  @db.Uuid
+  failoverRegion   Region?  @relation("RegionFailover", fields: [failoverRegionId], references: [id], onDelete: SetNull)
+  failoverFor      Region[] @relation("RegionFailover")
+
+  engines  TelecomEngine[]
+  nodes    TelecomNode[]
+  carriers Carrier[]
+  dids     Did[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([status])
+}
+
+// --- Telecom engine registry (platform, ADR-0007) --------------------------
+model TelecomEngine {
+  id          String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  name        String
+  type        TelecomEngineType
+  provider    String?
+  version     String?
+  endpoint    String? // management/API host reference — NOT a secret
+  environment TelecomEnvironment @default(DEVELOPMENT)
+  status      TelecomStatus      @default(DISABLED) // DISABLED until genuinely connected
+
+  regionId String? @db.Uuid
+  region   Region? @relation(fields: [regionId], references: [id], onDelete: SetNull)
+
+  capabilities EngineCapability[]
+  nodes        TelecomNode[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([type])
+  @@index([status])
+  @@index([regionId])
+}
+
+model EngineCapability {
+  id         String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  engineId   String              @db.Uuid
+  engine     TelecomEngine       @relation(fields: [engineId], references: [id], onDelete: Cascade)
+  capability EngineCapabilityKey
+  enabled    Boolean             @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@unique([engineId, capability])
+}
+
+// --- Telecom node: CONFIG (durable) ----------------------------------------
+model TelecomNode {
+  id                 String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  name               String
+  engineId           String             @db.Uuid
+  engine             TelecomEngine      @relation(fields: [engineId], references: [id], onDelete: Restrict)
+  regionId           String?            @db.Uuid
+  region             Region?            @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  zone               String?
+  environment        TelecomEnvironment @default(DEVELOPMENT)
+  hostRef            String? // address reference — NOT a secret
+  status             TelecomStatus      @default(DISABLED)
+  version            String?
+  maxCps             Int? // capacity ceiling (config, not live value)
+  maxConcurrentCalls Int?
+
+  health NodeHealth?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([engineId])
+  @@index([regionId])
+  @@index([status])
+}
+
+// --- Node health: RUNTIME snapshot (ephemeral, 1:1) ------------------------
+model NodeHealth {
+  id              String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  nodeId          String       @unique @db.Uuid
+  node            TelecomNode  @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  status          HealthStatus @default(UNKNOWN)
+  latencyMs       Int?
+  lastHeartbeatAt DateTime?
+  updatedAt       DateTime     @updatedAt
+}
+
+// --- Health events: append-only status transitions -------------------------
+model HealthEvent {
+  id            String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  entityType    HealthEntityType
+  entityId      String           @db.Uuid
+  tenantId      String?          @db.Uuid // null for platform entities
+  fromStatus    HealthStatus?
+  toStatus      HealthStatus
+  reason        String?
+  correlationId String?
+  createdAt     DateTime         @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([tenantId, createdAt])
+}
+
+// --- Carrier (platform/wholesale when tenantId null, else tenant; ADR-0008) -
+model Carrier {
+  id                 String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId           String?       @db.Uuid // null = platform/wholesale
+  tenant             Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name               String
+  type               CarrierType   @default(BIDIRECTIONAL)
+  country            String?       @db.Char(2)
+  regionId           String?       @db.Uuid
+  region             Region?       @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  status             TelecomStatus @default(DISABLED)
+  priority           Int           @default(100) // config; LCR deferred
+  codecs             Codec[]
+  maxCps             Int?
+  maxConcurrentCalls Int?
+
+  credentialId String?            @db.Uuid
+  credential   TelecomCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+
+  sipEndpoints CarrierSipEndpoint[]
+  dids         Did[]
+  routingRules RoutingRule[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId, status])
+  @@index([status])
+  @@index([regionId])
+}
+
+model CarrierSipEndpoint {
+  id        String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  carrierId String       @db.Uuid
+  carrier   Carrier      @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  host      String
+  port      Int          @default(5060)
+  transport SipTransport @default(UDP)
+  tls       Boolean      @default(false)
+  priority  Int          @default(100)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([carrierId])
+}
+
+// --- SIP trunk (tenant-owned) ----------------------------------------------
+model SipTrunk {
+  id                 String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId           String            @db.Uuid
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name               String
+  direction          SipTrunkDirection @default(BIDIRECTIONAL)
+  sipUri             String?
+  host               String?
+  port               Int               @default(5060)
+  transport          SipTransport      @default(UDP)
+  tls                Boolean           @default(false)
+  authMode           SipAuthMode       @default(CREDENTIALS)
+  allowedIps         String[] // IP-auth ACL
+  codecs             Codec[]
+  srtp               Boolean           @default(false)
+  dtmfMode           String? // e.g. "rfc2833" — simple config for now
+  maxCps             Int?
+  maxConcurrentCalls Int?
+  status             TelecomStatus     @default(DISABLED)
+
+  credentialId String?            @db.Uuid
+  credential   TelecomCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId, status])
+}
+
+// --- DID (nullable tenant: null = platform inventory pool, set = assigned) --
+model Did {
+  id         String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  e164       String    @unique // +14155550100 (partial-unique-on-live deferred)
+  tenantId   String?   @db.Uuid
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  country    String    @db.Char(2)
+  regionId   String?   @db.Uuid
+  region     Region?   @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  carrierId  String?   @db.Uuid
+  carrier    Carrier?  @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  status     DidStatus @default(AVAILABLE)
+  assignedAt DateTime?
+
+  routingProfileId String?         @db.Uuid
+  routingProfile   RoutingProfile? @relation(fields: [routingProfileId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId, status])
+  @@index([status])
+  @@index([carrierId])
+}
+
+// --- Routing profile (tenant-owned) + rules --------------------------------
+model RoutingProfile {
+  id          String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId    String           @db.Uuid
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  direction   RoutingDirection @default(INBOUND)
+  description String?
+  status      TelecomStatus    @default(ACTIVE)
+
+  rules RoutingRule[]
+  dids  Did[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model RoutingRule {
+  id               String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  routingProfileId String         @db.Uuid
+  routingProfile   RoutingProfile @relation(fields: [routingProfileId], references: [id], onDelete: Cascade)
+  priority         Int            @default(100)
+  destination      String // SIP URI / carrier ref / E.164 — config
+  carrierId        String?        @db.Uuid
+  carrier          Carrier?       @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  // FailoverPolicy is deferred — modeled as fields for now.
+  failoverDestination  String?
+  failoverAfterSeconds Int?
+  enabled              Boolean     @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([routingProfileId, priority])
+}
+
+// --- Telecom credential vault (ADR-0009) -----------------------------------
+// Secret material ONLY. secretEnc is AES-256-GCM and is NEVER exposed via any
+// API DTO, log, or audit entry; decryption happens only at the adapter boundary.
+model TelecomCredential {
+  id        String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String?               @db.Uuid // null = platform (wholesale carriers)
+  tenant    Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type      TelecomCredentialType
+  label     String
+  hint      String? // non-secret (e.g. username or last-4)
+  secretEnc String // AES-256-GCM (iv.ct.tag) — NEVER returned to clients
+  rotatedAt DateTime?
+
+  carriers  Carrier[]
+  sipTrunks SipTrunk[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId])
+}
+
+// --- Config versioning: append-only, secret-free ---------------------------
+model TelecomConfigVersion {
+  id             String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId       String?          @db.Uuid
+  entityType     String // carrier | sip_trunk | did | routing_profile | node | engine
+  entityId       String           @db.Uuid
+  changeType     ConfigChangeType
+  previousConfig Json? // secret-free snapshot
+  newConfig      Json? // secret-free snapshot
+  actorId        String?          @db.Uuid
+  correlationId  String?
+  createdAt      DateTime         @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([tenantId, createdAt])
 }

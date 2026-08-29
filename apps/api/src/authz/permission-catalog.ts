@@ -33,6 +33,7 @@ export const PERMISSION_GROUPS: PermissionGroupDef[] = [
   { key: "numbers", name: "Numbers", description: "DID inventory & routing" },
   { key: "billing", name: "Billing", description: "Wallet, invoices, ledger" },
   { key: "audit", name: "Audit", description: "Audit and security trails" },
+  { key: "telecom", name: "Telecom", description: "Engines, nodes, carriers, trunks, routing, health" },
 ];
 
 export const PERMISSIONS: PermissionDef[] = [
@@ -48,11 +49,27 @@ export const PERMISSIONS: PermissionDef[] = [
   // numbers (used by later phases; declared now so roles are stable)
   { key: "did.read", resource: "did", action: "read", description: "View DID inventory", group: "numbers" },
   { key: "did.assign", resource: "did", action: "assign", description: "Assign/release DIDs", group: "numbers" },
+  { key: "did.manage", resource: "did", action: "manage", description: "Manage DID lifecycle & routing", group: "numbers" },
   // billing (declared for role stability)
   { key: "wallet.read", resource: "wallet", action: "read", description: "View balances", group: "billing" },
   { key: "wallet.credit", resource: "wallet", action: "credit", description: "Post wallet credits", group: "billing" },
   // audit
   { key: "audit.read", resource: "audit", action: "read", description: "View the tenant audit log", group: "audit" },
+  // telecom control plane (Phase 12). Platform infra = telecom.read/telecom.manage
+  // (mutations further gated to PLATFORM tenants); tenant resources = carrier/sip_trunk/routing.
+  { key: "telecom.read", resource: "telecom", action: "read", description: "View telecom engines, nodes & regions", group: "telecom" },
+  { key: "telecom.manage", resource: "telecom", action: "manage", description: "Manage platform telecom engines, nodes & regions", group: "telecom" },
+  { key: "telecom.health.read", resource: "telecom.health", action: "read", description: "View telecom health & heartbeats", group: "telecom" },
+  { key: "carrier.read", resource: "carrier", action: "read", description: "View carriers", group: "telecom" },
+  { key: "carrier.create", resource: "carrier", action: "create", description: "Create carriers", group: "telecom" },
+  { key: "carrier.update", resource: "carrier", action: "update", description: "Update carriers", group: "telecom" },
+  { key: "carrier.delete", resource: "carrier", action: "delete", description: "Delete carriers", group: "telecom" },
+  { key: "sip_trunk.read", resource: "sip_trunk", action: "read", description: "View SIP trunks", group: "telecom" },
+  { key: "sip_trunk.create", resource: "sip_trunk", action: "create", description: "Create SIP trunks", group: "telecom" },
+  { key: "sip_trunk.update", resource: "sip_trunk", action: "update", description: "Update SIP trunks", group: "telecom" },
+  { key: "sip_trunk.delete", resource: "sip_trunk", action: "delete", description: "Delete SIP trunks", group: "telecom" },
+  { key: "routing.read", resource: "routing", action: "read", description: "View routing profiles", group: "telecom" },
+  { key: "routing.manage", resource: "routing", action: "manage", description: "Manage routing profiles & rules", group: "telecom" },
 ];
 
 export const SYSTEM_ROLES: SystemRoleDef[] = [
@@ -65,20 +82,29 @@ export const SYSTEM_ROLES: SystemRoleDef[] = [
   {
     key: "admin",
     name: "Administrator",
-    description: "Manage access, numbers, and settings",
-    permissions: ["tenant.*", "member.*", "role.*", "did.*", "audit.read"],
+    description: "Manage access, numbers, carriers, trunks, routing, and settings",
+    permissions: [
+      "tenant.*", "member.*", "role.*", "did.*", "audit.read",
+      "carrier.*", "sip_trunk.*", "routing.*", "telecom.read", "telecom.health.read",
+    ],
   },
   {
     key: "operator",
     name: "Operator",
-    description: "Operate numbers and view billing",
-    permissions: ["tenant.read", "member.read", "did.read", "did.assign", "wallet.read"],
+    description: "Operate numbers and connectivity, view billing & health",
+    permissions: [
+      "tenant.read", "member.read", "did.read", "did.assign", "wallet.read",
+      "carrier.read", "sip_trunk.read", "routing.read", "telecom.read", "telecom.health.read",
+    ],
   },
   {
     key: "auditor",
     name: "Auditor",
     description: "Read-only across the tenant",
-    permissions: ["tenant.read", "member.read", "role.read", "did.read", "wallet.read", "audit.read"],
+    permissions: [
+      "tenant.read", "member.read", "role.read", "did.read", "wallet.read", "audit.read",
+      "carrier.read", "sip_trunk.read", "routing.read", "telecom.read", "telecom.health.read",
+    ],
   },
 ];
 

@@ -160,3 +160,25 @@ Two enforced layers, tenant id always server-derived:
   `prisma migrate dev` + `prisma db seed` + the RLS SQL are the deploy steps
   (RUNBOOK.md). Partial-unique recycling for soft-deleted natural keys
   (Tenant.slug, Role[tenantId,key]) remains a raw-SQL follow-up before prod.
+
+---
+
+## Telecom foundation schema — EXISTING (Phase 12B, 2026-08-29)
+
+Migration `20260829002712_telecom_foundation` — **purely additive** (15 enums,
+14 tables, 27 indexes, 20 FKs; **zero** changes to existing tables, verified
+before apply). Applied to dev; seed re-synced (26 permissions, 4 system roles).
+
+Tables (all UUIDv7 PK, `createdAt`/`updatedAt`, soft-delete where a lifecycle
+exists; config/runtime separated per ADR-0010):
+`Region`, `TelecomEngine`, `EngineCapability`, `TelecomNode`, `NodeHealth`
+(runtime, 1:1), `HealthEvent` (append-only), `Carrier`, `CarrierSipEndpoint`,
+`SipTrunk`, `Did`, `RoutingProfile`, `RoutingRule`, `TelecomCredential`
+(secret vault, ADR-0009 — `secretEnc` never exposed), `TelecomConfigVersion`
+(append-only, secret-free).
+
+Tenancy: `SipTrunk`, `RoutingProfile` are strictly tenant-owned (required
+`tenantId`); `Carrier`, `Did`, `TelecomCredential` use nullable `tenantId`
+(platform/pool vs tenant) per ADR-0008. Data-layer scope registration + the
+system-or-tenant read helper land with each resource's service (12E–12H), and
+each carries cross-tenant/IDOR tests then.

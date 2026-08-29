@@ -114,3 +114,11 @@ Format: Keep a Changelog; SemVer once releases begin.
   the table-vs-deferred split (Endpoint/CodecPolicy/NumberingPlan/FailoverPolicy
   = fields; Registration/CallSession = non-persisted runtime). No application
   code changed; baseline intact.
+- 2026-08-29 — **Phase 12B — Database foundation.** Additive migration
+  `telecom_foundation` (15 enums, 14 tables, 27 indexes, 20 FKs; no destructive
+  ops, no changes to existing tables — reviewed via `--create-only` before
+  apply). RBAC catalog extended: +14 permissions (telecom/carrier/sip_trunk/
+  routing/did.manage) in a new `telecom` group; admin/operator/auditor grants
+  updated (owner `*` auto-covers; platform `telecom.manage` stays owner-only).
+  Seed re-synced idempotently (26 permissions, 4 roles). Regression: API 51/51,
+  typecheck ✓, lint ✓. No application services yet (12C onward).
