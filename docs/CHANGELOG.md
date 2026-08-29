@@ -122,3 +122,10 @@ Format: Keep a Changelog; SemVer once releases begin.
   updated (owner `*` auto-covers; platform `telecom.manage` stays owner-only).
   Seed re-synced idempotently (26 permissions, 4 roles). Regression: API 51/51,
   typecheck ✓, lint ✓. No application services yet (12C onward).
+- 2026-08-29 — **Phase 12C — Telecom engine abstraction.** Provider-neutral
+  `TelecomEngineAdapter` interface + `EngineRegistryService` + honest
+  NOT-IMPLEMENTED `Kamailio`/`Asterisk`/`FreeSwitch` adapters (ADR-0007):
+  `implemented=false`, `healthCheck()`→UNKNOWN (never fabricated HEALTHY),
+  static capability profiles (honest software facts, e.g. Kamailio declares no
+  RTP). `TelecomModule` wired into AppModule (providers only, no controllers/DB
+  yet). +7 unit tests. Regression: API 58/58 (51 + 7), typecheck ✓, lint ✓.
