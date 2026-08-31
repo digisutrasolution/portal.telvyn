@@ -52,6 +52,8 @@ the existing `AuditService`. None of these resources hold secrets.
 | `POST/PUT/DELETE /v1/telecom/regions[/:id]` | `telecom.manage` |
 | `GET /v1/telecom/engines` · `GET /v1/telecom/engines/:id` | `telecom.read` |
 | `POST/PUT/DELETE /v1/telecom/engines[/:id]` · `PUT /v1/telecom/engines/:id/capabilities` | `telecom.manage` |
+| `GET /v1/telecom/engines/:id/status` | `telecom.health.read` |
+| `POST /v1/telecom/engines/:id/sync` | `telecom.manage` |
 | `GET /v1/telecom/nodes` · `GET /v1/telecom/nodes/:id` | `telecom.read` |
 | `GET /v1/telecom/nodes/:id/health` | `telecom.health.read` |
 | `POST/PUT/DELETE /v1/telecom/nodes[/:id]` | `telecom.manage` |
@@ -60,7 +62,21 @@ Engine GET is enriched with honest adapter metadata (ADR-0007): `implemented`
 (false until a real integration), `softwareCapabilities` (the engine's declared
 profile), `capabilities` (admin-enabled per instance), and live `health`
 (UNKNOWN via the stub). Node `health` starts UNKNOWN (populated by the health
-framework, 12I). Lists are bounded (take 500); cursor pagination lands with the
+framework, 12I).
+
+**Engine foundation (Phase 12K, ADR-0007 addendum).** `GET :id/status` returns a
+normalized `EngineStatus` — `provider`, `implemented`, an explicit
+`capabilities` *operation profile* (`health`/`routing`/`registration`/
+`activeCalls`/`originate`/`configuration` — Kamailio `originate:false`,
+Asterisk/FreeSWITCH `originate:true`), honest `health` (`UNKNOWN` for stubs,
+never fabricated `HEALTHY`), a `correlationId`, and `checkedAt`. `POST :id/sync`
+attempts to push control-plane config to the engine and, with stub adapters,
+returns **HTTP 501** (normalized `NOT_IMPLEMENTED` — no fake success); the attempt
+is always audited as `telecom.engine.sync_attempted` (metadata: outcome, code,
+correlationId, provider — no secrets). Both are **platform-only** (`PlatformGuard`);
+a customer tenant gets 403 even as owner. Normalized failure mapping:
+`NOT_IMPLEMENTED → 501`, `TIMEOUT → 504`, else `503`. Credentials never appear in
+any response — config sync carries only `credentialRef` ids. Lists are bounded (take 500); cursor pagination lands with the
 high-cardinality tenant resources (DIDs, 12G). **Note:** the hand-authored
 OpenAPI YAML currently covers `/v1/auth` only; authz + telecom endpoints are
 documented here (pre-existing gap, tracked — YAML expansion is future work).

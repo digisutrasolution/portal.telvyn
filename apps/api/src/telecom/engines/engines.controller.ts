@@ -1,4 +1,19 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  NotImplementedException,
+  ServiceUnavailableException,
+  GatewayTimeoutException,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 import type { Request } from "express";
 import { requestContext } from "@/common/request-context";
 import { ZodPipe } from "@/common/zod.pipe";
@@ -10,6 +25,8 @@ import { CurrentTenant, RequirePermissions } from "@/authz/authz.decorators";
 import type { TenantContext } from "@/authz/tenant-context";
 import { AuditService } from "@/authz/audit.service";
 import { EnginesService } from "./engines.service";
+import { EngineService } from "./engine.service";
+import { EngineErrorCode } from "./engine.types";
 import {
   CreateEngineDto,
   UpdateEngineDto,
@@ -25,8 +42,48 @@ import {
 export class EnginesController {
   constructor(
     private readonly engines: EnginesService,
+    private readonly engineSvc: EngineService,
     private readonly audit: AuditService,
   ) {}
+
+  // ---- engine abstraction (Phase 12K) ----
+
+  /** Normalized engine status: explicit capabilities + honest health (UNKNOWN for stubs). */
+  @Get(":id/status")
+  @RequirePermissions("telecom.health.read")
+  async status(@Param("id", ParseUUIDPipe) id: string) {
+    const engine = await this.engines.get(id); // 404 if not found; platform-scoped
+    return this.engineSvc.getStatus({ id, type: engine.type });
+  }
+
+  /**
+   * Attempt to synchronize control-plane config to the engine. With stub
+   * adapters this returns a normalized NOT_IMPLEMENTED → HTTP 501 (no fake
+   * success, no engine connectivity). The attempt is audited regardless.
+   */
+  @Post(":id/sync")
+  @RequirePermissions("telecom.manage")
+  async sync(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
+    const engine = await this.engines.get(id);
+    // Empty desired-state intent for now — engine↔resource assignment is future.
+    const intent = this.engineSvc.buildConfigurationIntent({ engineType: engine.type, carriers: [], trunks: [], dids: [], routes: [] });
+    const result = await this.engineSvc.sync({ id, type: engine.type }, intent);
+    await this.audit.log({
+      ctx,
+      req: requestContext(req),
+      action: "telecom.engine.sync_attempted",
+      resource: "engine",
+      resourceId: id,
+      metadata: { outcome: result.outcome, code: result.code, correlationId: result.correlationId, provider: engine.type },
+    });
+    if (!result.ok) {
+      const msg = `engine sync ${result.outcome.toLowerCase()}`;
+      if (result.code === EngineErrorCode.NOT_IMPLEMENTED) throw new NotImplementedException(msg);
+      if (result.code === EngineErrorCode.TIMEOUT) throw new GatewayTimeoutException(msg);
+      throw new ServiceUnavailableException(msg);
+    }
+    return result;
+  }
 
   @Get()
   @RequirePermissions("telecom.read")

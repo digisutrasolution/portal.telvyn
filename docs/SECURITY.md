@@ -389,3 +389,32 @@ and remains the source of truth — UI gating is convenience only).
 - **Atomic optimistic-concurrency updates** (`version`/`expectedVersion` → 409);
   route replacement all-or-nothing. Deterministic ordering (no incidental order).
   No runtime network calls in CRUD.
+
+## Engine foundation security (Phase 12K, 2026-09-01)
+
+- **No secret exposure.** The `EngineConfigurationIntent` fed to adapters carries
+  credentials only as a `credentialRef` id — never a plaintext secret, encrypted
+  blob, or `secretEnc`. Secrets stay in the vault (ADR-0009); nothing in 12K reads
+  or persists them. Status/sync responses, audit metadata, and log lines are all
+  asserted secret-free (e2e greps responses for `secret|password`).
+- **No secret/error leakage in logs or errors.** `EngineService.normalizeError`
+  suppresses unknown-error detail (returns a fixed `"engine operation failed"`),
+  so engine-internal exception text can never reach a controller or client.
+  Structured logs emit only provider/engineId/operation/correlationId/duration/
+  outcome/code — no payloads.
+- **No SSRF / injection / arbitrary code paths.** Adapters are resolved **only**
+  through `EngineRegistryService`'s static type→class map; unsupported providers
+  are rejected and tenant-controlled class/module names are impossible (no dynamic
+  instantiation). No tenant-supplied engine endpoints/URLs exist — sync targets a
+  registered platform engine, not an arbitrary host. No command execution, no
+  outbound network calls (adapters are stubs).
+- **Bounded resource use.** Every adapter call runs under a timeout guard (default
+  5 s, hard cap 30 s) via `Promise.race` — never infinite wait, never unbounded
+  retry. A hung probe degrades to honest `UNKNOWN`, not a hang.
+- **Honest health + honest failure.** Health is `UNKNOWN` for stubs (never fake
+  `HEALTHY`); `sync` returns HTTP 501 `NOT_IMPLEMENTED` rather than fabricating
+  success.
+- **Platform-only + audited.** Both endpoints sit behind `PlatformGuard` +
+  permission gates (`telecom.health.read` / `telecom.manage`); a customer tenant
+  is 403 even as owner, unauthenticated is 401. Every sync attempt is audited
+  (`telecom.engine.sync_attempted`) with a correlation id.

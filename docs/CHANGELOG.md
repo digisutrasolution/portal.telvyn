@@ -195,3 +195,19 @@ Format: Keep a Changelog; SemVer once releases begin.
   concurrency updates. RBAC reuses routing.read/routing.manage (no new perms).
   +13 tests (8 e2e + 5 ordering unit). Regression: API 124/124 (111 + 13), web
   13/13, typecheck ✓, lint ✓, build ✓.
+- 2026-09-01 — **Phase 12K — Telecom engine foundation + engine abstraction**
+  (control-plane abstraction only; NO SIP/RTP/engine runtime). **No migration** —
+  reuses the 12C/12D adapter interface, `EngineRegistryService`, and the existing
+  engine/node/health models. New provider-neutral `engine.types.ts` (capabilities,
+  health, context, normalized `EngineErrorCode`/`EngineError`, operation result,
+  secret-free `EngineConfigurationIntent`); adapters gained explicit
+  `capabilities()` (Kamailio `originate:false`; Asterisk/FreeSWITCH `originate:true`)
+  and honest `applyConfiguration()` → `NOT_IMPLEMENTED`. New `EngineService`
+  (bounded-timeout guard, correlation IDs, structured secret-free logging, error
+  normalization, pure `buildConfigurationIntent` that reduces credentials to id
+  refs). Platform-only endpoints `GET /v1/telecom/engines/:id/status` (honest
+  UNKNOWN health + explicit capabilities) and `POST /v1/telecom/engines/:id/sync`
+  (→ HTTP 501 NOT_IMPLEMENTED, audited `telecom.engine.sync_attempted`). RBAC
+  reuses telecom.health.read/telecom.manage (no new perms). +10 tests (6 unit +
+  4 e2e). Regression: API 134/134 (124 + 10), web 13/13, typecheck ✓, lint ✓,
+  build ✓. Realizes the growth path in ADR-0007 (addendum added).

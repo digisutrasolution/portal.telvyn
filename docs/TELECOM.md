@@ -68,6 +68,31 @@ IVR, RECORDING, TRANSCRIPTION, TTS, SRTP, TLS, CALL_TRANSFER, CALL_FORWARDING,
 codecs. Deployment topology (edge → SIP edge → media → carrier) is documented
 as **configurable**, not a mandatory chain.
 
+### Engine foundation (Phase 12K, 2026-09-01)
+
+The abstraction gained a provider-neutral *operation* layer — still control-plane
+only, no SIP/RTP/engine runtime. `engine.types.ts` defines an `EngineCapabilities`
+operation profile (`health`, `routing`, `registration`, `activeCalls`,
+`originate`, `configuration` — distinct from the `EngineCapability` *feature*
+rows above), a normalized `EngineErrorCode`/`EngineError`, an `EngineContext`
+(correlation id + bounded timeout), and a **secret-free** `EngineConfigurationIntent`
+(credentials reduced to a `credentialRef` id). Adapters now declare
+`capabilities()` — honest per engine class: **Kamailio `originate:false`**
+(SIP router/signalling), **Asterisk / FreeSWITCH `originate:true`** (B2BUA /
+softswitch) — and `applyConfiguration()`, which throws `NOT_IMPLEMENTED` while
+stubbed.
+
+`EngineService` orchestrates adapters: registry-resolved only (unsupported types
+rejected; never dynamic class instantiation or tenant-controlled type names),
+every call wrapped in a **bounded timeout** (default 5 s, hard cap 30 s — never
+infinite), correlation-id stamped, structured **secret-free** logging, and
+uniform error normalization (unknown-error detail suppressed). Two platform-only
+endpoints expose it (see API.md): `GET /v1/telecom/engines/:id/status` (explicit
+capabilities + honest `UNKNOWN` health) and `POST /v1/telecom/engines/:id/sync`
+(→ **HTTP 501 NOT_IMPLEMENTED**, audited `telecom.engine.sync_attempted`; no fake
+success). Real engine connectivity plugs into these seams in a later phase without
+changing the contract.
+
 ## Node config vs runtime + health (ADR-0010)
 
 Config (durable): identity, engine, region, zone, environment, `hostRef`,

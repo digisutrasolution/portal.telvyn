@@ -3,6 +3,7 @@ import { PrismaService } from "@/infra/prisma.service";
 import { AuthModule } from "@/auth/auth.module";
 import { AuthzModule } from "@/authz/authz.module";
 import { EngineRegistryService } from "./engines/engine-registry.service";
+import { EngineService } from "./engines/engine.service";
 import { KamailioAdapter } from "./engines/adapters/kamailio.adapter";
 import { AsteriskAdapter } from "./engines/adapters/asterisk.adapter";
 import { FreeSwitchAdapter } from "./engines/adapters/freeswitch.adapter";
@@ -42,6 +43,7 @@ import { LcrController } from "./lcr/lcr.controller";
     AsteriskAdapter,
     FreeSwitchAdapter,
     EngineRegistryService,
+    EngineService,
     RegionsService,
     EnginesService,
     NodesService,

@@ -43,3 +43,41 @@ every engine does WebRTC, recording, or SRTP — so capability must be
   integration contract with real infra is defined), the system is honest about
   having no live engine — health reads `UNKNOWN`, provisioning is refused, and
   nothing pretends otherwise.
+
+## Addendum — Phase 12K (2026-09-01): engine foundation
+
+The growth path this ADR anticipated (`applyConfig()` / `reload()`) is now
+realized as a provider-neutral *foundation* — still control-plane only, still no
+SIP/RTP/engine runtime.
+
+- **Provider-neutral types** (`engine.types.ts`): `EngineCapabilities` (a boolean
+  operation profile — `health`, `routing`, `registration`, `activeCalls`,
+  `originate`, `configuration` — distinct from the persisted `EngineCapability`
+  *feature* rows), `EngineHealthResult`, `EngineContext` (correlation id +
+  bounded timeout), `EngineStatus`, a normalized `EngineErrorCode` /
+  `EngineError`, `EngineOperationResult`, and a **secret-free**
+  `EngineConfigurationIntent` (credentials appear only as a `credentialRef` id,
+  never a secret).
+- **Adapter contract grew** by `capabilities(): EngineCapabilities` and
+  `applyConfiguration(intent, ctx): Promise<EngineOperationResult>`. Capability
+  differences are explicit and honest: Kamailio (SIP signalling/router) reports
+  `originate:false`; Asterisk and FreeSWITCH (B2BUA / softswitch) report
+  `originate:true`. All adapters remain honest stubs — `applyConfiguration()`
+  throws `EngineError(NOT_IMPLEMENTED)`; `healthCheck()` stays `UNKNOWN`.
+- **`EngineService`** is the orchestration layer: resolves adapters via the
+  registry (never dynamic class instantiation, never tenant-controlled type
+  names — unsupported types are rejected by the registry), wraps every adapter
+  call in a bounded-timeout guard (default 5 s, hard cap 30 s — never infinite),
+  stamps a correlation id, emits structured **secret-free** log lines, and
+  normalizes all errors (unknown-error detail is suppressed — no engine internals
+  leak). `buildConfigurationIntent()` is a pure translator with no I/O.
+- **Platform-only endpoints** (reuse `telecom.health.read` / `telecom.manage`,
+  behind `PlatformGuard`): `GET :id/status` returns explicit capabilities + honest
+  UNKNOWN health + correlation id; `POST :id/sync` attempts synchronization and,
+  with stub adapters, returns a normalized `NOT_IMPLEMENTED` → **HTTP 501** (no
+  fake success), auditing `telecom.engine.sync_attempted` every time.
+- **No new persistence, no migration.** The engine / node / health model
+  (ADR-0010) and the credential vault (ADR-0009) are reused unchanged.
+
+The next phase (real adapter implementation) plugs engine connectivity into these
+seams without changing the control-plane contract or business logic.
