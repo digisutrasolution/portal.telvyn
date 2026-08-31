@@ -185,3 +185,13 @@ Format: Keep a Changelog; SemVer once releases begin.
   rejected + bounded maxAttempts), and **atomic optimistic-concurrency updates**
   (`expectedVersion` → 409). +6 e2e. Regression: API 111/111 (105 + 6), web
   13/13, typecheck ✓, lint ✓, build ✓.
+- 2026-08-29 — **Phase 12J — Routing decision + LCR policy foundation**
+  (declarative route selection only; no execution, rating, or billing). Additive
+  migration `lcr_policy` (enums Currency + LcrSelectionStrategy; tables LcrPolicy
+  + LcrRoute with BigInt `costMicros` micro-units). `/v1/telecom/lcr-policies`
+  CRUD (embedded route candidates). Deterministic candidate ordering per strategy
+  (pure `orderCandidates`, stable id tie-break); carrier/trunk eligibility;
+  bounded cost/currency/prefix/effective-date validation; atomic optimistic-
+  concurrency updates. RBAC reuses routing.read/routing.manage (no new perms).
+  +13 tests (8 e2e + 5 ordering unit). Regression: API 124/124 (111 + 13), web
+  13/13, typecheck ✓, lint ✓, build ✓.

@@ -21,6 +21,8 @@ import { DidsService } from "./dids/dids.service";
 import { DidsController } from "./dids/dids.controller";
 import { RoutingProfilesService } from "./routing-profiles/routing.service";
 import { RoutingProfilesController } from "./routing-profiles/routing.controller";
+import { LcrService } from "./lcr/lcr.service";
+import { LcrController } from "./lcr/lcr.controller";
 
 /**
  * Telecom control plane (Phase 12).
@@ -33,7 +35,7 @@ import { RoutingProfilesController } from "./routing-profiles/routing.controller
  */
 @Module({
   imports: [AuthModule, AuthzModule],
-  controllers: [RegionsController, EnginesController, NodesController, CarriersController, SipTrunksController, DidsController, RoutingProfilesController],
+  controllers: [RegionsController, EnginesController, NodesController, CarriersController, SipTrunksController, DidsController, RoutingProfilesController, LcrController],
   providers: [
     PrismaService,
     KamailioAdapter,
@@ -48,6 +50,7 @@ import { RoutingProfilesController } from "./routing-profiles/routing.controller
     SipTrunksService,
     DidsService,
     RoutingProfilesService,
+    LcrService,
   ],
   exports: [EngineRegistryService, TelecomCredentialService],
 })

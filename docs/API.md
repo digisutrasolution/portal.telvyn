@@ -153,3 +153,24 @@ The `/v1/telecom/routing-profiles` body (12H) now also accepts **policy** fields
 PATCH accepts optional `expectedVersion` (optimistic concurrency → **409** on
 mismatch); list adds a `strategy` filter. No new routes; no runtime execution.
 OpenAPI YAML still `/v1/auth` only (tracked debt).
+
+## LCR policy API — EXISTING (Phase 12J, 2026-08-29)
+
+`/v1/telecom/lcr-policies` — JWT + tenant + permission gated; strictly
+tenant-owned (auto-scoped). Reuses `routing.read`/`routing.manage`. Routes are
+embedded (`routes[]`; PATCH replaces). Response returns `candidates` in
+deterministic selection order + `version`.
+
+| Method & path | Permission |
+|---|---|
+| `GET /v1/telecom/lcr-policies` (cursor pagination; filters `enabled`, `strategy`, `q`) | `routing.read` |
+| `GET /v1/telecom/lcr-policies/:id` | `routing.read` |
+| `POST /v1/telecom/lcr-policies` (with `routes[]`) | `routing.manage` |
+| `PATCH /v1/telecom/lcr-policies/:id` (optional `expectedVersion` → 409; present `routes` replaces) | `routing.manage` |
+| `DELETE /v1/telecom/lcr-policies/:id` (soft delete) | `routing.manage` |
+
+Route fields: `carrierId`, `sipTrunkId?`, `prefix`, `country?`, `costMicros`
+(integer micro-units), `currency`, `priority`, `weight?`, `enabled`,
+`effectiveFrom?/To?`. Duplicate name → 409; foreign/deleted carrier/trunk → 400.
+No new permission created (routing.manage reused). OpenAPI YAML still `/v1/auth`
+only (tracked debt).

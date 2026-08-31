@@ -83,6 +83,7 @@ model Tenant {
   dids               Did[]
   routingProfiles    RoutingProfile[]
   telecomCredentials TelecomCredential[]
+  lcrPolicies        LcrPolicy[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -451,6 +452,27 @@ enum RoutingFailoverCondition {
   TIMEOUT
 }
 
+// Shared platform currency (ISO-4217). Introduced with LCR (Phase 12J); reused
+// by future rating/billing. Not USD-only.
+enum Currency {
+  USD
+  EUR
+  GBP
+  INR
+  AUD
+  CAD
+  JPY
+}
+
+// LCR route-selection strategy (Phase 12J) — declarative; evaluated by a FUTURE
+// engine adapter, never here.
+enum LcrSelectionStrategy {
+  LOWEST_COST
+  HIGHEST_PRIORITY
+  WEIGHTED
+  QUALITY_FIRST
+}
+
 enum TelecomCredentialType {
   SIP_PASSWORD
   CARRIER_API
@@ -610,6 +632,7 @@ model Carrier {
   sipTrunks    SipTrunk[]
   dids         Did[]
   routingRules RoutingRule[]
+  lcrRoutes    LcrRoute[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -665,7 +688,8 @@ model SipTrunk {
   credentialId String?            @db.Uuid
   credential   TelecomCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
 
-  dids Did[]
+  dids      Did[]
+  lcrRoutes LcrRoute[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -766,6 +790,60 @@ model RoutingRule {
   deletedAt DateTime?
 
   @@index([routingProfileId, priority])
+}
+
+// --- LCR policy (Phase 12J): tenant-owned route-SELECTION policy. -----------
+// Distinct from RoutingProfile (inbound delivery): LCR picks an outbound carrier
+// by cost/priority/prefix. Declarative only — NOTHING is executed here, and this
+// is route selection, NOT call rating or billing.
+model LcrPolicy {
+  id                String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId          String               @db.Uuid
+  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  selectionStrategy LcrSelectionStrategy @default(LOWEST_COST)
+  enabled           Boolean              @default(true)
+  version           Int                  @default(0) // optimistic concurrency
+
+  routes LcrRoute[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+// A candidate route within an LCR policy. `costMicros` is an INTEGER in
+// millionths of a currency unit (no floating point) — a SELECTION cost, not a
+// billed amount. Carrier/trunk are references (never duplicated / no secrets).
+model LcrRoute {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  lcrPolicyId String    @db.Uuid
+  lcrPolicy   LcrPolicy @relation(fields: [lcrPolicyId], references: [id], onDelete: Cascade)
+  carrierId   String    @db.Uuid
+  carrier     Carrier   @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  sipTrunkId  String?   @db.Uuid
+  sipTrunk    SipTrunk? @relation(fields: [sipTrunkId], references: [id], onDelete: SetNull)
+  prefix      String // E.164-style destination prefix (e.g. "44", "9198")
+  country     String?   @db.Char(2)
+  costMicros  BigInt // millionths of a currency unit; integer, non-negative
+  currency    Currency
+  priority    Int       @default(100)
+  weight      Int? // for WEIGHTED strategy
+  enabled     Boolean   @default(true)
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([lcrPolicyId, prefix])
+  @@index([lcrPolicyId, enabled])
+  @@index([carrierId])
 }
 
 // --- Telecom credential vault (ADR-0009) -----------------------------------

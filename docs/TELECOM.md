@@ -291,3 +291,51 @@ Control plane: `RoutingProfile → RoutingRule → policy fields`. A **future en
 adapter** (ADR-0007) will read this declarative config and program the data
 plane (Kamailio/FreeSWITCH/Asterisk). Business routing logic stays out of the
 SIP/media engines.
+
+## LCR policy foundation — EXISTING (Phase 12J, 2026-08-29)
+
+**Declarative route SELECTION only — NOTHING executed, no rating, no billing,
+no wallet charging.** LCR is distinct from `RoutingProfile` (inbound delivery):
+it picks an outbound carrier by cost/priority/prefix. New tables `LcrPolicy`
+(tenant-owned, strategy + `version`) + `LcrRoute` (candidates); additive
+migration `lcr_policy`. `LcrPolicy` joined `TENANT_SCOPED_MODELS`.
+
+- **Route candidate model:** `LcrRoute` = `carrierId` (required, accessible) +
+  optional `sipTrunkId` (owned) + `prefix` + `country?` + `costMicros` +
+  `currency` + `priority` + `weight?` + `enabled` + `effectiveFrom?/To?`.
+  Carrier/trunk are **references** (never duplicated; no credentials/secrets).
+- **Cost / currency (12J-6/7):** `costMicros` is a **BigInt in millionths of a
+  currency unit** — integer, no floating point; validated non-negative, bounded,
+  no NaN/Infinity. This is a **route-selection cost, not a billed amount**
+  (rating/billing remain separate + future). New shared `Currency` enum
+  (USD/EUR/GBP/INR/AUD/CAD/JPY — not USD-only); **no FX conversion** in LCR
+  (future dedicated concern).
+- **Selection strategy:** `LcrSelectionStrategy` = LOWEST_COST | HIGHEST_PRIORITY
+  | WEIGHTED | QUALITY_FIRST. **Deterministic ordering** (pure function
+  `orderCandidates`): LOWEST_COST → cost, priority, id; HIGHEST_PRIORITY →
+  priority, cost, id; WEIGHTED → weight desc, priority, id; QUALITY_FIRST →
+  priority, cost, id (**no health subsystem yet — UNKNOWN; quality is a future
+  engine input**, honest fallback). **Every tie breaks on `id`** — never
+  insertion/DB order. GET returns candidates already in selection order.
+- **Prefix matching (12J-8):** `prefix` is an E.164-style digit string (no
+  NumberingPlan table — deferred, 12A). Documented runtime semantics
+  (future engine): longest-prefix wins, exact-match preferred, then strategy
+  tie-break. Not executed here.
+- **Effective dates:** `effectiveFrom < effectiveTo` validated; future/inactive
+  windows allowed. Overlap is NOT constrained (multiple candidates per prefix is
+  the point of LCR).
+- **Failover relationship:** LCR (candidate ordering) and failover (12I, when a
+  candidate fails) are **separate**; the future engine decides failure. Not here.
+- **Eligibility/atomicity/concurrency:** carrier accessible (own/system, ADR-0008),
+  trunk owned; routes replaced atomically (validation before txn); `version`
+  optimistic concurrency (`expectedVersion` → 409). RBAC reuses
+  `routing.read`/`routing.manage` (LCR is the routing domain; no credential
+  access). Soft delete; carrier hard-delete blocked by RESTRICT.
+
+## Future routing-decision contract (12J-21)
+
+`RoutingDecisionInput → PolicyEvaluator → CandidateRoutes → SelectedRoute →
+FailoverCandidates → Future Engine Adapter (Kamailio/FreeSWITCH/Asterisk)`. The
+control plane stays authoritative for pricing, carrier preference, customer
+routing policy, tenant config, billing, and authorization — the SIP/media
+engines never own these.

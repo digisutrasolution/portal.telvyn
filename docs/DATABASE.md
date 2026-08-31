@@ -220,3 +220,12 @@ Additive migration `routing_policy_failover`: enums `RoutingSelectionStrategy`,
 `failoverDestinationType?`. All NOT NULL columns carry defaults → safe additive.
 No new FailoverPolicy table (policy is 1:1 with the profile). Reviewed
 `--create-only`; no destructive ops.
+
+## LCR policy + routes — EXISTING (Phase 12J, 2026-08-29)
+
+Additive migration `lcr_policy`: enums `Currency`, `LcrSelectionStrategy`; tables
+`LcrPolicy` (tenant-owned; `@@unique([tenantId,name])`, `version`) and `LcrRoute`
+(policy child; `carrierId` FK RESTRICT, `sipTrunkId` FK SetNull; `costMicros`
+BIGINT — no float; indexes `[lcrPolicyId, prefix]`, `[lcrPolicyId, enabled]`,
+`[carrierId]`). Reviewed `--create-only`; no destructive ops. `LcrPolicy` joined
+`TENANT_SCOPED_MODELS`. First BigInt + first Currency enum in the schema.

@@ -377,3 +377,15 @@ and remains the source of truth — UI gating is convenience only).
 - **Atomic optimistic-concurrency updates** (`version` + `expectedVersion` → 409)
   prevent lost-update races; rule replacement is all-or-nothing. Mass-assignment
   unchanged (create strips unknowns, update `.strict()`). No runtime calls in CRUD.
+
+## LCR security (Phase 12J, 2026-08-29)
+
+- **Tenant isolation:** LCR policies auto-scoped; B cannot read/update/delete/
+  enumerate A's policy (404); a route cannot reference a foreign carrier/trunk
+  (400). Mass assignment blocked (create strips unknowns; update `.strict()`).
+- **Cost safety:** integer micro-units (no float/NaN/Infinity), non-negative,
+  bounded. No billing/charging performed. No secrets in LCR (carrier/trunk are
+  id references; responses assert no `secretEnc`/password).
+- **Atomic optimistic-concurrency updates** (`version`/`expectedVersion` → 409);
+  route replacement all-or-nothing. Deterministic ordering (no incidental order).
+  No runtime network calls in CRUD.
