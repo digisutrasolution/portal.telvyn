@@ -190,3 +190,13 @@ Carrier, `ON DELETE RESTRICT`) + `SipTrunk_carrierId_idx`. Reviewed via
 `--create-only` before apply — table verified empty (0 rows), so the NOT NULL add
 is safe; no destructive ops, no changes to other tables. `SipTrunk` joins
 `TENANT_SCOPED_MODELS` (strictly tenant-owned → auto-scoped).
+
+## DID ↔ SIP trunk link — EXISTING (Phase 12G, 2026-08-29)
+
+Additive migration `did_sip_trunk_link`: `Did.sipTrunkId` (nullable FK → SipTrunk,
+`ON DELETE SET NULL`) + indexes on `sipTrunkId`, `routingProfileId`, `regionId`,
+`country`. Reviewed via `--create-only` (no destructive ops). `Did` joins
+`TENANT_SCOPED_MODELS` (auto-scoped). `Did.e164` retains the **global plain
+`@unique`** (12B); partial-unique (recycle after soft-delete) deferred — no data
+conflict today. Delete semantics: DID relations are SET NULL (never cascade to
+carrier/trunk/profile/region); DID itself soft-deletes.

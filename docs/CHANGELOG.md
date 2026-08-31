@@ -155,3 +155,14 @@ Format: Keep a Changelog; SemVer once releases begin.
   host/URI validation; no outbound connections. RBAC reuses 12B `sip_trunk.*`.
   +11 tests (9 e2e + 2 scope). Regression: API 84/84 (73 + 11), web 13/13,
   typecheck ✓, lint ✓, build ✓.
+- 2026-08-29 — **Phase 12G — DID foundation** (control-plane resource only; no
+  telecom runtime). Additive migration `did_sip_trunk_link` (`Did.sipTrunkId` FK
+  + filter indexes; reviewed --create-only). `/v1/telecom/dids` CRUD; Did added
+  to `TENANT_SCOPED_MODELS` (auto-scoped, IDOR-safe). E.164 normalization via
+  `libphonenumber-js` (canonical store, derived country); GLOBAL `@unique` on
+  e164 (duplicate → 409; partial-unique recycle deferred). Relationship auth
+  (carrier/trunk/routing-profile/region) + carrier↔trunk consistency; soft
+  delete + SET NULL relations. RBAC reuses did.read/did.manage. +11 tests (8 e2e
+  + 3 E.164 unit). Regression: API 95/95 (84 + 11), web 13/13, typecheck ✓,
+  lint ✓, build ✓. (Env note: pgsql cluster had lost seed data mid-session —
+  re-seeded to restore 26 perms; verify seed after any cluster restart.)

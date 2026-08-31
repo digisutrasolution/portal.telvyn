@@ -102,3 +102,22 @@ references only — never secrets).
 Response is a safe DTO (config + carrier summary + safe credential metadata +
 honest `health: UNKNOWN`) — never `secretEnc`/passwords. OpenAPI YAML still
 covers `/v1/auth` only (tracked debt) — endpoints documented here.
+
+## DID API — EXISTING (Phase 12G, 2026-08-29)
+
+`/v1/telecom/dids` — JWT + tenant + permission gated; strictly tenant-owned
+(auto-scoped). Mutations audited (didId/e164/carrierId/sipTrunkId/
+routingProfileId/regionId/status — never secrets, never embedded objects).
+
+| Method & path | Permission |
+|---|---|
+| `GET /v1/telecom/dids` (cursor pagination; filters `status`, `carrierId`, `sipTrunkId`, `routingProfileId`, `regionId`, `country`, `q`) | `did.read` |
+| `GET /v1/telecom/dids/:id` | `did.read` |
+| `POST /v1/telecom/dids` (raw `number` → canonical E.164; optional carrier/trunk/profile/region) | `did.manage` |
+| `PATCH /v1/telecom/dids/:id` (relations nullable to detach; number immutable) | `did.manage` |
+| `DELETE /v1/telecom/dids/:id` (soft delete) | `did.manage` |
+
+Response DTO: e164 (canonical), country (derived), status, reference ids, honest
+`health: UNKNOWN`. Duplicate number → 409. RBAC note: 12B provides
+`did.read`/`did.assign`/`did.manage` (not `.create`/`.update`/`.delete`) — reused
+read+manage; no duplicates. OpenAPI YAML still `/v1/auth` only (tracked debt).

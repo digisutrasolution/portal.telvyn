@@ -340,3 +340,16 @@ and remains the source of truth — UI gating is convenience only).
   injection, whitespace, and non-`sip(s):` schemes. **12F makes no outbound
   connections**; future probing requires egress allowlisting + private-network/
   DNS-rebinding protection (documented boundary in TELECOM.md).
+
+## DID security (Phase 12G, 2026-08-29)
+
+- **Tenant isolation:** DIDs are auto-scoped (`TENANT_SCOPED_MODELS`); B cannot
+  read/update/delete/enumerate A's DID (IDOR → 404). e2e-proven.
+- **Mass assignment:** create strips unknown keys (client `tenantId`/`scope`
+  ignored → owned by ctx); update DTO is `.strict()` (unknown ownership key →
+  400). Number + ownership immutable.
+- **Relationship injection:** a DID cannot reference another tenant's carrier/
+  trunk/routing-profile, a deleted relation, or an inconsistent carrier/trunk
+  pair — all rejected server-side (400). Credentials are never reachable via DID.
+- **RBAC:** reuses existing `did.read` (read) + `did.manage` (create/update/
+  delete). Operator (no `did.manage`) is denied create (403).

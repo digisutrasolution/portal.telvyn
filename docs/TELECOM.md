@@ -194,3 +194,31 @@ required `carrierId` FK (the trunk↔carrier link 12B lacked).
   contacting any user-supplied endpoint (documented boundary).
 - **Status vs health:** administrative `status` is config; health is honest
   `UNKNOWN`. **Soft delete** (`deletedAt`); no cascade destruction.
+
+## DID foundation — EXISTING (Phase 12G, 2026-08-29)
+
+**Control-plane resource only — NO telecom runtime.** DIDs are **strictly
+tenant-owned** via the auto-scoping client (deny-by-default + IDOR). The
+nullable-`tenantId` platform inventory pool is **not exposed** by the 12G API
+(reserved for a future inventory/acquisition phase — no system DIDs invented).
+Additive migration `did_sip_trunk_link` added `Did.sipTrunkId` (FK, SetNull) +
+filter indexes.
+
+- **E.164 normalization** via `libphonenumber-js` (vetted): raw input is parsed
+  to canonical E.164; **country is derived from the number**, never trusted from
+  the client. Format validity ≠ carrier validity.
+- **Uniqueness: GLOBAL** — `Did.e164 @unique` (DB-enforced across all tenants;
+  a physical number cannot exist as two DIDs). **Analysis/decision:** kept the
+  plain global unique from 12B (includes soft-deleted rows), so a released
+  number is not yet recyclable; moving to a **partial unique**
+  (`WHERE deleted_at IS NULL`) is deferred to when the release-and-reacquire
+  workflow is built (table currently has no data conflict). Duplicate → 409.
+- **Relationships (all validated server-side):** carrier accessible in scope
+  (own/system); SIP trunk owned by the same tenant; routing profile owned by the
+  same tenant; region exists — foreign/deleted → 400. **Carrier↔trunk
+  consistency:** if both set, the trunk must belong to the referenced carrier.
+- **Status vs health:** administrative `DidStatus` (AVAILABLE/ASSIGNED/ACTIVE/
+  SUSPENDED/PORTING/RELEASED/…) is config; health is honest `UNKNOWN`.
+- **Delete is soft;** relationships use `SET NULL` (a DID losing a relation is
+  not deleted, and deleting a DID never cascades to carrier/trunk/profile/region).
+  Responses carry **reference ids only** — no embedded related objects.

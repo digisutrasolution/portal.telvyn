@@ -12,7 +12,7 @@
  * (Carrier, TelecomCredential) are NOT here — they use the system-or-tenant
  * helpers below instead.
  */
-export const TENANT_SCOPED_MODELS = new Set(["Membership", "Role", "AuditLog", "SipTrunk"]);
+export const TENANT_SCOPED_MODELS = new Set(["Membership", "Role", "AuditLog", "SipTrunk", "Did"]);
 
 // ---------------------------------------------------------------------------
 // System-or-tenant scope (ADR-0008). Dual-nature models (Carrier,

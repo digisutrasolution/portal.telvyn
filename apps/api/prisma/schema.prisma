@@ -636,6 +636,8 @@ model SipTrunk {
   credentialId String?            @db.Uuid
   credential   TelecomCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
 
+  dids Did[]
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -655,6 +657,10 @@ model Did {
   region     Region?   @relation(fields: [regionId], references: [id], onDelete: SetNull)
   carrierId  String?   @db.Uuid
   carrier    Carrier?  @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  // Optional delivery trunk (Phase 12G). SetNull: losing the trunk must not
+  // delete the DID. Consistency (trunk.carrierId == carrierId) enforced in app.
+  sipTrunkId String?   @db.Uuid
+  sipTrunk   SipTrunk? @relation(fields: [sipTrunkId], references: [id], onDelete: SetNull)
   status     DidStatus @default(AVAILABLE)
   assignedAt DateTime?
 
@@ -668,6 +674,10 @@ model Did {
   @@index([tenantId, status])
   @@index([status])
   @@index([carrierId])
+  @@index([sipTrunkId])
+  @@index([routingProfileId])
+  @@index([regionId])
+  @@index([country])
 }
 
 // --- Routing profile (tenant-owned) + rules --------------------------------
