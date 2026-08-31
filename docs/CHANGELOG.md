@@ -166,3 +166,13 @@ Format: Keep a Changelog; SemVer once releases begin.
   + 3 E.164 unit). Regression: API 95/95 (84 + 11), web 13/13, typecheck ✓,
   lint ✓, build ✓. (Env note: pgsql cluster had lost seed data mid-session —
   re-seeded to restore 26 perms; verify seed after any cluster restart.)
+- 2026-08-29 — **Phase 12H — Routing profile foundation** (declarative config
+  only; no runtime execution). Additive migration `routing_rule_config`
+  (RoutingDestinationType enum + RoutingRule destinationType/timeout/retry/
+  schedule; reviewed --create-only). `/v1/telecom/routing-profiles` CRUD with
+  embedded rules; RoutingProfile joined `TENANT_SCOPED_MODELS`. Typed
+  destinations w/ per-type validation (SSRF-safe webhooks — never called),
+  deterministic priority ordering, bounded retry/timeout, IANA-validated
+  schedule. RBAC reuses routing.read/routing.manage. +13 tests (10 e2e + 3
+  e164). Regression: API 105/105 (95 + 10), web 13/13, typecheck ✓, lint ✓,
+  build ✓.

@@ -200,3 +200,12 @@ Additive migration `did_sip_trunk_link`: `Did.sipTrunkId` (nullable FK → SipTr
 `@unique`** (12B); partial-unique (recycle after soft-delete) deferred — no data
 conflict today. Delete semantics: DID relations are SET NULL (never cascade to
 carrier/trunk/profile/region); DID itself soft-deletes.
+
+## Routing rule config — EXISTING (Phase 12H, 2026-08-29)
+
+Additive migration `routing_rule_config`: new enum `RoutingDestinationType`;
+`RoutingRule` gains `destinationType` (NOT NULL — safe, table empty), plus
+nullable `timeoutSeconds`, `retryCount`, `schedule` (JSONB). Reviewed
+`--create-only` (no destructive ops). `RoutingProfile` joined
+`TENANT_SCOPED_MODELS` (auto-scoped). Rules order deterministically by
+`(priority ASC, id ASC)` on the existing `@@index([routingProfileId, priority])`.

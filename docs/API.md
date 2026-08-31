@@ -121,3 +121,25 @@ Response DTO: e164 (canonical), country (derived), status, reference ids, honest
 `health: UNKNOWN`. Duplicate number → 409. RBAC note: 12B provides
 `did.read`/`did.assign`/`did.manage` (not `.create`/`.update`/`.delete`) — reused
 read+manage; no duplicates. OpenAPI YAML still `/v1/auth` only (tracked debt).
+
+## Routing profile API — EXISTING (Phase 12H, 2026-08-29)
+
+`/v1/telecom/routing-profiles` — JWT + tenant + permission gated; strictly
+tenant-owned (auto-scoped). Rules are embedded (`rules` array; PATCH replaces).
+Audit records counts/status only (never webhook payloads/secrets).
+
+| Method & path | Permission |
+|---|---|
+| `GET /v1/telecom/routing-profiles` (cursor pagination; filters `status`, `direction`, `q`) | `routing.read` |
+| `GET /v1/telecom/routing-profiles/:id` | `routing.read` |
+| `POST /v1/telecom/routing-profiles` (with `rules[]`) | `routing.manage` |
+| `PATCH /v1/telecom/routing-profiles/:id` (present `rules` replaces the set) | `routing.manage` |
+| `DELETE /v1/telecom/routing-profiles/:id` (soft delete) | `routing.manage` |
+
+Rule fields: `destinationType`, `destination` (validated per type; webhooks
+SSRF-checked, never called), `priority` (deterministic order), `enabled`,
+`timeoutSeconds`, `retryCount`, `carrierId`, `failoverDestination`,
+`failoverAfterSeconds`, `schedule {timezone, daysOfWeek[], startMinute,
+endMinute}`. Duplicate name per tenant → 409. RBAC reuses `routing.read`/
+`routing.manage` (12B — not `routing_profile.*`). OpenAPI YAML still `/v1/auth`
+only (tracked debt).

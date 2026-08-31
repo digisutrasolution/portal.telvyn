@@ -222,3 +222,36 @@ filter indexes.
 - **Delete is soft;** relationships use `SET NULL` (a DID losing a relation is
   not deleted, and deleting a DID never cascades to carrier/trunk/profile/region).
   Responses carry **reference ids only** — no embedded related objects.
+
+## Routing profile foundation — EXISTING (Phase 12H, 2026-08-29)
+
+**Declarative configuration only — NOTHING is executed** (no SIP/webhook/failover/
+LCR runtime). Reuses the 12B `RoutingProfile` + `RoutingRule` tables; additive
+migration `routing_rule_config` typed the destination and added retry/timeout/
+schedule. Profiles are **strictly tenant-owned** (auto-scoped); `RoutingProfile`
+joined `TENANT_SCOPED_MODELS`.
+
+- **Ownership:** server-derived tenant; `@@unique([tenantId, name])` (duplicate → 409).
+- **Destination model:** `RoutingDestinationType` = SIP_TRUNK | PHONE_NUMBER |
+  EXTENSION | VOICEMAIL | WEBHOOK (AI/application deferred). Each type constrains
+  the `destination` value: SIP_TRUNK → a tenant-owned trunk id (validated);
+  PHONE_NUMBER → canonical E.164 (normalized on store); EXTENSION → digits;
+  VOICEMAIL → simple identifier; **WEBHOOK → https URL to a public host** —
+  SSRF-validated (https only, no credentials-in-URL, no private/loopback/
+  link-local/multicast targets, no control chars). **Webhooks are never called
+  in 12H.** Future webhook execution requires allowlisting, egress controls,
+  private-IP blocking, DNS-rebinding protection, timeout + response-size limits,
+  and auditability (documented boundary).
+- **Rules** are managed embedded in the profile (a `rules` array; PATCH with
+  `rules` replaces the set atomically). **Priority ordering is deterministic:
+  priority ASC, then id ASC** (stable; duplicate priorities tie-break by id) —
+  never insertion order.
+- **Retry/timeout:** bounded config (retryCount 0–10, timeoutSeconds 1–600) —
+  never executed. **Schedule:** optional `{ timezone, daysOfWeek[], startMinute,
+  endMinute }`; timezone is validated as **IANA** via the platform `Intl` (no
+  silent server-local assumption); start < end enforced.
+- **Carrier reference** on a rule is validated accessible (own/system).
+- **Status vs health:** administrative `TelecomStatus`; no runtime health.
+- **Delete is soft;** deleting a profile does not cascade to carriers/trunks and
+  does not auto-reassign DIDs referencing it. RBAC reuses `routing.read`/
+  `routing.manage`; responses carry reference ids/config only (no secrets).

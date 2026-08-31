@@ -422,6 +422,17 @@ enum RoutingDirection {
   OUTBOUND
 }
 
+// Declarative routing destination types (Phase 12H). No AI/application target
+// yet (deferred). Each type constrains how `RoutingRule.destination` is
+// validated; webhook targets are SSRF-validated as config (never called in 12H).
+enum RoutingDestinationType {
+  SIP_TRUNK
+  PHONE_NUMBER
+  EXTENSION
+  VOICEMAIL
+  WEBHOOK
+}
+
 enum TelecomCredentialType {
   SIP_PASSWORD
   CARRIER_API
@@ -705,10 +716,16 @@ model RoutingRule {
   id               String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
   routingProfileId String         @db.Uuid
   routingProfile   RoutingProfile @relation(fields: [routingProfileId], references: [id], onDelete: Cascade)
-  priority         Int            @default(100)
-  destination      String // SIP URI / carrier ref / E.164 — config
-  carrierId        String?        @db.Uuid
-  carrier          Carrier?       @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  priority         Int                    @default(100)
+  destinationType  RoutingDestinationType
+  destination      String // validated per destinationType (Phase 12H) — declarative config
+  carrierId        String?                @db.Uuid
+  carrier          Carrier?               @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  // Retry/timeout are bounded CONFIG — never executed in 12H.
+  timeoutSeconds Int?
+  retryCount     Int?
+  // Optional declarative schedule: { timezone, daysOfWeek[], startMinute, endMinute } (validated at write).
+  schedule Json?
   // FailoverPolicy is deferred — modeled as fields for now.
   failoverDestination  String?
   failoverAfterSeconds Int?

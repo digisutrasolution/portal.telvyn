@@ -353,3 +353,16 @@ and remains the source of truth — UI gating is convenience only).
   pair — all rejected server-side (400). Credentials are never reachable via DID.
 - **RBAC:** reuses existing `did.read` (read) + `did.manage` (create/update/
   delete). Operator (no `did.manage`) is denied create (403).
+
+## Routing profile security (Phase 12H, 2026-08-29)
+
+- **Tenant isolation:** profiles auto-scoped; B cannot read/update/delete/
+  enumerate A's profile (IDOR → 404). Mass assignment blocked (create strips
+  unknowns; update DTO `.strict()`).
+- **Destination validation:** typed + per-type validated; **webhook targets are
+  SSRF-validated config** (https only, public host — private/loopback/link-local/
+  multicast + credentials-in-URL + control chars rejected) and **never fetched**
+  in 12H. Foreign carrier/trunk references rejected (400).
+- **Bounds:** priority/retry/timeout bounded; schedule timezone IANA-validated;
+  no scripting/executable config (declarative only). No runtime requests during
+  CRUD.
