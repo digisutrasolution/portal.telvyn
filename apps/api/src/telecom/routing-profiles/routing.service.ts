@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, RoutingDestinationType, TenantType } from "@prisma/client";
+import { Prisma, RoutingDestinationType } from "@prisma/client";
 import { PrismaService } from "@/infra/prisma.service";
 import type { TenantContext } from "@/authz/tenant-context";
 import { systemOrTenantWhere } from "@/authz/tenant-scope";
@@ -11,18 +11,16 @@ const PROFILE_INCLUDE = { rules: { where: { deletedAt: null }, orderBy: [{ prior
 type ProfileRow = Prisma.RoutingProfileGetPayload<{ include: typeof PROFILE_INCLUDE }>;
 
 /**
- * Routing profile foundation (Phase 12H) — DECLARATIVE CONFIGURATION ONLY.
- * NOTHING is executed: no SIP, no webhooks, no failover, no LCR. Profiles are
- * strictly tenant-owned (auto-scoped). Rules are managed embedded in the
- * profile; ordering is deterministic (priority ASC, then id ASC).
+ * Routing profile + policy foundation (Phase 12H/12I) — DECLARATIVE CONFIGURATION
+ * ONLY. NOTHING is executed: no SIP, no webhooks, no failover, no LCR. Profiles
+ * are strictly tenant-owned (auto-scoped). Rule ordering is deterministic
+ * (priority ASC, id ASC). Updates are atomic with optimistic concurrency
+ * (`version`), and loop protection is declarative (bounded maxAttempts/retry,
+ * self-failover rejected).
  */
 @Injectable()
 export class RoutingProfilesService {
   constructor(private readonly prisma: PrismaService) {}
-
-  private isPlatform(ctx: TenantContext): boolean {
-    return ctx.tenantType === TenantType.PLATFORM;
-  }
 
   private view(p: ProfileRow) {
     return {
@@ -31,16 +29,26 @@ export class RoutingProfilesService {
       direction: p.direction,
       description: p.description,
       status: p.status,
+      version: p.version,
+      policy: {
+        selectionStrategy: p.selectionStrategy,
+        failoverEnabled: p.failoverEnabled,
+        failoverConditions: p.failoverConditions,
+        maxAttempts: p.maxAttempts,
+        overallTimeoutSeconds: p.overallTimeoutSeconds,
+      },
       rules: p.rules.map((r) => ({
         id: r.id,
         destinationType: r.destinationType,
         destination: r.destination,
         priority: r.priority,
+        weight: r.weight,
         enabled: r.enabled,
         timeoutSeconds: r.timeoutSeconds,
         retryCount: r.retryCount,
         carrierId: r.carrierId,
         failoverDestination: r.failoverDestination,
+        failoverDestinationType: r.failoverDestinationType,
         failoverAfterSeconds: r.failoverAfterSeconds,
         schedule: r.schedule,
       })),
@@ -53,6 +61,7 @@ export class RoutingProfilesService {
     const where: Prisma.RoutingProfileWhereInput = { deletedAt: null };
     if (f.status) where.status = f.status;
     if (f.direction) where.direction = f.direction;
+    if (f.strategy) where.selectionStrategy = f.strategy;
     if (f.q) where.name = { contains: f.q, mode: "insensitive" };
     const rows = await this.prisma.scoped.routingProfile.findMany({ where, include: PROFILE_INCLUDE, ...cursorArgs(f.limit, f.cursor) });
     const { items, nextCursor } = toPage(rows, f.limit);
@@ -69,6 +78,16 @@ export class RoutingProfilesService {
     return this.view(await this.load(id));
   }
 
+  private policyData(input: { selectionStrategy?: unknown; failoverEnabled?: unknown; failoverConditions?: unknown; maxAttempts?: unknown; overallTimeoutSeconds?: unknown }) {
+    const d: Record<string, unknown> = {};
+    if ("selectionStrategy" in input) d.selectionStrategy = input.selectionStrategy;
+    if ("failoverEnabled" in input) d.failoverEnabled = input.failoverEnabled;
+    if ("failoverConditions" in input) d.failoverConditions = input.failoverConditions;
+    if ("maxAttempts" in input) d.maxAttempts = input.maxAttempts;
+    if ("overallTimeoutSeconds" in input) d.overallTimeoutSeconds = input.overallTimeoutSeconds;
+    return d;
+  }
+
   async create(ctx: TenantContext, input: CreateRoutingProfileInput) {
     const ruleData = await this.buildRules(ctx, input.rules ?? []);
     try {
@@ -79,6 +98,8 @@ export class RoutingProfilesService {
           direction: input.direction,
           description: input.description,
           status: input.status,
+          ...this.policyData(input),
+          failoverConditions: input.failoverConditions ?? [],
           rules: { create: ruleData },
         },
         include: PROFILE_INCLUDE,
@@ -93,10 +114,10 @@ export class RoutingProfilesService {
   }
 
   async update(ctx: TenantContext, id: string, input: UpdateRoutingProfileInput) {
-    const current = await this.load(id); // scoped → 404 for foreign tenant
+    await this.load(id); // scoped → 404 for foreign tenant
     const rulesReplace = input.rules !== undefined ? await this.buildRules(ctx, input.rules) : undefined;
 
-    const data: Prisma.RoutingProfileUncheckedUpdateInput = {};
+    const data: Prisma.RoutingProfileUncheckedUpdateInput = { ...(this.policyData(input) as Prisma.RoutingProfileUncheckedUpdateInput) };
     if ("name" in input) data.name = input.name;
     if ("direction" in input) data.direction = input.direction;
     if ("description" in input) data.description = input.description;
@@ -104,7 +125,13 @@ export class RoutingProfilesService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        await tx.routingProfile.update({ where: { id }, data });
+        if (input.expectedVersion !== undefined) {
+          // Atomic optimistic lock: only update if the version still matches.
+          const res = await tx.routingProfile.updateMany({ where: { id, version: input.expectedVersion }, data: { ...data, version: { increment: 1 } } });
+          if (res.count !== 1) throw new ConflictException("Routing profile was modified concurrently (version mismatch)");
+        } else {
+          await tx.routingProfile.update({ where: { id }, data: { ...data, version: { increment: 1 } } });
+        }
         if (rulesReplace !== undefined) {
           await tx.routingRule.deleteMany({ where: { routingProfileId: id } });
           if (rulesReplace.length) await tx.routingRule.createMany({ data: rulesReplace.map((r) => ({ ...r, routingProfileId: id })) });
@@ -116,7 +143,6 @@ export class RoutingProfilesService {
       }
       throw e;
     }
-    void current;
     return this.get(ctx, id);
   }
 
@@ -125,18 +151,18 @@ export class RoutingProfilesService {
     await this.prisma.routingProfile.update({ where: { id }, data: { deletedAt: new Date() } });
   }
 
-  /** Validate + normalize each rule (relationships, timezone, canonical E.164). */
+  /** Validate + normalize each rule (relationships, timezone, canonical E.164, self-loop). */
   private async buildRules(ctx: TenantContext, rules: RuleInputType[]): Promise<Prisma.RoutingRuleCreateManyRoutingProfileInput[]> {
     const out: Prisma.RoutingRuleCreateManyRoutingProfileInput[] = [];
     for (const r of rules) {
-      let destination = r.destination;
-      if (r.destinationType === RoutingDestinationType.PHONE_NUMBER) {
-        const n = normalizeE164(r.destination);
-        if (!n.ok) throw new BadRequestException(`Invalid destination number: ${n.reason}`);
-        destination = n.value.e164; // store canonical
-      }
-      if (r.destinationType === RoutingDestinationType.SIP_TRUNK) {
-        await this.assertSipTrunkOwned(r.destination);
+      const destination = await this.resolveDestination(ctx, r.destinationType, r.destination);
+      let failoverDestination: string | undefined;
+      if (r.failoverDestination !== undefined && r.failoverDestinationType !== undefined) {
+        failoverDestination = await this.resolveDestination(ctx, r.failoverDestinationType, r.failoverDestination);
+        // Loop protection: a rule may not fail over to its own primary destination.
+        if (r.failoverDestinationType === r.destinationType && failoverDestination === destination) {
+          throw new BadRequestException("A rule cannot fail over to its own destination");
+        }
       }
       if (r.carrierId) await this.assertCarrierAccessible(ctx, r.carrierId);
       if (r.schedule) this.assertTimezone(r.schedule.timezone);
@@ -144,11 +170,13 @@ export class RoutingProfilesService {
         destinationType: r.destinationType,
         destination,
         priority: r.priority,
+        weight: r.weight,
         enabled: r.enabled,
         timeoutSeconds: r.timeoutSeconds,
         retryCount: r.retryCount,
         carrierId: r.carrierId,
-        failoverDestination: r.failoverDestination,
+        failoverDestination,
+        failoverDestinationType: r.failoverDestinationType,
         failoverAfterSeconds: r.failoverAfterSeconds,
         schedule: r.schedule ? (r.schedule as Prisma.InputJsonValue) : undefined,
       });
@@ -156,9 +184,18 @@ export class RoutingProfilesService {
     return out;
   }
 
-  private async assertSipTrunkOwned(sipTrunkId: string): Promise<void> {
-    const t = await this.prisma.scoped.sipTrunk.findFirst({ where: { id: sipTrunkId, deletedAt: null }, select: { id: true } });
-    if (!t) throw new BadRequestException("SIP trunk destination not found or not owned by this tenant");
+  /** Normalize + tenant-validate a destination value by type; returns the canonical string. */
+  private async resolveDestination(ctx: TenantContext, type: RoutingDestinationType, value: string): Promise<string> {
+    if (type === RoutingDestinationType.PHONE_NUMBER) {
+      const n = normalizeE164(value);
+      if (!n.ok) throw new BadRequestException(`Invalid destination number: ${n.reason}`);
+      return n.value.e164; // canonical
+    }
+    if (type === RoutingDestinationType.SIP_TRUNK) {
+      const t = await this.prisma.scoped.sipTrunk.findFirst({ where: { id: value, deletedAt: null }, select: { id: true } });
+      if (!t) throw new BadRequestException("SIP trunk destination not found or not owned by this tenant");
+    }
+    return value;
   }
 
   private async assertCarrierAccessible(ctx: TenantContext, carrierId: string): Promise<void> {

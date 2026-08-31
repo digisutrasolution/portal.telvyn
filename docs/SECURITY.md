@@ -366,3 +366,14 @@ and remains the source of truth — UI gating is convenience only).
 - **Bounds:** priority/retry/timeout bounded; schedule timezone IANA-validated;
   no scripting/executable config (declarative only). No runtime requests during
   CRUD.
+
+## Routing policy security (Phase 12I, 2026-08-29)
+
+- **Loop protection:** self-failover rejected (incl. normalized phone numbers);
+  `maxAttempts` + retry counts bounded → no unbounded/infinite retry config.
+- **Typed failover** validated per type (webhook failover still SSRF-validated;
+  never called). Oversized-config bounds (≤100 rules, ≤5 conditions, string/int
+  caps). `failoverEnabled` requires ≥1 condition.
+- **Atomic optimistic-concurrency updates** (`version` + `expectedVersion` → 409)
+  prevent lost-update races; rule replacement is all-or-nothing. Mass-assignment
+  unchanged (create strips unknowns, update `.strict()`). No runtime calls in CRUD.

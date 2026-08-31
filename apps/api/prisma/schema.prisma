@@ -433,6 +433,24 @@ enum RoutingDestinationType {
   WEBHOOK
 }
 
+// Routing policy semantics (Phase 12I) — declarative selection strategy for a
+// profile's rules. Runtime evaluation is a FUTURE engine-adapter concern.
+enum RoutingSelectionStrategy {
+  PRIORITY // try rules in deterministic priority order
+  WEIGHTED // distribute by RoutingRule.weight (config only)
+  ROUND_ROBIN
+  SIMULTANEOUS // ring eligible destinations at once
+}
+
+// Declarative failure conditions that would trigger failover (config only).
+enum RoutingFailoverCondition {
+  NO_ANSWER
+  BUSY
+  FAILED
+  UNREACHABLE
+  TIMEOUT
+}
+
 enum TelecomCredentialType {
   SIP_PASSWORD
   CARRIER_API
@@ -701,6 +719,15 @@ model RoutingProfile {
   description String?
   status      TelecomStatus    @default(ACTIVE)
 
+  // Routing policy (Phase 12I) — declarative; NOT executed. Loop protection via
+  // bounded maxAttempts; `version` gives optimistic-concurrency on updates.
+  selectionStrategy   RoutingSelectionStrategy    @default(PRIORITY)
+  failoverEnabled     Boolean                     @default(false)
+  failoverConditions  RoutingFailoverCondition[]
+  maxAttempts         Int? // bounded attempt cap (loop protection)
+  overallTimeoutSeconds Int?
+  version             Int                         @default(0)
+
   rules RoutingRule[]
   dids  Did[]
 
@@ -724,12 +751,15 @@ model RoutingRule {
   // Retry/timeout are bounded CONFIG — never executed in 12H.
   timeoutSeconds Int?
   retryCount     Int?
+  weight         Int? // for the WEIGHTED selection strategy (config only)
   // Optional declarative schedule: { timezone, daysOfWeek[], startMinute, endMinute } (validated at write).
   schedule Json?
-  // FailoverPolicy is deferred — modeled as fields for now.
-  failoverDestination  String?
-  failoverAfterSeconds Int?
-  enabled              Boolean     @default(true)
+  // FailoverPolicy stays as fields (12A). Phase 12I types the failover destination
+  // so it is validated like the primary and self-loops are rejected.
+  failoverDestination     String?
+  failoverDestinationType RoutingDestinationType?
+  failoverAfterSeconds    Int?
+  enabled                 Boolean  @default(true)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

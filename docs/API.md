@@ -143,3 +143,13 @@ SSRF-checked, never called), `priority` (deterministic order), `enabled`,
 endMinute}`. Duplicate name per tenant → 409. RBAC reuses `routing.read`/
 `routing.manage` (12B — not `routing_profile.*`). OpenAPI YAML still `/v1/auth`
 only (tracked debt).
+
+## Routing policy fields — EXISTING (Phase 12I, 2026-08-29)
+
+The `/v1/telecom/routing-profiles` body (12H) now also accepts **policy** fields:
+`selectionStrategy`, `failoverEnabled`, `failoverConditions[]`, `maxAttempts`,
+`overallTimeoutSeconds`; rules gain `weight`, `failoverDestination` +
+`failoverDestinationType`. Responses include `version` and a `policy` object.
+PATCH accepts optional `expectedVersion` (optimistic concurrency → **409** on
+mismatch); list adds a `strategy` filter. No new routes; no runtime execution.
+OpenAPI YAML still `/v1/auth` only (tracked debt).

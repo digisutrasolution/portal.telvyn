@@ -255,3 +255,39 @@ joined `TENANT_SCOPED_MODELS`.
 - **Delete is soft;** deleting a profile does not cascade to carriers/trunks and
   does not auto-reassign DIDs referencing it. RBAC reuses `routing.read`/
   `routing.manage`; responses carry reference ids/config only (no secrets).
+
+## Routing policy + failover — EXISTING (Phase 12I, 2026-08-29)
+
+**Declarative policy only — NOTHING executed.** Extends the 12H profile (no new
+FailoverPolicy table — policy is 1:1 with `RoutingProfile`, so policy is stored
+as fields; additive migration `routing_policy_failover`).
+
+- **Policy semantics:** `selectionStrategy` (PRIORITY | WEIGHTED | ROUND_ROBIN |
+  SIMULTANEOUS) governs how rules are chosen (runtime = future engine adapter).
+  `RoutingRule.weight` supports WEIGHTED (config only).
+- **Declarative failover:** `failoverEnabled` + `failoverConditions[]`
+  (NO_ANSWER | BUSY | FAILED | UNREACHABLE | TIMEOUT). `failoverEnabled` with no
+  conditions is rejected (no silent no-op). Per-rule `failoverDestination` is now
+  **typed** (`failoverDestinationType`) and validated exactly like the primary.
+- **Ordering** stays deterministic (priority ASC, id ASC); strategy affects
+  runtime selection only (not enumeration).
+- **Retry/timeout** bounded (retryCount 0–10, timeoutSeconds 1–600,
+  failoverAfterSeconds 1–600, overallTimeoutSeconds 1–3600) — never executed.
+- **Loop protection (declarative):** a rule may not fail over to its own
+  destination (rejected, incl. normalized-equal phone numbers); `maxAttempts`
+  (1–20) caps total attempts; retries/rules are bounded. Runtime cycle detection
+  across chains is a future engine concern (documented).
+- **Atomicity + concurrency:** rule replacement is atomic (validation happens
+  before the transaction — an invalid rule aborts the whole update, no partial
+  write). `RoutingProfile.version` provides **optimistic concurrency**: PATCH may
+  send `expectedVersion`; a mismatch → 409 (atomic `updateMany WHERE version=…`).
+  Every update increments `version`. Without `expectedVersion`, last-writer-wins.
+- Carrier/trunk consistency + tenant-safe relationship validation unchanged
+  (own trunk, accessible carrier). No runtime network calls during CRUD.
+
+## Future engine boundary
+
+Control plane: `RoutingProfile → RoutingRule → policy fields`. A **future engine
+adapter** (ADR-0007) will read this declarative config and program the data
+plane (Kamailio/FreeSWITCH/Asterisk). Business routing logic stays out of the
+SIP/media engines.

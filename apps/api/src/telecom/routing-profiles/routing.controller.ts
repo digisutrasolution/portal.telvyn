@@ -70,7 +70,7 @@ export class RoutingProfilesController {
       action: "telecom.routing_profile.created",
       resource: "routing_profile",
       resourceId: profile.id,
-      metadata: { direction: profile.direction, status: profile.status, ruleCount: profile.rules.length },
+      metadata: { direction: profile.direction, status: profile.status, strategy: profile.policy.selectionStrategy, failoverEnabled: profile.policy.failoverEnabled, ruleCount: profile.rules.length, version: profile.version },
     });
     return profile;
   }
@@ -90,7 +90,7 @@ export class RoutingProfilesController {
       action: "telecom.routing_profile.updated",
       resource: "routing_profile",
       resourceId: id,
-      metadata: { status: profile.status, ruleCount: profile.rules.length, rulesReplaced: body.rules !== undefined },
+      metadata: { status: profile.status, strategy: profile.policy.selectionStrategy, failoverEnabled: profile.policy.failoverEnabled, ruleCount: profile.rules.length, rulesReplaced: body.rules !== undefined, version: profile.version },
     });
     return profile;
   }

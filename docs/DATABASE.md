@@ -209,3 +209,14 @@ nullable `timeoutSeconds`, `retryCount`, `schedule` (JSONB). Reviewed
 `--create-only` (no destructive ops). `RoutingProfile` joined
 `TENANT_SCOPED_MODELS` (auto-scoped). Rules order deterministically by
 `(priority ASC, id ASC)` on the existing `@@index([routingProfileId, priority])`.
+
+## Routing policy + failover — EXISTING (Phase 12I, 2026-08-29)
+
+Additive migration `routing_policy_failover`: enums `RoutingSelectionStrategy`,
+`RoutingFailoverCondition`; `RoutingProfile` gains `selectionStrategy`
+(NOT NULL DEFAULT PRIORITY), `failoverEnabled` (DEFAULT false),
+`failoverConditions[]`, `maxAttempts?`, `overallTimeoutSeconds?`, and `version`
+(NOT NULL DEFAULT 0, optimistic-concurrency); `RoutingRule` gains `weight?` and
+`failoverDestinationType?`. All NOT NULL columns carry defaults → safe additive.
+No new FailoverPolicy table (policy is 1:1 with the profile). Reviewed
+`--create-only`; no destructive ops.

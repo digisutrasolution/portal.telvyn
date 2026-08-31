@@ -176,3 +176,12 @@ Format: Keep a Changelog; SemVer once releases begin.
   schedule. RBAC reuses routing.read/routing.manage. +13 tests (10 e2e + 3
   e164). Regression: API 105/105 (95 + 10), web 13/13, typecheck ✓, lint ✓,
   build ✓.
+- 2026-08-29 — **Phase 12I — Routing policy + failover foundation** (declarative
+  config only; no runtime). Additive migration `routing_policy_failover`
+  (RoutingSelectionStrategy + RoutingFailoverCondition enums; RoutingProfile
+  policy fields incl. `version`; RoutingRule `weight` + `failoverDestinationType`
+  — no new FailoverPolicy table). Extends 12H profile API with policy semantics,
+  declarative failover conditions, typed failover, loop protection (self-failover
+  rejected + bounded maxAttempts), and **atomic optimistic-concurrency updates**
+  (`expectedVersion` → 409). +6 e2e. Regression: API 111/111 (105 + 6), web
+  13/13, typecheck ✓, lint ✓, build ✓.
