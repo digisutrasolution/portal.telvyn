@@ -93,6 +93,40 @@ capabilities + honest `UNKNOWN` health) and `POST /v1/telecom/engines/:id/sync`
 success). Real engine connectivity plugs into these seams in a later phase without
 changing the contract.
 
+### Engine runtime integration foundation (Phase 12L, 2026-09-01, ADR-0011)
+
+The secure seams a real adapter will plug into — **no live SIP/RTP, no egress**
+(no real engine exists; discovery confirmed Postgres + Redis only). Layers, top
+to bottom, in `engines/runtime/`:
+
+- **`engine-endpoint.ts`** — the canonical SSRF egress policy (see SECURITY.md):
+  validates a platform-configured management endpoint (`http(s)` + public host
+  only) and is the active gate on engine-endpoint config. Distinct from the 12H
+  webhook check (config-time, never-called URLs).
+- **`connection-profiles.ts`** — per-provider management mechanism (Kamailio
+  JSONRPC/HTTP, Asterisk ARI, FreeSWITCH mod_xml_rpc — typed ops only, never raw
+  ESL/AMI) + bounded timeout/retry/backoff envelope.
+- **`EngineConnector` / `NullEngineConnector`** — the only network boundary; the
+  foundation wires the **Null** connector (honest `UNKNOWN`, zero egress).
+- **`EngineConnectionManager`** — resolve → SSRF-validate → connector; normalized
+  reachability (`UNCONFIGURED`/`DISABLED`/`BLOCKED`/`UNVERIFIED`/`REACHABLE`/
+  `UNREACHABLE`). `BLOCKED` is refused before any connector call.
+- **`EngineHealthService`** — maps reachability to an honest `HealthStatus`
+  (unproven → `UNKNOWN`, never fake `HEALTHY`) and appends a `HealthEvent` only on
+  a real transition.
+- **`EngineSyncService`** — deterministic config **fingerprint** (SHA-256 of the
+  secret-free intent) = desired version; append-only history in
+  `TelecomConfigVersion` (`entityType="engine"`, **no migration**); **idempotent**
+  (skip when applied == desired), **stale-downgrade-safe** (rollback re-proposes a
+  prior version, never deletes), **concurrency-guarded** by a fail-closed Redis
+  `SET NX` mutex. Apply delegates to the adapter → honest `NOT_IMPLEMENTED`, so
+  **`appliedVersion` never advances** (stays `null`; persisting it is deferred to
+  the first real adapter — ADR-0011).
+
+Platform-only endpoints (see API.md): richer `GET :id/status` (+ connection/version
+posture), `POST :id/health-check`, versioned `POST :id/sync`, and
+`POST :id/sync/rollback`.
+
 ## Node config vs runtime + health (ADR-0010)
 
 Config (durable): identity, engine, region, zone, environment, `hostRef`,

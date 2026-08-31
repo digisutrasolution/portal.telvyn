@@ -177,6 +177,14 @@ exists; config/runtime separated per ADR-0010):
 (secret vault, ADR-0009 — `secretEnc` never exposed), `TelecomConfigVersion`
 (append-only, secret-free).
 
+Phase 12L (engine runtime foundation) begins **writing** two of these
+append-only tables with **no schema change**: `TelecomConfigVersion`
+(`entityType="engine"`) records each desired configuration version (a secret-free
+SHA-256 fingerprint snapshot) as the versioning substrate, and `HealthEvent`
+(`entityType=ENGINE`) records engine health transitions. An *applied*-version
+column is intentionally NOT added yet (nothing applies until a real adapter
+exists — ADR-0011); it becomes warranted with the first real engine integration.
+
 Tenancy: `SipTrunk`, `RoutingProfile` are strictly tenant-owned (required
 `tenantId`); `Carrier`, `Did`, `TelecomCredential` use nullable `tenantId`
 (platform/pool vs tenant) per ADR-0008. Data-layer scope registration + the

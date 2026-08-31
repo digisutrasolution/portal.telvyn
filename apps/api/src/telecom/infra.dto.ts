@@ -5,6 +5,7 @@ import {
   TelecomStatus,
   EngineCapabilityKey,
 } from "@prisma/client";
+import { isSafeEngineEndpoint } from "./engines/runtime/engine-endpoint";
 
 /**
  * Zod DTOs for platform telecom infrastructure (Phase 12D): Region, Engine
@@ -35,7 +36,13 @@ export const CreateEngineDto = z.object({
   type: z.nativeEnum(TelecomEngineType),
   provider: z.string().max(120).optional(),
   version: z.string().max(60).optional(),
-  endpoint: z.string().max(255).optional(), // host reference, NOT a secret
+  // Management endpoint (NOT a secret). SSRF-guarded: must be an http(s) URL to a
+  // public host — no localhost/private/link-local/metadata targets (Phase 12L).
+  endpoint: z
+    .string()
+    .max(255)
+    .refine(isSafeEngineEndpoint, "endpoint must be an http(s) URL to a public host (no private/loopback/metadata targets)")
+    .optional(),
   environment: z.nativeEnum(TelecomEnvironment).optional(),
   regionId: z.string().uuid().optional(),
   status: z.nativeEnum(TelecomStatus).optional(),

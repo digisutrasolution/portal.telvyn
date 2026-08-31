@@ -1,9 +1,15 @@
 import { Module } from "@nestjs/common";
 import { PrismaService } from "@/infra/prisma.service";
+import { RedisService } from "@/infra/redis.service";
 import { AuthModule } from "@/auth/auth.module";
 import { AuthzModule } from "@/authz/authz.module";
 import { EngineRegistryService } from "./engines/engine-registry.service";
 import { EngineService } from "./engines/engine.service";
+import { EngineConnector, NullEngineConnector } from "./engines/runtime/engine-connector";
+import { EngineConnectionManager } from "./engines/runtime/engine-connection.manager";
+import { EngineHealthService } from "./engines/runtime/engine-health.service";
+import { EngineLockService } from "./engines/runtime/engine-lock.service";
+import { EngineSyncService } from "./engines/runtime/engine-sync.service";
 import { KamailioAdapter } from "./engines/adapters/kamailio.adapter";
 import { AsteriskAdapter } from "./engines/adapters/asterisk.adapter";
 import { FreeSwitchAdapter } from "./engines/adapters/freeswitch.adapter";
@@ -39,11 +45,19 @@ import { LcrController } from "./lcr/lcr.controller";
   controllers: [RegionsController, EnginesController, NodesController, CarriersController, SipTrunksController, DidsController, RoutingProfilesController, LcrController],
   providers: [
     PrismaService,
+    RedisService,
     KamailioAdapter,
     AsteriskAdapter,
     FreeSwitchAdapter,
     EngineRegistryService,
     EngineService,
+    // Engine runtime foundation (Phase 12L). The connector is bound to the honest
+    // NullEngineConnector — no live egress until a real engine exists.
+    { provide: EngineConnector, useClass: NullEngineConnector },
+    EngineConnectionManager,
+    EngineHealthService,
+    EngineLockService,
+    EngineSyncService,
     RegionsService,
     EnginesService,
     NodesService,

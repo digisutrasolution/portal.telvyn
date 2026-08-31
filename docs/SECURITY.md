@@ -418,3 +418,42 @@ and remains the source of truth — UI gating is convenience only).
   permission gates (`telecom.health.read` / `telecom.manage`); a customer tenant
   is 403 even as owner, unauthenticated is 401. Every sync attempt is audited
   (`telecom.engine.sync_attempted`) with a correlation id.
+
+## Engine runtime integration security (Phase 12L, 2026-09-01)
+
+Phase 12L builds the runtime *integration boundary*. No live SIP/RTP and **no
+network egress** occur (the wired connector is the honest `NullEngineConnector`),
+but the security controls are real and tested.
+
+- **Canonical SSRF egress policy** (`engine-endpoint.ts`) — the single authority
+  for validating a management endpoint before any egress. Requires an explicit
+  `http`/`https` scheme, forbids credentials-in-URL and control/CRLF characters,
+  and permits only a **public host**: blocks `localhost`/`*.local`/`*.internal`,
+  loopback (`127/8`, `::1`), RFC1918 (`10/8`, `172.16/12`, `192.168/16`), CGNAT
+  (`100.64/10`), link-local (`169.254/16` incl. **cloud metadata**, `fe80::/10`),
+  unique-local (`fc00::/7`), multicast/reserved, `0.0.0.0/8`, **IPv4-mapped &
+  NAT64 IPv6**, and **alternate IP representations** (decimal/octal/hex). A
+  connect-time `assertResolvedIpAllowed` re-checks the DNS-resolved IP
+  (**rebinding defence**). Endpoints are **platform-configured only** (PlatformGuard),
+  never tenant input; the policy is enforced both at config time (engine
+  create/update → 400) and pre-connect. This is the canonical *egress* policy —
+  distinct from the 12H webhook check (a config-time gate for never-called URLs).
+- **No command / dialplan / XML injection.** Providers are driven by typed
+  operations only (`healthCheck`, `applyConfiguration`, future `reload`) — never
+  `execute(userCommand)`, raw ESL/AMI, or user-supplied dialplan/XML/Lua. No shell
+  execution; no `exec`/`spawn` on untrusted input.
+- **Secret-safe.** The desired-config fingerprint is computed over the secret-free
+  `EngineConfigurationIntent` (credentials are `credentialRef` ids); version
+  snapshots (`TelecomConfigVersion`), health events, logs, and audit metadata are
+  all secret-free (e2e greps responses/audit for `secret|password`). The vault is
+  never read into a response.
+- **Bounded + fail-closed.** Bounded connect/request/operation timeouts and
+  bounded retry/backoff (centralized per provider); the Redis sync mutex
+  (`SET NX`) fails closed — Redis down → sync refused (503), never a double-apply.
+  Concurrent sync → 409.
+- **Honest.** Reachability that is unproven → `UNKNOWN` (never fabricated
+  `HEALTHY`); sync → `501 NOT_IMPLEMENTED` (never fake success); `appliedVersion`
+  stays `null` because nothing is applied.
+- **IDOR/BOLA-safe + audited.** All runtime endpoints are PlatformGuard + permission
+  gated (customer 403, unauth 401, nonexistent 404); health-check / sync / rollback
+  attempts are audited with correlation ids and secret-free metadata.

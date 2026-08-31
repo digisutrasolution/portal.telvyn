@@ -53,7 +53,9 @@ the existing `AuditService`. None of these resources hold secrets.
 | `GET /v1/telecom/engines` · `GET /v1/telecom/engines/:id` | `telecom.read` |
 | `POST/PUT/DELETE /v1/telecom/engines[/:id]` · `PUT /v1/telecom/engines/:id/capabilities` | `telecom.manage` |
 | `GET /v1/telecom/engines/:id/status` | `telecom.health.read` |
+| `POST /v1/telecom/engines/:id/health-check` | `telecom.health.read` |
 | `POST /v1/telecom/engines/:id/sync` | `telecom.manage` |
+| `POST /v1/telecom/engines/:id/sync/rollback` | `telecom.manage` |
 | `GET /v1/telecom/nodes` · `GET /v1/telecom/nodes/:id` | `telecom.read` |
 | `GET /v1/telecom/nodes/:id/health` | `telecom.health.read` |
 | `POST/PUT/DELETE /v1/telecom/nodes[/:id]` | `telecom.manage` |
@@ -76,7 +78,23 @@ is always audited as `telecom.engine.sync_attempted` (metadata: outcome, code,
 correlationId, provider — no secrets). Both are **platform-only** (`PlatformGuard`);
 a customer tenant gets 403 even as owner. Normalized failure mapping:
 `NOT_IMPLEMENTED → 501`, `TIMEOUT → 504`, else `503`. Credentials never appear in
-any response — config sync carries only `credentialRef` ids. Lists are bounded (take 500); cursor pagination lands with the
+any response — config sync carries only `credentialRef` ids.
+
+**Engine runtime foundation (Phase 12L, ADR-0011).** `GET :id/status` additionally
+returns `connection` (SSRF-guarded reachability: `UNCONFIGURED`/`DISABLED`/
+`BLOCKED`/`UNVERIFIED`/`REACHABLE`/`UNREACHABLE`, `endpointConfigured`, safe
+`detail`) and `version` (`desiredVersion`, `appliedVersion` — **`null`** until a
+real engine applies, `versions` count). `POST :id/health-check` actively probes
+(honest `UNKNOWN` with the NullConnector — no egress), records a `HealthEvent` on
+transition, and audits `telecom.engine.health_checked`. `POST :id/sync` is now
+**versioned** (deterministic secret-free config fingerprint = desired version),
+**idempotent**, and **concurrency-guarded** (a second concurrent sync → **409**;
+Redis-lock outage → **503**), still honest `501 NOT_IMPLEMENTED`, audited with
+`desiredVersion`/`appliedVersion`. `POST :id/sync/rollback` re-proposes the prior
+desired version (append-only; **400** when there is no previous version), audited
+`telecom.engine.rollback_attempted`. The management **endpoint** on engine
+create/update is SSRF-validated (private/loopback/metadata/malformed → **400**).
+All runtime endpoints are platform-only. Lists are bounded (take 500); cursor pagination lands with the
 high-cardinality tenant resources (DIDs, 12G). **Note:** the hand-authored
 OpenAPI YAML currently covers `/v1/auth` only; authz + telecom endpoints are
 documented here (pre-existing gap, tracked — YAML expansion is future work).

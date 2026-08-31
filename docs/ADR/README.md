@@ -16,3 +16,4 @@ ADR that references the old one. Template: `template.md`.
 | 0008 | Carrier abstraction: platform/wholesale vs tenant | Accepted |
 | 0009 | Telecom credential vault (secret material separation) | Accepted |
 | 0010 | Telecom node: configuration vs runtime, and the health model | Accepted |
+| 0011 | Engine runtime integration boundary | Accepted |

@@ -211,3 +211,23 @@ Format: Keep a Changelog; SemVer once releases begin.
   reuses telecom.health.read/telecom.manage (no new perms). +10 tests (6 unit +
   4 e2e). Regression: API 134/134 (124 + 10), web 13/13, typecheck ✓, lint ✓,
   build ✓. Realizes the growth path in ADR-0007 (addendum added).
+- 2026-09-01 — **Phase 12L — Engine runtime integration foundation** (secure seams
+  only; NO live SIP/RTP/engine runtime, **no network egress** — discovery confirmed
+  no real engine exists). **No migration** — reuses `TelecomConfigVersion` (versioning)
+  and `HealthEvent` (transitions). New `engines/runtime/`: **canonical SSRF egress
+  policy** `engine-endpoint.ts` (http(s)+public-host only; blocks loopback/RFC1918/
+  CGNAT/link-local+metadata/ULA/multicast/IPv4-mapped+NAT64 IPv6/alt-representations;
+  DNS-rebinding recheck) — active gate on engine-endpoint config (→400) and pre-connect;
+  `connection-profiles.ts` (typed per-provider mechanism + bounded timeout/retry/backoff);
+  `EngineConnector`+**`NullEngineConnector`** (honest UNKNOWN, zero egress — the only
+  wired connector); `EngineConnectionManager` (normalized reachability, BLOCKED refused
+  pre-connect); `EngineHealthService` (honest health, HealthEvent on transition);
+  `EngineSyncService` (deterministic secret-free config **fingerprint** = desired
+  version, append-only `TelecomConfigVersion` history, **idempotent**, stale-downgrade-safe
+  **rollback**, fail-closed Redis `SET NX` **concurrency lock**; apply → honest
+  NOT_IMPLEMENTED, appliedVersion stays null). Platform-only endpoints: richer
+  `GET :id/status` (+connection/version), `POST :id/health-check`, versioned
+  `POST :id/sync` (concurrent→409, lock-outage→503), `POST :id/sync/rollback`
+  (no-previous→400). RBAC reuses telecom.health.read/telecom.manage (no new perms).
+  New ADR-0011 (engine runtime integration boundary). +56 tests (49 unit + 7 e2e).
+  Regression: API 190/190 (134 + 56), web 13/13, typecheck ✓, lint ✓, build ✓.

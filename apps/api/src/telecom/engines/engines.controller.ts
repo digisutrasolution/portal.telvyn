@@ -1,5 +1,6 @@
 import {
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -14,6 +15,7 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import { requestContext } from "@/common/request-context";
 import { ZodPipe } from "@/common/zod.pipe";
@@ -27,6 +29,10 @@ import { AuditService } from "@/authz/audit.service";
 import { EnginesService } from "./engines.service";
 import { EngineService } from "./engine.service";
 import { EngineErrorCode } from "./engine.types";
+import { EngineConnectionManager } from "./runtime/engine-connection.manager";
+import { EngineHealthService } from "./runtime/engine-health.service";
+import { EngineSyncService, type SyncOutcome } from "./runtime/engine-sync.service";
+import { EngineLockBusy, EngineLockUnavailable } from "./runtime/engine-lock.service";
 import {
   CreateEngineDto,
   UpdateEngineDto,
@@ -43,41 +49,108 @@ export class EnginesController {
   constructor(
     private readonly engines: EnginesService,
     private readonly engineSvc: EngineService,
+    private readonly connection: EngineConnectionManager,
+    private readonly health: EngineHealthService,
+    private readonly syncSvc: EngineSyncService,
     private readonly audit: AuditService,
   ) {}
 
-  // ---- engine abstraction (Phase 12K) ----
+  // ---- engine abstraction (Phase 12K) + runtime foundation (Phase 12L) ----
 
-  /** Normalized engine status: explicit capabilities + honest health (UNKNOWN for stubs). */
+  /**
+   * Normalized engine status: explicit capabilities + honest health (UNKNOWN for
+   * stubs) + runtime posture — connection reachability (SSRF-guarded, no live
+   * egress in the foundation) and configuration version (desired/applied).
+   */
   @Get(":id/status")
   @RequirePermissions("telecom.health.read")
   async status(@Param("id", ParseUUIDPipe) id: string) {
     const engine = await this.engines.get(id); // 404 if not found; platform-scoped
-    return this.engineSvc.getStatus({ id, type: engine.type });
+    const correlationId = randomUUID();
+    const base = await this.engineSvc.getStatus({ id, type: engine.type });
+    const connection = await this.connection.resolve({ provider: engine.type, endpoint: engine.endpoint, status: engine.status, correlationId });
+    const version = await this.syncSvc.posture(id);
+    return {
+      ...base,
+      connection: { state: connection.state, endpointConfigured: connection.endpointConfigured, detail: connection.detail },
+      version, // { desiredVersion, appliedVersion, versions } — applied stays null until a real engine applies
+    };
+  }
+
+  /** Actively probe engine health (SSRF-guarded). Honest UNKNOWN with the NullConnector; records a HealthEvent on transition. */
+  @Post(":id/health-check")
+  @RequirePermissions("telecom.health.read")
+  async healthCheck(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
+    const engine = await this.engines.get(id);
+    const correlationId = randomUUID();
+    const report = await this.health.probe({ id, type: engine.type, endpoint: engine.endpoint, status: engine.status }, correlationId);
+    await this.audit.log({
+      ctx,
+      req: requestContext(req),
+      action: "telecom.engine.health_checked",
+      resource: "engine",
+      resourceId: id,
+      metadata: { status: report.status, reachability: report.reachability, correlationId, provider: engine.type },
+    });
+    return report;
   }
 
   /**
-   * Attempt to synchronize control-plane config to the engine. With stub
-   * adapters this returns a normalized NOT_IMPLEMENTED → HTTP 501 (no fake
-   * success, no engine connectivity). The attempt is audited regardless.
+   * Attempt versioned, idempotent, concurrency-guarded synchronization of
+   * control-plane config to the engine. With stub adapters this returns a
+   * normalized NOT_IMPLEMENTED → HTTP 501 (no fake success, no live connectivity).
+   * A concurrent sync is refused (409); a lock outage fails closed (503). Always audited.
    */
   @Post(":id/sync")
   @RequirePermissions("telecom.manage")
   async sync(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
     const engine = await this.engines.get(id);
-    // Empty desired-state intent for now — engine↔resource assignment is future.
-    const intent = this.engineSvc.buildConfigurationIntent({ engineType: engine.type, carriers: [], trunks: [], dids: [], routes: [] });
-    const result = await this.engineSvc.sync({ id, type: engine.type }, intent);
+    const ref = { id, type: engine.type, endpoint: engine.endpoint, status: engine.status };
+    const result = await this.run(() => this.syncSvc.sync(ref, ctx.userId, randomUUID()));
     await this.audit.log({
       ctx,
       req: requestContext(req),
       action: "telecom.engine.sync_attempted",
       resource: "engine",
       resourceId: id,
-      metadata: { outcome: result.outcome, code: result.code, correlationId: result.correlationId, provider: engine.type },
+      metadata: { outcome: result.outcome, code: result.code, correlationId: result.correlationId, provider: engine.type, desiredVersion: result.desiredVersion, appliedVersion: result.appliedVersion },
     });
+    return this.mapOutcome(result);
+  }
+
+  /** Roll back to the previous desired configuration version (append-only; honest apply). */
+  @Post(":id/sync/rollback")
+  @RequirePermissions("telecom.manage")
+  async rollback(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
+    const engine = await this.engines.get(id);
+    const ref = { id, type: engine.type, endpoint: engine.endpoint, status: engine.status };
+    const result = await this.run(() => this.syncSvc.rollback(ref, ctx.userId, randomUUID()));
+    await this.audit.log({
+      ctx,
+      req: requestContext(req),
+      action: "telecom.engine.rollback_attempted",
+      resource: "engine",
+      resourceId: id,
+      metadata: { outcome: result.outcome, code: result.code, correlationId: result.correlationId, provider: engine.type, desiredVersion: result.desiredVersion },
+    });
+    return this.mapOutcome(result);
+  }
+
+  /** Translate lock failures into HTTP; other errors (e.g. 400 no-previous-version) propagate. */
+  private async run(op: () => Promise<SyncOutcome>): Promise<SyncOutcome> {
+    try {
+      return await op();
+    } catch (e) {
+      if (e instanceof EngineLockBusy) throw new ConflictException("engine sync already in progress");
+      if (e instanceof EngineLockUnavailable) throw new ServiceUnavailableException("engine sync lock unavailable");
+      throw e;
+    }
+  }
+
+  /** Honest HTTP mapping: NOT_IMPLEMENTED→501, TIMEOUT→504, other failure→503; success returns the outcome. */
+  private mapOutcome(result: SyncOutcome): SyncOutcome {
     if (!result.ok) {
-      const msg = `engine sync ${result.outcome.toLowerCase()}`;
+      const msg = `engine ${result.outcome.toLowerCase()}`;
       if (result.code === EngineErrorCode.NOT_IMPLEMENTED) throw new NotImplementedException(msg);
       if (result.code === EngineErrorCode.TIMEOUT) throw new GatewayTimeoutException(msg);
       throw new ServiceUnavailableException(msg);
