@@ -457,3 +457,29 @@ but the security controls are real and tested.
 - **IDOR/BOLA-safe + audited.** All runtime endpoints are PlatformGuard + permission
   gated (customer 403, unauth 401, nonexistent 404); health-check / sync / rollback
   attempts are audited with correlation ids and secret-free metadata.
+
+## Engine private-network management allowlist (Phase 12M-2, 2026-11-17)
+
+A real engine management plane is reached over a PRIVATE transport (a WireGuard
+address behind an mTLS gateway), which the canonical policy above denies by
+default. Phase 12M-2 adds a **narrow, explicit allowlist** that authorizes a
+specific private IP + port **individually** — it narrows, never widens, egress.
+
+- **Address-only, never a name.** An entry matches on the IP address, so a
+  hostname can never be allowlisted — defeating DNS-rebinding to an arbitrary
+  address. Forbidden hostnames (`localhost`, `*.internal`, …) stay forbidden
+  regardless of the allowlist.
+- **No blanket RFC1918.** IPv4 entries must be `/24..32` (a blanket `10/8`,
+  `172.16/12`, `192.168/16` is rejected); IPv6 entries must be an exact address
+  (`/128`). A port is **mandatory** per entry — an allowlisted host is reachable
+  only on its declared port(s).
+- **Same allowlist at config AND connect time.** `parseEngineEndpoint` (engine
+  create/update) and `assertResolvedIpAllowed` (connect-time, post-DNS) consult
+  the same allowlist, so a resolved IP that is private-but-not-allowlisted — or
+  allowlisted-but-on-the-wrong-port — is still refused.
+- **Platform-only, fail-closed source.** The allowlist comes from the platform
+  env `ENGINE_MGMT_ALLOWLIST` (comma-separated `CIDR@port[;port…]`, e.g.
+  `10.9.0.1/32@8443`) — never tenant input. Malformed tokens are dropped
+  (fail-closed → that endpoint stays blocked). **Unset (the default) = empty
+  allowlist = the strict public-only policy, unchanged.** No egress occurs yet;
+  the wired connector is still `NullEngineConnector`.

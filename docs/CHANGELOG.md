@@ -249,3 +249,17 @@ Format: Keep a Changelog; SemVer once releases begin.
   the decision. +3 integration tests (ENGINE_API usable, engine↔credential link,
   SET NULL on credential delete). Regression: **API 199/199 (196 + 3)**, web 13/13,
   typecheck ✓, lint ✓.
+- 2026-11-17 — **Phase 12M-2 — Engine management private-network SSRF allowlist.**
+  Extends the canonical egress policy (`engine-endpoint.ts`) so a real engine can
+  be reached over a PRIVATE transport (WireGuard + mTLS gateway) while RFC1918 stays
+  denied by default. A narrow, explicit allowlist (platform env `ENGINE_MGMT_ALLOWLIST`,
+  `CIDR@port[;port…]`) authorizes a **specific IP + port individually**: IPv4 `/24..32`
+  (blanket `10/8`·`172.16/12`·`192.168/16` rejected), IPv6 exact `/128`, port mandatory,
+  matched on the **IP address only** (a hostname can never be allowlisted → rebinding
+  defeated); enforced at config time **and** the connect-time `assertResolvedIpAllowed`
+  recheck. Malformed entries dropped (fail-closed); **unset = the prior strict
+  public-only policy, unchanged**. No egress yet (`NullEngineConnector` still wired);
+  no schema/DI change. +37 unit tests (token parsing, exact IP+port match, parse +
+  connect-time integration, every other guard still holds, env memoization). ADR-0011
+  addendum + SECURITY.md updated; `.env.example` documents the var. Regression: **API
+  236/236 (199 + 37)**, web 13/13, typecheck ✓, lint ✓, build ✓.

@@ -106,8 +106,12 @@ the first real adapter lands"; neither re-litigates an accepted decision.
   returned from the engine row. This does not change the single-connection-
   boundary or typed-operations decisions above.
 
-- **Per-endpoint private-network allowlist (planned, 12M-2).** The canonical SSRF
-  policy keeps denying private ranges by default. The private WireGuard
-  management endpoint is authorized **individually** (host + CIDR + port), never
-  by blanket-unblocking RFC1918, and keeps the connect-time DNS-rebinding
-  recheck. This narrows, and does not weaken, the egress policy.
+- **Per-endpoint private-network allowlist (Phase 12M-2, implemented).** The
+  canonical SSRF policy keeps denying private ranges by default. The private
+  WireGuard management endpoint is authorized **individually** (IP + port), never
+  by blanket-unblocking RFC1918 (IPv4 `/24..32`, IPv6 exact `/128`, a port
+  mandatory), matched on the IP address only (a name can never be allowlisted),
+  and enforced at both config time and the connect-time DNS-rebinding recheck.
+  Source is the platform env `ENGINE_MGMT_ALLOWLIST`; malformed entries are
+  dropped (fail-closed); unset = the strict public-only policy, unchanged. This
+  narrows, and does not weaken, the egress policy — see SECURITY.md.
