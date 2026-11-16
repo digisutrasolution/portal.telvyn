@@ -483,3 +483,34 @@ specific private IP + port **individually** — it narrows, never widens, egress
   (fail-closed → that endpoint stays blocked). **Unset (the default) = empty
   allowlist = the strict public-only policy, unchanged.** No egress occurs yet;
   the wired connector is still `NullEngineConnector`.
+
+## Real Kamailio management connector (Phase 12M-3, 2026-11-17)
+
+Phase 12M-3 adds the first real engine connector — a **read-only JSONRPC health
+probe** (`core.version`) over the private mTLS gateway. It remains **off by
+default**; nothing changes until the platform opts in.
+
+- **Default off, env-gated.** `ENGINE_CONNECTOR` unset (or anything other than
+  `kamailio`) → `NullEngineConnector` (no egress). `kamailio` → the real connector
+  — and even then nothing is contacted until an engine has an allowlisted
+  management endpoint AND an `ENGINE_API` credential. Flipping the flag alone
+  changes no behavior.
+- **Single network seam.** All egress goes through one injectable transport
+  (`EngineHttpTransport`); connector logic is unit-tested with a mocked transport
+  (no live egress). The real `NodeHttpsEngineTransport` enforces **https + mTLS**
+  (client cert presented, server cert verified `rejectUnauthorized: true`), a
+  **connect-time rebinding recheck** (the same `assertResolvedIpAllowed` + allowlist,
+  per resolved IP + port), **bounded** connect/request timeouts, and a **capped**
+  response body.
+- **Secret at the boundary only.** The mTLS client cert is a vault `ENGINE_API`
+  credential, decrypted solely via `revealForAdapter` inside the connector, never
+  cached, logged, or returned. A wrong-type or malformed credential → honest
+  `UNKNOWN` (no egress). Proven in tests: the key body never appears in any `detail`.
+- **Honest health.** Valid `core.version` → `HEALTHY`; the engine answered but not
+  OK (non-2xx / JSONRPC error / no version) → `UNHEALTHY`; unreachable / unverifiable
+  → `UNKNOWN` — never a fabricated `HEALTHY`. Transport failures map to a fixed,
+  safe vocabulary (`connection refused`, `timed out`, `TLS verification failed`,
+  `blocked by egress policy`) — raw provider/TLS text is never surfaced.
+- **Scope.** Kamailio is a SIP router (`originate:false`); this connector is
+  read-only health introspection. Pushing configuration is a separate later
+  concern (no engine↔resource model yet) and is not done here.

@@ -68,7 +68,7 @@ export class EnginesController {
     const engine = await this.engines.get(id); // 404 if not found; platform-scoped
     const correlationId = randomUUID();
     const base = await this.engineSvc.getStatus({ id, type: engine.type });
-    const connection = await this.connection.resolve({ provider: engine.type, endpoint: engine.endpoint, status: engine.status, correlationId });
+    const connection = await this.connection.resolve({ provider: engine.type, endpoint: engine.endpoint, credentialId: engine.credentialId, status: engine.status, correlationId });
     const version = await this.syncSvc.posture(id);
     return {
       ...base,
@@ -83,7 +83,7 @@ export class EnginesController {
   async healthCheck(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
     const engine = await this.engines.get(id);
     const correlationId = randomUUID();
-    const report = await this.health.probe({ id, type: engine.type, endpoint: engine.endpoint, status: engine.status }, correlationId);
+    const report = await this.health.probe({ id, type: engine.type, endpoint: engine.endpoint, credentialId: engine.credentialId, status: engine.status }, correlationId);
     await this.audit.log({
       ctx,
       req: requestContext(req),

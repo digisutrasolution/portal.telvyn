@@ -5,7 +5,9 @@ import { AuthModule } from "@/auth/auth.module";
 import { AuthzModule } from "@/authz/authz.module";
 import { EngineRegistryService } from "./engines/engine-registry.service";
 import { EngineService } from "./engines/engine.service";
-import { EngineConnector, NullEngineConnector } from "./engines/runtime/engine-connector";
+import { EngineConnector } from "./engines/runtime/engine-connector";
+import { EngineHttpTransport, NodeHttpsEngineTransport } from "./engines/runtime/engine-http-transport";
+import { buildEngineConnector } from "./engines/runtime/engine-connector.factory";
 import { EngineConnectionManager } from "./engines/runtime/engine-connection.manager";
 import { EngineHealthService } from "./engines/runtime/engine-health.service";
 import { EngineLockService } from "./engines/runtime/engine-lock.service";
@@ -51,9 +53,15 @@ import { LcrController } from "./lcr/lcr.controller";
     FreeSwitchAdapter,
     EngineRegistryService,
     EngineService,
-    // Engine runtime foundation (Phase 12L). The connector is bound to the honest
-    // NullEngineConnector — no live egress until a real engine exists.
-    { provide: EngineConnector, useClass: NullEngineConnector },
+    // Engine runtime (Phase 12L/12M-3). The connector is the ONLY network seam.
+    // Default = honest NullEngineConnector (no egress); the real Kamailio connector
+    // engages only when the platform sets ENGINE_CONNECTOR=kamailio (see factory).
+    { provide: EngineHttpTransport, useClass: NodeHttpsEngineTransport },
+    {
+      provide: EngineConnector,
+      useFactory: (transport: EngineHttpTransport, vault: TelecomCredentialService) => buildEngineConnector(transport, vault),
+      inject: [EngineHttpTransport, TelecomCredentialService],
+    },
     EngineConnectionManager,
     EngineHealthService,
     EngineLockService,

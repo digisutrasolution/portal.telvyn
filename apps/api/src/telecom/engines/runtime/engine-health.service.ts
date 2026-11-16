@@ -46,12 +46,13 @@ export class EngineHealthService {
   ) {}
 
   async probe(
-    engine: { id: string; type: TelecomEngineType; endpoint: string | null; status: TelecomStatus },
+    engine: { id: string; type: TelecomEngineType; endpoint: string | null; credentialId?: string | null; status: TelecomStatus },
     correlationId: string,
   ): Promise<EngineHealthReport> {
     const conn = await this.connection.resolve({
       provider: engine.type,
       endpoint: engine.endpoint,
+      credentialId: engine.credentialId ?? null,
       status: engine.status,
       correlationId,
     });

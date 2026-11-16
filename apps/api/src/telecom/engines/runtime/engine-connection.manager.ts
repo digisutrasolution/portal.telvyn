@@ -10,6 +10,7 @@ export type ReachabilityState = "UNCONFIGURED" | "DISABLED" | "BLOCKED" | "UNVER
 export interface EngineConnectionInput {
   provider: TelecomEngineType;
   endpoint: string | null;
+  credentialId?: string | null;
   status: TelecomStatus;
   correlationId: string;
 }
@@ -51,6 +52,7 @@ export class EngineConnectionManager {
     const probe = await this.connector.probe({
       provider: input.provider,
       endpoint: parsed.normalized ?? null,
+      credentialId: input.credentialId ?? null,
       profile,
       correlationId: input.correlationId,
     });

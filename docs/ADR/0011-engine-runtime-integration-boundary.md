@@ -115,3 +115,15 @@ the first real adapter lands"; neither re-litigates an accepted decision.
   Source is the platform env `ENGINE_MGMT_ALLOWLIST`; malformed entries are
   dropped (fail-closed); unset = the strict public-only policy, unchanged. This
   narrows, and does not weaken, the egress policy — see SECURITY.md.
+
+- **First real connector landed (Phase 12M-3).** `NullEngineConnector` is no longer
+  the only connector: `KamailioJsonRpcConnector` performs a read-only JSONRPC
+  `core.version` **health** probe over the mTLS gateway, behind a single injectable
+  transport seam. It is **env-gated** (`ENGINE_CONNECTOR=kamailio`) and **off by
+  default** — DI still resolves to `NullEngineConnector` unless opted in, so the
+  "flip the DI binding" consequence above is now realized without changing
+  controllers, versioning, security, or audit. Health stays honest
+  (HEALTHY/UNHEALTHY/UNKNOWN, never fabricated). The applied-version snapshot flag
+  remains deferred until `applyConfiguration` does real network work (there is no
+  engine↔resource assignment model yet, so the desired intent is empty and nothing
+  is pushed).

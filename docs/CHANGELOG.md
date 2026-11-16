@@ -263,3 +263,23 @@ Format: Keep a Changelog; SemVer once releases begin.
   connect-time integration, every other guard still holds, env memoization). ADR-0011
   addendum + SECURITY.md updated; `.env.example` documents the var. Regression: **API
   236/236 (199 + 37)**, web 13/13, typecheck ✓, lint ✓, build ✓.
+- 2026-11-17 — **Phase 12M-3 — real Kamailio management connector (read-only health).**
+  First real engine connector: a JSONRPC `core.version` **health probe** over the
+  private mTLS gateway, **off by default**. New `KamailioJsonRpcConnector` (honest
+  health: valid version → HEALTHY, answered-but-not-OK → UNHEALTHY, unreachable →
+  UNKNOWN; transport failures mapped to a safe fixed vocabulary — no raw provider/TLS
+  text), one injectable network seam `EngineHttpTransport` + real `NodeHttpsEngineTransport`
+  (https+mTLS, server-cert verified, **connect-time rebinding recheck** via the 12M-2
+  allowlist, bounded timeouts, capped body), and an **env-gated DI factory**
+  (`ENGINE_CONNECTOR=kamailio` engages it; unset/other → `NullEngineConnector`). The mTLS
+  client cert is a vault `ENGINE_API` credential, decrypted only at the boundary
+  (`revealForAdapter`), never cached/logged/returned (test-proven the key never leaks
+  into a detail). `credentialId` threaded engine→health→connection→probe; engine view
+  now surfaces the non-secret `credentialId`. **No migration; default behavior
+  unchanged** (NullEngineConnector still wired with the flag off → all existing e2e
+  pass). Applied-version/`PENDING_RECONCILIATION` persistence intentionally deferred
+  (only meaningful once `applyConfiguration` does real network work — no engine↔resource
+  model yet). +19 unit tests (connector logic, env-gated selection, transport https guard;
+  live network path integration-tested in 12M-4). ADR-0011 addendum + SECURITY.md +
+  `.env.example` updated. Regression: **API 255/255 (236 + 19)**, web 13/13, typecheck ✓,
+  lint ✓, build ✓.

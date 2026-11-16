@@ -15,6 +15,8 @@ export interface EngineProbeInput {
   provider: TelecomEngineType;
   /** SSRF-validated, normalized endpoint (scheme//host[:port]) or null if unconfigured. */
   endpoint: string | null;
+  /** Vault reference for the management credential (mTLS/JSONRPC auth), or null. */
+  credentialId?: string | null;
   profile: ConnectionProfile;
   correlationId: string;
 }

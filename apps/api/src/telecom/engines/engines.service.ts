@@ -25,6 +25,7 @@ export class EnginesService {
       provider: e.provider,
       version: e.version,
       endpoint: e.endpoint,
+      credentialId: e.credentialId, // vault reference only — never the secret
       environment: e.environment,
       regionId: e.regionId,
       status: e.status,
