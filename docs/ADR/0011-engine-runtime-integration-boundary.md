@@ -79,3 +79,35 @@ not re-litigated when a real adapter lands.
   `NOT_IMPLEMENTED`, applied-version is `null`, and no packets are sent.
 - No live SIP/RTP/engine runtime is introduced by this phase (deferred to a
   later, separately-authorized phase).
+
+## Addendum — 2026-11-16 (Phase 12M, first real adapter)
+
+A disposable Kamailio 6.1 test engine has been provisioned (dedicated VPS,
+management plane private behind WireGuard + mTLS, SIP ports closed). The real
+adapter is being built in additive, review-gated sub-phases. This addendum
+records the two boundary refinements that the original ADR reserved for "when
+the first real adapter lands"; neither re-litigates an accepted decision.
+
+- **Applied-version persistence stays schema-free (snapshot-flag route).** The
+  original decision offered "a ConfigVersion snapshot flag, OR an additive
+  column." We choose the **snapshot flag**: applied state continues to be an
+  append-only `TelecomConfigVersion` row whose `newConfig.kind` distinguishes
+  `desired` / `applied`, extended with `reconcile_pending` for an apply whose
+  outcome is unknown (e.g. a timeout). A timed-out apply records
+  `reconcile_pending` and **never** advances the applied version — honest
+  uncertainty, no fabricated success. This keeps one append-only source of
+  truth and needs no migration for version state. (Wired in sub-phase 12M-3.)
+
+- **`TelecomEngine.credentialId` added additively (Phase 12M-1).** The management
+  adapter authenticates with a vault secret (`TelecomCredentialType.ENGINE_API`,
+  e.g. an mTLS client cert). Migration `engine_credential_ref` adds a nullable
+  `credentialId` FK (`ON DELETE SET NULL`) — a reference only, decrypted solely
+  at the adapter boundary via `revealForAdapter`. No secret is ever stored on or
+  returned from the engine row. This does not change the single-connection-
+  boundary or typed-operations decisions above.
+
+- **Per-endpoint private-network allowlist (planned, 12M-2).** The canonical SSRF
+  policy keeps denying private ranges by default. The private WireGuard
+  management endpoint is authorized **individually** (host + CIDR + port), never
+  by blanket-unblocking RFC1918, and keeps the connect-time DNS-rebinding
+  recheck. This narrows, and does not weaken, the egress policy.

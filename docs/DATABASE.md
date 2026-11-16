@@ -237,3 +237,25 @@ Additive migration `lcr_policy`: enums `Currency`, `LcrSelectionStrategy`; table
 BIGINT — no float; indexes `[lcrPolicyId, prefix]`, `[lcrPolicyId, enabled]`,
 `[carrierId]`). Reviewed `--create-only`; no destructive ops. `LcrPolicy` joined
 `TENANT_SCOPED_MODELS`. First BigInt + first Currency enum in the schema.
+
+## Engine credential reference — EXISTING (Phase 12M-1, 2026-11-16)
+
+Additive migration `engine_credential_ref` — the schema foundation for a real
+engine management-plane adapter (Phase 12M). Three additive operations, **zero
+destructive** (reviewed via `--create-only`; `TelecomEngine` currently 0 rows):
+
+- `enum TelecomCredentialType` gains `ENGINE_API` — the credential kind for an
+  engine's management interface (e.g. an mTLS client cert / JSONRPC auth secret).
+  Vault-only like `SIP_PASSWORD`/`CARRIER_API`: `secretEnc` never leaves the vault
+  (ADR-0009); flows automatically to every `z.nativeEnum(TelecomCredentialType)`.
+- `TelecomEngine.credentialId` (nullable UUID, FK → `TelecomCredential`,
+  `ON DELETE SET NULL`) + `TelecomEngine_credentialId_idx`. A **reference**, never
+  a secret; decryption happens only at the adapter boundary (`revealForAdapter`).
+  SET NULL so deleting a credential clears the link without orphaning or deleting
+  the engine. Mirrors the existing `Carrier.credentialId` / `SipTrunk.credentialId`
+  pattern; `TelecomCredential` gains the `engines` back-relation.
+
+The **applied-version** state (`PENDING_RECONCILIATION` on a timed-out apply) is
+NOT a schema column — it extends the existing append-only snapshot model in
+`TelecomConfigVersion` (`newConfig.kind`), the option ADR-0011 reserved. No live
+egress, DI, or behavior changed by this sub-phase.

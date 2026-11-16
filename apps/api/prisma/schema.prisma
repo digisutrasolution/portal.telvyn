@@ -476,6 +476,7 @@ enum LcrSelectionStrategy {
 enum TelecomCredentialType {
   SIP_PASSWORD
   CARRIER_API
+  ENGINE_API // engine management-plane credential (e.g. mTLS client cert / JSONRPC auth)
 }
 
 enum ConfigChangeType {
@@ -531,6 +532,12 @@ model TelecomEngine {
   regionId String? @db.Uuid
   region   Region? @relation(fields: [regionId], references: [id], onDelete: SetNull)
 
+  // Management-plane credential reference (vault, ADR-0009). NEVER a plaintext
+  // secret; decryption happens only at the adapter boundary. SetNull so deleting
+  // a credential never orphans/deletes the engine row.
+  credentialId String?            @db.Uuid
+  credential   TelecomCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+
   capabilities EngineCapability[]
   nodes        TelecomNode[]
 
@@ -541,6 +548,7 @@ model TelecomEngine {
   @@index([type])
   @@index([status])
   @@index([regionId])
+  @@index([credentialId])
 }
 
 model EngineCapability {
@@ -861,6 +869,7 @@ model TelecomCredential {
 
   carriers  Carrier[]
   sipTrunks SipTrunk[]
+  engines   TelecomEngine[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

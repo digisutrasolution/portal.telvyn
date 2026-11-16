@@ -231,3 +231,21 @@ Format: Keep a Changelog; SemVer once releases begin.
   (no-previous→400). RBAC reuses telecom.health.read/telecom.manage (no new perms).
   New ADR-0011 (engine runtime integration boundary). +56 tests (49 unit + 7 e2e).
   Regression: API 190/190 (134 + 56), web 13/13, typecheck ✓, lint ✓, build ✓.
+- 2026-10-15 — **Phase 12M-A — Engine sync mutex fail-closed coverage** (test-only;
+  no production change). Added `engine-lock.service.test.ts` (+6 unit, fake Redis):
+  own-token compare-and-delete release, TTL floor ≥1000ms, `EngineLockBusy` on
+  contention, **fail-closed `EngineLockUnavailable` on Redis outage**, release-on-throw.
+  Verdict READY-FOR-INFRASTRUCTURE (real-engine gate unmet — `NullEngineConnector`
+  still the only connector). Regression: API 196/196 (190 + 6), web 13/13.
+- 2026-11-16 — **Phase 12M-1 — Engine credential reference (additive schema).** First
+  sub-phase of the real Kamailio adapter: the schema foundation an engine needs to
+  reference its management-plane secret in the vault. Additive migration
+  `engine_credential_ref` (reviewed `--create-only`, **zero destructive ops**):
+  `TelecomCredentialType.ENGINE_API`; `TelecomEngine.credentialId` (nullable FK →
+  `TelecomCredential`, `ON DELETE SET NULL`) + index; `TelecomCredential.engines`
+  back-relation. A reference only — secrets stay vault-encrypted, decrypted solely at
+  the adapter boundary. **No behavior/DI/egress change**; applied-version state remains
+  the append-only snapshot model (no column) per ADR-0011. ADR-0011 addendum records
+  the decision. +3 integration tests (ENGINE_API usable, engine↔credential link,
+  SET NULL on credential delete). Regression: **API 199/199 (196 + 3)**, web 13/13,
+  typecheck ✓, lint ✓.
