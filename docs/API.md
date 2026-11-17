@@ -98,7 +98,10 @@ Redis-lock outage → **503**), still honest `501 NOT_IMPLEMENTED`, audited with
 `desiredVersion`/`appliedVersion`/`syncState`. The response carries `syncState`
 (Phase 12N-4a): success → `APPLIED` (applied version advances); a **TIMEOUT** →
 `PENDING_RECONCILIATION` (engine state unknown — applied is **never** advanced);
-any other failure → `FAILED` (no snapshot, retryable). `POST :id/sync/rollback` re-proposes the prior
+any other failure → `FAILED` (no snapshot, retryable). With a real connector wired
+(Phase 12N-4b, ADR-0013) the apply is a Kamailio **htable diff-and-apply** verified
+by a re-dump (`OK` only when it matches; `APPLY_INCOMPLETE`/`INVALID_CONFIG`/`UNAVAILABLE`
+otherwise); off by default (`NullEngineConnector` → `NOT_IMPLEMENTED`/501). `POST :id/sync/rollback` re-proposes the prior
 desired version (append-only; **400** when there is no previous version), audited
 `telecom.engine.rollback_attempted`. The management **endpoint** on engine
 create/update is SSRF-validated (private/loopback/metadata/malformed → **400**).

@@ -1,6 +1,7 @@
 # ADR-0013 — Kamailio configuration apply mechanism
 
-- **Status:** Proposed (needs owner approval before Phase 12N-4b)
+- **Status:** Accepted (owner-approved; mechanism implemented in 12N-4b — the live
+  mutation against the disposable VPS remains operator-gated, Phase 5)
 - **Date:** 2026-11-17
 - **Deciders:** Architect / Telecom / Security
 - **Related:** ADR-0006 (control vs data plane), ADR-0007 (engine abstraction),
@@ -67,3 +68,23 @@ idempotent operations**.
   the security boundary — it fills in the adapter's apply with real, typed work.
 - DB-backed modules (option 1) remain available for a later, higher-scale phase if
   the resource model outgrows in-memory htables.
+
+## Implementation (Phase 12N-4b)
+
+- `htable-config.ts` (pure): `buildDesiredEntries` (validate + bound; reject a
+  malformed set whole, never a partial push), `diffEntries` (deterministic,
+  idempotent; deletes stale **managed** keys only — foreign keys untouched),
+  `parseDumpEntries` (defensive — managed, safe keys only). Keys are namespaced
+  (`did:`/`trunk:`/`route:`), non-numeric; values derive only from safe fields.
+- `KamailioJsonRpcConnector.applyConfiguration`: dump → diff → bounded
+  `htable.sets`/`htable.delete` → **re-dump verify**. Returns `OK` only when the
+  re-dump equals desired; `APPLY_INCOMPLETE` on mismatch; `TIMEOUT` →
+  PENDING_RECONCILIATION (12N-4a); mTLS cred revealed at the boundary, never logged.
+  Only the `telvyn` htable is ever named. `NullEngineConnector` stays
+  NOT_IMPLEMENTED; apply routes through `EngineConnectionManager` (SSRF guard).
+- **VPS prerequisite (operator):** `kamailio.cfg` must `loadmodule "htable.so"` and
+  `modparam("htable", "htable", "telvyn=>size=8;")`. Until then, apply is honest
+  UNAVAILABLE/NOT_IMPLEMENTED.
+- Covered by unit tests (fake in-memory htable transport) + an **opt-in** live test
+  (`telecom-engine-apply-live.e2e.test.ts`, skipped unless `ENGINE_LIVE_MTLS_DIR`).
+  Production DI stays `NullEngineConnector`. The live mutation is operator-gated.

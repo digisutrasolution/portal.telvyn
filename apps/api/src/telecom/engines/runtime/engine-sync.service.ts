@@ -5,6 +5,7 @@ import { EngineService } from "../engine.service";
 import { EngineErrorCode } from "../engine.types";
 import { EngineLockService } from "./engine-lock.service";
 import { EngineAssignmentsService } from "../engine-assignments.service";
+import { EngineConnectionManager } from "./engine-connection.manager";
 import { connectionProfile } from "./connection-profiles";
 import { fingerprintIntent, shortFingerprint } from "./engine-config";
 
@@ -59,7 +60,7 @@ export interface SyncOutcome {
   detail?: string;
 }
 
-type EngineRef = { id: string; type: TelecomEngineType; endpoint: string | null; status: TelecomStatus };
+type EngineRef = { id: string; type: TelecomEngineType; endpoint: string | null; credentialId?: string | null; status: TelecomStatus };
 
 interface VersionSnapshot {
   kind: "desired" | "applied" | "reconcile_pending";
@@ -85,6 +86,7 @@ export class EngineSyncService {
     private readonly engineService: EngineService,
     private readonly lock: EngineLockService,
     private readonly assignments: EngineAssignmentsService,
+    private readonly connection: EngineConnectionManager,
   ) {}
 
   /** Build the desired intent from the engine's enabled resource assignments (Phase 12N-3). */
@@ -137,7 +139,7 @@ export class EngineSyncService {
         return { ok: true, outcome: "NOOP", syncState: "NOOP", desiredVersion: shortFingerprint(desiredFp), appliedVersion: appliedFp && shortFingerprint(appliedFp), changed: false, correlationId, detail: "engine already in desired state" };
       }
 
-      const result = await this.engineService.sync(engine, intent, undefined);
+      const result = await this.connection.applyConfiguration({ provider: engine.type, endpoint: engine.endpoint, credentialId: engine.credentialId, status: engine.status, correlationId, intent });
       const applied = await this.recordApplyOutcome(engine.id, desiredFp, appliedFp, summary, result, actorId, correlationId);
       this.log(engine, correlationId, `${result.outcome}:${applied.syncState}`, desiredFp, result.code);
       return {
@@ -196,7 +198,7 @@ export class EngineSyncService {
 
       // Attempt to apply the rolled-back version — honest NOT_IMPLEMENTED/UNAVAILABLE with stubs.
       const intent = await this.desiredIntent(engine);
-      const result = await this.engineService.sync(engine, intent, undefined);
+      const result = await this.connection.applyConfiguration({ provider: engine.type, endpoint: engine.endpoint, credentialId: engine.credentialId, status: engine.status, correlationId, intent });
       const applied = await this.recordApplyOutcome(engine.id, decision.targetFp, appliedFp, {}, result, actorId, correlationId);
       this.log(engine, correlationId, `rollback:${result.outcome}:${applied.syncState}`, decision.targetFp, result.code);
       return {

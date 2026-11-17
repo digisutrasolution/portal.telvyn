@@ -349,3 +349,25 @@ Format: Keep a Changelog; SemVer once releases begin.
   (decideApplyOutcome branches; APPLIED/PENDING_RECONCILIATION/FAILED sync paths; posture
   lifecycle). ADR-0011 addendum + API.md. Regression: **API 274/274 (269 + 5), web 13/13,
   typecheck ✓, lint ✓.**
+- 2026-11-17 — **Phase 12N-4b — real Kamailio htable config apply (ADR-0013 Accepted).**
+  The first operation that changes engine state — **off by default, live mutation
+  operator-gated**. Pure `htable-config.ts`: validated/bounded desired entries
+  (namespaced non-numeric keys; values from safe fields only; a malformed set rejected
+  whole before any egress), deterministic idempotent `diffEntries` (deletes stale
+  **managed** keys only — foreign keys untouched), defensive `parseDumpEntries`.
+  `KamailioJsonRpcConnector.applyConfiguration` = dump → diff → bounded
+  `htable.sets`/`htable.delete` → **re-dump verify** (OK only when it matches; else
+  `APPLY_INCOMPLETE`; TIMEOUT → PENDING_RECONCILIATION). Added `applyConfiguration` to the
+  `EngineConnector` contract (`NullEngineConnector` → honest NOT_IMPLEMENTED) +
+  `EngineConnectionManager.applyConfiguration` (SSRF guard); `EngineSyncService` now routes
+  apply through the connector boundary (ADR-0011) with `credentialId` threaded from the
+  controller. Only the `telvyn` htable is ever named; mTLS cred revealed at the boundary,
+  never logged; concurrency still Redis-mutex-guarded; `NOT_IMPLEMENTED → 501` preserved for
+  the Null default. No schema change. +17 unit tests (validation/diff/parse; connector
+  dump→diff→apply→verify via a fake htable transport — happy path, idempotency, stale-delete +
+  foreign isolation, verify-mismatch, timeout, JSONRPC error, no-egress, secret hygiene) +
+  **opt-in** live mutating test (`telecom-engine-apply-live.e2e.test.ts`, skipped unless
+  `ENGINE_LIVE_MTLS_DIR`). ADR-0013 Accepted + SECURITY.md + RUNBOOK.md + API.md. **Live
+  mutation NOT executed** (Phase-5 gate: needs the VPS `telvyn` htable + operator confirmation).
+  Production remains on `NullEngineConnector`. Regression: **API 291/291 (274 + 17), web 13/13,
+  typecheck ✓, lint ✓** (1 opt-in apply + 1 opt-in health skipped).

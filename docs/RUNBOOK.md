@@ -146,3 +146,39 @@ To wire the running API to the live engine, set in `apps/api/.env`:
   such interception.
 - Windows `curl` uses the schannel TLS backend and cannot load a PEM client cert
   (`schannel: Failed to import cert file`) — use Node (the connector) to test mTLS.
+
+---
+
+## Engine config apply — htable (Phase 12N-4b, ADR-0013) — OPERATOR-GATED
+
+The real apply mutates ONLY the dedicated `telvyn` in-memory htable via JSONRPC.
+It is off by default; the live mutation needs the VPS prerequisite + operator
+confirmation.
+
+**VPS prerequisite (one-time, on `vps-9345109a`):** declare the htable in the
+management-only `kamailio.cfg`, then restart Kamailio:
+```bash
+# add near the other loadmodule lines:
+#   loadmodule "htable.so"
+# add near the other modparam lines:
+#   modparam("htable", "htable", "telvyn=>size=8;")
+grep -q 'htable.so' /etc/kamailio/kamailio.cfg || sed -i '/loadmodule "jsonrpcs.so"/a loadmodule "htable.so"' /etc/kamailio/kamailio.cfg
+grep -q 'telvyn=>size' /etc/kamailio/kamailio.cfg || sed -i '/modparam("jsonrpcs"/a modparam("htable", "htable", "telvyn=>size=8;")' /etc/kamailio/kamailio.cfg
+kamailio -c -f /etc/kamailio/kamailio.cfg && systemctl restart kamailio
+# verify the table exists (empty dump is fine):
+curl -s -X POST http://127.0.0.1:8000/RPC -d '{"jsonrpc":"2.0","method":"htable.dump","params":["telvyn"],"id":1}'
+```
+
+**Live apply test (opt-in, MUTATES the `telvyn` htable — disposable VPS only):**
+after confirming identity/version/private path and the `telvyn` htable exists, and
+with explicit operator go-ahead:
+```bash
+ENGINE_LIVE_MTLS_DIR="<dir with client.crt/client.key/ca.crt>" \
+ENGINE_LIVE_ENDPOINT=https://10.9.0.1:8443 \
+ENGINE_LIVE_ALLOWLIST=10.9.0.1/32@8443 \
+corepack pnpm exec vitest run test/telecom-engine-apply-live.e2e.test.ts
+```
+It applies a small set, verifies, re-applies (idempotent 0-op), then rolls back to
+empty. To wire the running API to real apply, set `ENGINE_CONNECTOR=kamailio` +
+`ENGINE_MGMT_ALLOWLIST=10.9.0.1/32@8443` in `apps/api/.env`. Production DI stays
+`NullEngineConnector` until that flag is set.

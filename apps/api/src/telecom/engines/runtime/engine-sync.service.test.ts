@@ -4,6 +4,7 @@ import { EngineSyncService, decideSync, decideRollback, decideApplyOutcome } fro
 import { EngineLockBusy, type EngineLockService } from "./engine-lock.service";
 import { EngineService } from "../engine.service";
 import type { EngineAssignmentsService } from "../engine-assignments.service";
+import type { EngineConnectionManager } from "./engine-connection.manager";
 import { EngineErrorCode } from "../engine.types";
 
 describe("decideSync (pure idempotency)", () => {
@@ -41,8 +42,12 @@ function makeService(over: { syncResult?: () => Promise<unknown>; lockBusy?: boo
   const real = new EngineService({ getAdapter: () => ({}) } as never);
   const engineService = {
     buildConfigurationIntent: real.buildConfigurationIntent.bind(real),
-    sync: over.syncResult ?? (async () => ({ ok: false, outcome: "NOT_IMPLEMENTED", code: EngineErrorCode.NOT_IMPLEMENTED, correlationId: "x", durationMs: 1 })),
   } as unknown as EngineService;
+
+  // Apply now flows through the connection manager (connector boundary, Phase 12N-4b).
+  const connection = {
+    applyConfiguration: over.syncResult ?? (async () => ({ ok: false, outcome: "NOT_IMPLEMENTED", code: EngineErrorCode.NOT_IMPLEMENTED, detail: "", applied: false })),
+  } as unknown as EngineConnectionManager;
 
   const lock = {
     withLock: async (_id: string, _ttl: number, fn: () => Promise<unknown>) => {
@@ -55,7 +60,7 @@ function makeService(over: { syncResult?: () => Promise<unknown>; lockBusy?: boo
     buildConfigurationSource: async (_engineId: string, engineType: TelecomEngineType) => ({ engineType, carriers: [], trunks: [], dids: [], routes: [] }),
   } as unknown as EngineAssignmentsService;
 
-  return { svc: new EngineSyncService(prisma, engineService, lock, assignments), created };
+  return { svc: new EngineSyncService(prisma, engineService, lock, assignments, connection), created };
 }
 const engine = { id: "00000000-0000-7000-8000-000000000001", type: TelecomEngineType.KAMAILIO, endpoint: null, status: TelecomStatus.ACTIVE };
 

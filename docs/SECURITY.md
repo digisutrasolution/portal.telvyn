@@ -540,3 +540,30 @@ holds on the wire:
   intercept TLS and present its own cert (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`),
   which the connector correctly REFUSES — the strict `rejectUnauthorized` did its
   job. A production control-plane host has no such interception. See RUNBOOK.md.
+
+## Engine config apply — htable diff-and-apply (Phase 12N-4b, ADR-0013)
+
+The first operation that **changes engine state**. It mutates ONLY the dedicated
+`telvyn` in-memory htable via typed JSON-RPC, never config/modules/routing.
+
+- **Scoped to one htable.** The table name is a constant (`telvyn`); no RPC ever
+  names another table. Stale-key deletion is restricted to **managed** keys
+  (`did:`/`trunk:`/`route:`) — a foreign key in the table is never deleted.
+- **Strict validation, no injection.** Keys are namespaced + non-numeric (so
+  Kamailio can't reinterpret them as integer indices), length-bounded, control/CRLF
+  rejected; values derive ONLY from safe fields (ids, validated E.164, enum, int) —
+  never tenant free-text. A malformed desired set is rejected **whole, before any
+  egress** (`INVALID_CONFIG`) — never a partial/sanitized push. Entry count is bounded.
+- **Typed operations only.** `htable.dump`/`htable.sets`/`htable.delete` — no
+  `execute`, no shell, no generated config blob, no arbitrary RPC method from input.
+- **Verified or not applied.** After the bounded sets/deletes, a **re-dump** must
+  equal the desired set or the result is `APPLY_INCOMPLETE` (never success). A
+  **timeout** → `PENDING_RECONCILIATION` (12N-4a), applied version never advanced;
+  the idempotent next apply re-diffs and reconciles.
+- **Same transport envelope.** Goes through the connector over mTLS (server cert
+  verified) + the connect-time rebinding recheck + bounded timeouts; the credential
+  is revealed only at the boundary and never logged. Concurrency is still guarded by
+  the Redis `SET NX` sync mutex. Audit carries `syncState` + correlation id, no payloads.
+- **Off by default.** Production DI stays `NullEngineConnector` (NOT_IMPLEMENTED).
+  The real apply engages only with `ENGINE_CONNECTOR=kamailio` + an allowlisted
+  endpoint + an `ENGINE_API` credential, and the live mutation is operator-gated.

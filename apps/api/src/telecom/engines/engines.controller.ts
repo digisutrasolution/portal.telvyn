@@ -107,7 +107,7 @@ export class EnginesController {
   @RequirePermissions("telecom.manage")
   async sync(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
     const engine = await this.engines.get(id);
-    const ref = { id, type: engine.type, endpoint: engine.endpoint, status: engine.status };
+    const ref = { id, type: engine.type, endpoint: engine.endpoint, credentialId: engine.credentialId, status: engine.status };
     const result = await this.run(() => this.syncSvc.sync(ref, ctx.userId, randomUUID()));
     await this.audit.log({
       ctx,
@@ -125,7 +125,7 @@ export class EnginesController {
   @RequirePermissions("telecom.manage")
   async rollback(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
     const engine = await this.engines.get(id);
-    const ref = { id, type: engine.type, endpoint: engine.endpoint, status: engine.status };
+    const ref = { id, type: engine.type, endpoint: engine.endpoint, credentialId: engine.credentialId, status: engine.status };
     const result = await this.run(() => this.syncSvc.rollback(ref, ctx.userId, randomUUID()));
     await this.audit.log({
       ctx,
