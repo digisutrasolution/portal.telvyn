@@ -88,13 +88,17 @@ any response — config sync carries only `credentialRef` ids.
 returns `connection` (SSRF-guarded reachability: `UNCONFIGURED`/`DISABLED`/
 `BLOCKED`/`UNVERIFIED`/`REACHABLE`/`UNREACHABLE`, `endpointConfigured`, safe
 `detail`) and `version` (`desiredVersion`, `appliedVersion` — **`null`** until a
-real engine applies, `versions` count). `POST :id/health-check` actively probes
+real engine applies, `syncState` ∈ `APPLIED`/`PENDING_RECONCILIATION`/`null`
+(Phase 12N-4a), `versions` count). `POST :id/health-check` actively probes
 (honest `UNKNOWN` with the NullConnector — no egress), records a `HealthEvent` on
 transition, and audits `telecom.engine.health_checked`. `POST :id/sync` is now
 **versioned** (deterministic secret-free config fingerprint = desired version),
 **idempotent**, and **concurrency-guarded** (a second concurrent sync → **409**;
 Redis-lock outage → **503**), still honest `501 NOT_IMPLEMENTED`, audited with
-`desiredVersion`/`appliedVersion`. `POST :id/sync/rollback` re-proposes the prior
+`desiredVersion`/`appliedVersion`/`syncState`. The response carries `syncState`
+(Phase 12N-4a): success → `APPLIED` (applied version advances); a **TIMEOUT** →
+`PENDING_RECONCILIATION` (engine state unknown — applied is **never** advanced);
+any other failure → `FAILED` (no snapshot, retryable). `POST :id/sync/rollback` re-proposes the prior
 desired version (append-only; **400** when there is no previous version), audited
 `telecom.engine.rollback_attempted`. The management **endpoint** on engine
 create/update is SSRF-validated (private/loopback/metadata/malformed → **400**).

@@ -334,3 +334,18 @@ Format: Keep a Changelog; SemVer once releases begin.
   12N-4). No schema change. +3 e2e (empty→populated→disabled, counts + fingerprint change);
   sync-service unit test updated for the new dependency. API.md updated. Regression: **API
   269/269 (266 + 3), web 13/13, typecheck ✓, lint ✓.**
+- 2026-11-17 — **Phase 12N-4a — applied-version persistence + reconciliation state machine**
+  (no engine mutation). Implements the applied-version route ADR-0011 deferred. Pure
+  `decideApplyOutcome` state machine: success → **APPLIED** (append an `applied` snapshot,
+  advance the applied version); **TIMEOUT → PENDING_RECONCILIATION** (append a
+  `reconcile_pending` snapshot; engine state UNKNOWN, applied **never** advanced); any other
+  failure → **FAILED** (no snapshot, retryable). Wired into `EngineSyncService.sync`/`rollback`
+  via `recordApplyOutcome`; `posture()` + `GET :id/status.version` + `POST :id/sync` surface
+  `syncState`; sync audit metadata gains it. Append-only snapshot route — **no migration**.
+  With the adapter still a stub, every real apply is `NOT_IMPLEMENTED → FAILED` (applied stays
+  `null` — honest); the machinery is complete + tested for a real apply. **ADR-0013 (Proposed)**
+  records the real Kamailio apply mechanism (htable-via-RPC) for 12N-4b — it mutates a live
+  engine and needs owner approval + a one-line VPS `kamailio.cfg` addition. +5 unit tests
+  (decideApplyOutcome branches; APPLIED/PENDING_RECONCILIATION/FAILED sync paths; posture
+  lifecycle). ADR-0011 addendum + API.md. Regression: **API 274/274 (269 + 5), web 13/13,
+  typecheck ✓, lint ✓.**

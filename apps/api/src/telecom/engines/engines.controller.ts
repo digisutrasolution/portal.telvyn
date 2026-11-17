@@ -115,7 +115,7 @@ export class EnginesController {
       action: "telecom.engine.sync_attempted",
       resource: "engine",
       resourceId: id,
-      metadata: { outcome: result.outcome, code: result.code, correlationId: result.correlationId, provider: engine.type, desiredVersion: result.desiredVersion, appliedVersion: result.appliedVersion },
+      metadata: { outcome: result.outcome, code: result.code, syncState: result.syncState, correlationId: result.correlationId, provider: engine.type, desiredVersion: result.desiredVersion, appliedVersion: result.appliedVersion },
     });
     return this.mapOutcome(result);
   }

@@ -18,3 +18,4 @@ ADR that references the old one. Template: `template.md`.
 | 0010 | Telecom node: configuration vs runtime, and the health model | Accepted |
 | 0011 | Engine runtime integration boundary | Accepted |
 | 0012 | Engine ↔ resource assignment model | Accepted |
+| 0013 | Kamailio configuration apply mechanism | Proposed |

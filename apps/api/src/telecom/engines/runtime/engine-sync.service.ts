@@ -24,10 +24,34 @@ export function decideRollback(desiredHistory: { fingerprint: string }[]): { tar
   return { targetFp: previous.fingerprint };
 }
 
+/** Lifecycle of an apply attempt. NOOP = nothing to do (desired already applied). */
+export type SyncState = "NOOP" | "APPLIED" | "PENDING_RECONCILIATION" | "FAILED";
+
+/**
+ * Pure applied-version state machine (Phase 12N-4a, ADR-0011 snapshot route).
+ * Honest by construction:
+ *  - success           → APPLIED, advance the applied version, record it.
+ *  - **TIMEOUT**        → PENDING_RECONCILIATION — the engine state is UNKNOWN, so
+ *                         applied is NEVER advanced, but we persist the uncertainty.
+ *  - any other failure  → FAILED — transient/retryable; no snapshot, applied unchanged.
+ */
+export function decideApplyOutcome(result: { ok: boolean; code?: EngineErrorCode }): {
+  syncState: Exclude<SyncState, "NOOP">;
+  kind?: "applied" | "reconcile_pending";
+  record: boolean;
+  advanceApplied: boolean;
+} {
+  if (result.ok) return { syncState: "APPLIED", kind: "applied", record: true, advanceApplied: true };
+  if (result.code === EngineErrorCode.TIMEOUT) return { syncState: "PENDING_RECONCILIATION", kind: "reconcile_pending", record: true, advanceApplied: false };
+  return { syncState: "FAILED", record: false, advanceApplied: false };
+}
+
 export interface SyncOutcome {
   ok: boolean;
   outcome: string;
   code?: EngineErrorCode;
+  /** Applied-version lifecycle of this attempt (Phase 12N-4a). */
+  syncState: SyncState;
   desiredVersion: string;
   appliedVersion: string | null;
   changed: boolean;
@@ -38,7 +62,7 @@ export interface SyncOutcome {
 type EngineRef = { id: string; type: TelecomEngineType; endpoint: string | null; status: TelecomStatus };
 
 interface VersionSnapshot {
-  kind: "desired" | "applied";
+  kind: "desired" | "applied" | "reconcile_pending";
   fingerprint: string;
   short: string;
   summary: Record<string, number>;
@@ -110,26 +134,47 @@ export class EngineSyncService {
 
       if (decision.action === "NOOP") {
         this.log(engine, correlationId, "NOOP", desiredFp);
-        return { ok: true, outcome: "NOOP", desiredVersion: shortFingerprint(desiredFp), appliedVersion: appliedFp && shortFingerprint(appliedFp), changed: false, correlationId, detail: "engine already in desired state" };
+        return { ok: true, outcome: "NOOP", syncState: "NOOP", desiredVersion: shortFingerprint(desiredFp), appliedVersion: appliedFp && shortFingerprint(appliedFp), changed: false, correlationId, detail: "engine already in desired state" };
       }
 
       const result = await this.engineService.sync(engine, intent, undefined);
-      if (result.ok) {
-        // Future: a real adapter that applies successfully records an applied version here.
-        await this.record(engine.id, ConfigChangeType.STATUS_CHANGE, appliedFp, { kind: "applied", fingerprint: desiredFp, short: shortFingerprint(desiredFp), summary }, actorId, correlationId);
-      }
-      this.log(engine, correlationId, result.outcome, desiredFp, result.code);
+      const applied = await this.recordApplyOutcome(engine.id, desiredFp, appliedFp, summary, result, actorId, correlationId);
+      this.log(engine, correlationId, `${result.outcome}:${applied.syncState}`, desiredFp, result.code);
       return {
         ok: result.ok,
         outcome: result.outcome,
         code: result.code,
+        syncState: applied.syncState,
         desiredVersion: shortFingerprint(desiredFp),
-        appliedVersion: result.ok ? shortFingerprint(desiredFp) : appliedFp ? shortFingerprint(appliedFp) : null,
+        appliedVersion: applied.appliedVersion,
         changed: decision.changed,
         correlationId,
         detail: result.detail,
       };
     });
+  }
+
+  /**
+   * Record the applied-version outcome honestly (Phase 12N-4a): success → an
+   * `applied` snapshot (advances applied); TIMEOUT → a `reconcile_pending`
+   * snapshot (applied NOT advanced — engine state unknown); other failure → no
+   * snapshot. Returns the lifecycle state + the applied version to surface.
+   */
+  private async recordApplyOutcome(
+    engineId: string,
+    desiredFp: string,
+    priorAppliedFp: string | null,
+    summary: Record<string, number>,
+    result: { ok: boolean; code?: EngineErrorCode },
+    actorId: string | null,
+    correlationId: string,
+  ): Promise<{ syncState: SyncState; appliedVersion: string | null }> {
+    const d = decideApplyOutcome(result);
+    if (d.record && d.kind) {
+      await this.record(engineId, ConfigChangeType.STATUS_CHANGE, priorAppliedFp, { kind: d.kind, fingerprint: desiredFp, short: shortFingerprint(desiredFp), summary }, actorId, correlationId);
+    }
+    const appliedVersion = d.advanceApplied ? shortFingerprint(desiredFp) : priorAppliedFp ? shortFingerprint(priorAppliedFp) : null;
+    return { syncState: d.syncState, appliedVersion };
   }
 
   async rollback(engine: EngineRef, actorId: string | null, correlationId: string): Promise<SyncOutcome> {
@@ -152,13 +197,15 @@ export class EngineSyncService {
       // Attempt to apply the rolled-back version — honest NOT_IMPLEMENTED/UNAVAILABLE with stubs.
       const intent = await this.desiredIntent(engine);
       const result = await this.engineService.sync(engine, intent, undefined);
-      this.log(engine, correlationId, `rollback:${result.outcome}`, decision.targetFp, result.code);
+      const applied = await this.recordApplyOutcome(engine.id, decision.targetFp, appliedFp, {}, result, actorId, correlationId);
+      this.log(engine, correlationId, `rollback:${result.outcome}:${applied.syncState}`, decision.targetFp, result.code);
       return {
         ok: result.ok,
         outcome: `ROLLBACK_${result.outcome}`,
         code: result.code,
+        syncState: applied.syncState,
         desiredVersion: shortFingerprint(decision.targetFp),
-        appliedVersion: appliedFp ? shortFingerprint(appliedFp) : null,
+        appliedVersion: applied.appliedVersion,
         changed: true,
         correlationId,
         detail: result.detail,
@@ -167,13 +214,18 @@ export class EngineSyncService {
   }
 
   /** Current version posture for status display (no mutation). */
-  async posture(engineId: string): Promise<{ desiredVersion: string | null; appliedVersion: string | null; versions: number }> {
-    const history = await this.loadHistory(engineId);
+  async posture(engineId: string): Promise<{ desiredVersion: string | null; appliedVersion: string | null; syncState: SyncState | null; versions: number }> {
+    const history = await this.loadHistory(engineId); // newest-first
     const desired = history.find((h) => h.kind === "desired")?.fingerprint ?? null;
     const applied = history.find((h) => h.kind === "applied")?.fingerprint ?? null;
+    // The most recent apply OUTCOME decides the lifecycle state. A reconcile_pending
+    // after an applied means the last attempt timed out — applied stays put.
+    const latestOutcome = history.find((h) => h.kind === "applied" || h.kind === "reconcile_pending");
+    const syncState: SyncState | null = latestOutcome ? (latestOutcome.kind === "applied" ? "APPLIED" : "PENDING_RECONCILIATION") : null;
     return {
       desiredVersion: desired ? shortFingerprint(desired) : null,
       appliedVersion: applied ? shortFingerprint(applied) : null,
+      syncState,
       versions: history.filter((h) => h.kind === "desired").length,
     };
   }
@@ -188,7 +240,7 @@ export class EngineSyncService {
     const out: VersionSnapshot[] = [];
     for (const r of rows) {
       const c = r.newConfig as unknown as VersionSnapshot | null;
-      if (c && (c.kind === "desired" || c.kind === "applied") && typeof c.fingerprint === "string") out.push(c);
+      if (c && (c.kind === "desired" || c.kind === "applied" || c.kind === "reconcile_pending") && typeof c.fingerprint === "string") out.push(c);
     }
     return out;
   }

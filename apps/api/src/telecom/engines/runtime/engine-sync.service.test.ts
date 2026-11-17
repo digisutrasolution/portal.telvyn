@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TelecomEngineType, TelecomStatus } from "@prisma/client";
-import { EngineSyncService, decideSync, decideRollback } from "./engine-sync.service";
+import { EngineSyncService, decideSync, decideRollback, decideApplyOutcome } from "./engine-sync.service";
 import { EngineLockBusy, type EngineLockService } from "./engine-lock.service";
 import { EngineService } from "../engine.service";
 import type { EngineAssignmentsService } from "../engine-assignments.service";
@@ -83,6 +83,53 @@ describe("EngineSyncService.sync (honest, versioned)", () => {
     const r = await svc.sync(engine, null, "cid-3");
     expect(r.code).toBe(EngineErrorCode.TIMEOUT);
     expect(r.ok).toBe(false);
+  });
+
+  it("NOT_IMPLEMENTED → FAILED, no outcome snapshot recorded", async () => {
+    const { svc, created } = makeService();
+    const r = await svc.sync(engine, "a", "cid-f");
+    expect(r.syncState).toBe("FAILED");
+    expect(created.length).toBe(1); // only the desired version — no applied/reconcile snapshot
+  });
+
+  it("success → APPLIED, applied version advances + an applied snapshot is recorded", async () => {
+    const { svc, created } = makeService({ syncResult: async () => ({ ok: true, outcome: "OK", correlationId: "x", durationMs: 1 }) });
+    const r = await svc.sync(engine, "a", "cid-ok");
+    expect(r.syncState).toBe("APPLIED");
+    expect(r.appliedVersion).toBe(r.desiredVersion); // advanced
+    expect((created as { newConfig: { kind: string } }[]).some((c) => c.newConfig.kind === "applied")).toBe(true);
+  });
+
+  it("TIMEOUT → PENDING_RECONCILIATION, applied NOT advanced + a reconcile_pending snapshot is recorded", async () => {
+    const { svc, created } = makeService({ syncResult: async () => ({ ok: false, outcome: "ERROR", code: EngineErrorCode.TIMEOUT, correlationId: "x", durationMs: 1 }) });
+    const r = await svc.sync(engine, "a", "cid-to");
+    expect(r.syncState).toBe("PENDING_RECONCILIATION");
+    expect(r.appliedVersion).toBeNull(); // engine state unknown — never claimed applied
+    expect((created as { newConfig: { kind: string } }[]).some((c) => c.newConfig.kind === "reconcile_pending")).toBe(true);
+  });
+});
+
+describe("decideApplyOutcome (pure applied-version state machine)", () => {
+  it("success advances applied; timeout reconciles; other failures do not record", () => {
+    expect(decideApplyOutcome({ ok: true })).toMatchObject({ syncState: "APPLIED", record: true, advanceApplied: true });
+    expect(decideApplyOutcome({ ok: false, code: EngineErrorCode.TIMEOUT })).toMatchObject({ syncState: "PENDING_RECONCILIATION", record: true, advanceApplied: false });
+    expect(decideApplyOutcome({ ok: false, code: EngineErrorCode.NOT_IMPLEMENTED })).toMatchObject({ syncState: "FAILED", record: false, advanceApplied: false });
+    expect(decideApplyOutcome({ ok: false, code: EngineErrorCode.UNAVAILABLE })).toMatchObject({ syncState: "FAILED", record: false });
+  });
+});
+
+describe("EngineSyncService.posture (lifecycle state)", () => {
+  it("reports PENDING_RECONCILIATION after a timeout, with applied unchanged", async () => {
+    const { svc } = makeService({
+      history: [
+        { newConfig: { kind: "reconcile_pending", fingerprint: "desiredX" } },
+        { newConfig: { kind: "applied", fingerprint: "appliedA" } },
+        { newConfig: { kind: "desired", fingerprint: "desiredX" } },
+      ],
+    });
+    const p = await svc.posture("00000000-0000-7000-8000-000000000001");
+    expect(p.syncState).toBe("PENDING_RECONCILIATION");
+    expect(p.appliedVersion).toBe((await import("./engine-config")).shortFingerprint("appliedA"));
   });
 });
 

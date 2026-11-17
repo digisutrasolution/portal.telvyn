@@ -135,3 +135,15 @@ the first real adapter lands"; neither re-litigates an accepted decision.
   is covered by an **opt-in** integration test (`telecom-engine-live.e2e.test.ts`,
   skipped unless `ENGINE_LIVE_MTLS_DIR` is set) so CI stays hermetic. The DI default
   is still `NullEngineConnector`; `ENGINE_CONNECTOR=kamailio` opts a deployment in.
+
+- **Applied-version persistence implemented (Phase 12N-4a) — the snapshot-flag route.**
+  The decision above ("a ConfigVersion snapshot flag") is now realized. `EngineSyncService`
+  runs a pure `decideApplyOutcome` state machine on each apply: **success → APPLIED**
+  (append an `applied` snapshot; advance the applied version), **TIMEOUT →
+  PENDING_RECONCILIATION** (append a `reconcile_pending` snapshot; the engine state is
+  UNKNOWN, so applied is NEVER advanced), **any other failure → FAILED** (no snapshot;
+  transient/retryable; applied unchanged). `posture()` and `GET :id/status.version`
+  surface `syncState`; `POST :id/sync` returns it. No migration (append-only
+  `TelecomConfigVersion.newConfig.kind`). With the adapter still a stub, every real apply
+  is `NOT_IMPLEMENTED → FAILED`, so applied stays `null` — honest — but the machinery is
+  complete and tested for when a real mutating apply lands (ADR-0013).
