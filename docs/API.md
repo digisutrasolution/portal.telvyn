@@ -100,6 +100,14 @@ desired version (append-only; **400** when there is no previous version), audite
 create/update is SSRF-validated (private/loopback/metadata/malformed → **400**).
 All runtime endpoints are platform-only.
 
+**Desired config from assignments (Phase 12N-3).** `GET :id/status` now also returns
+`desired` — a live, read-only preview of the engine's desired configuration built
+from its ENABLED resource assignments: `{ version (short secret-free fingerprint),
+summary: { carriers, trunks, dids, routes } }`. Disabling/unassigning a resource (or
+soft-deleting the resource) drops it from the intent and changes the fingerprint.
+`POST :id/sync` records this same non-empty desired version; nothing is pushed yet
+(the connector still returns honest `NOT_IMPLEMENTED` until a real `applyConfiguration`).
+
 **Engine resource assignments (Phase 12N-2, ADR-0012).** Platform-only CRUD for
 which resources deploy to an engine. `POST …/assignments` takes `{kind, resourceId}`
 (`kind` ∈ `SIP_TRUNK`/`DID`/`ROUTING_PROFILE`); the resource is validated against

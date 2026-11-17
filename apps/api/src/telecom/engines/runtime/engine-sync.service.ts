@@ -4,6 +4,7 @@ import { PrismaService } from "@/infra/prisma.service";
 import { EngineService } from "../engine.service";
 import { EngineErrorCode } from "../engine.types";
 import { EngineLockService } from "./engine-lock.service";
+import { EngineAssignmentsService } from "../engine-assignments.service";
 import { connectionProfile } from "./connection-profiles";
 import { fingerprintIntent, shortFingerprint } from "./engine-config";
 
@@ -59,11 +60,23 @@ export class EngineSyncService {
     private readonly prisma: PrismaService,
     private readonly engineService: EngineService,
     private readonly lock: EngineLockService,
+    private readonly assignments: EngineAssignmentsService,
   ) {}
 
-  /** Build the (currently empty) desired intent. Engine↔resource assignment is a future model. */
-  private desiredIntent(engine: EngineRef) {
-    return this.engineService.buildConfigurationIntent({ engineType: engine.type, carriers: [], trunks: [], dids: [], routes: [] });
+  /** Build the desired intent from the engine's enabled resource assignments (Phase 12N-3). */
+  private async desiredIntent(engine: EngineRef) {
+    const src = await this.assignments.buildConfigurationSource(engine.id, engine.type);
+    return this.engineService.buildConfigurationIntent(src);
+  }
+
+  /** Read-only preview of the current desired config (no mutation) — for status display. */
+  async previewDesired(engine: EngineRef): Promise<{ version: string; summary: Record<string, number> }> {
+    const intent = await this.desiredIntent(engine);
+    const fp = fingerprintIntent(intent);
+    return {
+      version: shortFingerprint(fp),
+      summary: { carriers: intent.carriers.length, trunks: intent.trunks.length, dids: intent.dids.length, routes: intent.routes.length },
+    };
   }
 
   private ttlMs(engine: EngineRef): number {
@@ -72,7 +85,7 @@ export class EngineSyncService {
 
   async sync(engine: EngineRef, actorId: string | null, correlationId: string): Promise<SyncOutcome> {
     return this.lock.withLock(engine.id, this.ttlMs(engine), async () => {
-      const intent = this.desiredIntent(engine);
+      const intent = await this.desiredIntent(engine);
       const desiredFp = fingerprintIntent(intent);
       const summary = {
         carriers: intent.carriers.length,
@@ -137,7 +150,7 @@ export class EngineSyncService {
       }, actorId, correlationId);
 
       // Attempt to apply the rolled-back version — honest NOT_IMPLEMENTED/UNAVAILABLE with stubs.
-      const intent = this.desiredIntent(engine);
+      const intent = await this.desiredIntent(engine);
       const result = await this.engineService.sync(engine, intent, undefined);
       this.log(engine, correlationId, `rollback:${result.outcome}`, decision.targetFp, result.code);
       return {

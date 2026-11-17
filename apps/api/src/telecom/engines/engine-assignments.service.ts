@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { EngineResourceKind, Prisma } from "@prisma/client";
+import { EngineResourceKind, Prisma, type TelecomEngineType } from "@prisma/client";
 import { PrismaService } from "@/infra/prisma.service";
+import type { EngineConfigurationSource } from "./engine.service";
 import type { AssignEngineResourceInput } from "../infra.dto";
 
 /** Safe assignment view — ids + non-secret resource summary. */
@@ -95,6 +96,59 @@ export class EngineAssignmentsService {
   async unassign(engineId: string, assignmentId: string): Promise<void> {
     const existing = await this.getOwned(engineId, assignmentId);
     await this.prisma.engineResourceAssignment.update({ where: { id: existing.id }, data: { deletedAt: new Date(), enabled: false } });
+  }
+
+  /**
+   * Build the secret-free desired-configuration SOURCE for an engine from its
+   * ENABLED, non-deleted assignments (Phase 12N-3). Soft-deleted resources are
+   * excluded; carriers are derived from the assigned trunks'/DIDs' carriers
+   * (no per-engine carrier ordering yet → priority 0). Deterministic order.
+   */
+  async buildConfigurationSource(engineId: string, engineType: TelecomEngineType): Promise<EngineConfigurationSource> {
+    const rows = await this.prisma.engineResourceAssignment.findMany({
+      where: { engineId, deletedAt: null, enabled: true },
+      include: {
+        sipTrunk: { select: { id: true, name: true, host: true, transport: true, credentialId: true, carrierId: true, deletedAt: true } },
+        did: { select: { id: true, e164: true, carrierId: true, sipTrunkId: true, deletedAt: true } },
+        routingProfile: { select: { id: true, deletedAt: true, rules: { select: { id: true, destinationType: true, priority: true } } } },
+      },
+    });
+
+    const trunks: EngineConfigurationSource["trunks"] = [];
+    const dids: EngineConfigurationSource["dids"] = [];
+    const routes: EngineConfigurationSource["routes"] = [];
+    const carrierIds = new Set<string>();
+
+    for (const r of rows) {
+      if (r.kind === EngineResourceKind.SIP_TRUNK && r.sipTrunk && r.sipTrunk.deletedAt === null) {
+        const t = r.sipTrunk;
+        trunks.push({ id: t.id, name: t.name, host: t.host, transport: String(t.transport), credentialId: t.credentialId });
+        if (t.carrierId) carrierIds.add(t.carrierId);
+      } else if (r.kind === EngineResourceKind.DID && r.did && r.did.deletedAt === null) {
+        const d = r.did;
+        dids.push({ id: d.id, e164: d.e164, carrierId: d.carrierId, sipTrunkId: d.sipTrunkId });
+        if (d.carrierId) carrierIds.add(d.carrierId);
+      } else if (r.kind === EngineResourceKind.ROUTING_PROFILE && r.routingProfile && r.routingProfile.deletedAt === null) {
+        for (const rule of r.routingProfile.rules) {
+          routes.push({ id: rule.id, destinationType: String(rule.destinationType), priority: rule.priority });
+        }
+      }
+    }
+
+    const carriers: EngineConfigurationSource["carriers"] = carrierIds.size
+      ? (
+          await this.prisma.carrier.findMany({ where: { id: { in: [...carrierIds] }, deletedAt: null }, select: { id: true, name: true, credentialId: true } })
+        ).map((c) => ({ id: c.id, name: c.name, priority: 0, credentialId: c.credentialId }))
+      : [];
+
+    // The fingerprint is order-independent (ADR-0011), but keep snapshots stable.
+    const byId = <T extends { id: string }>(a: T, b: T) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    trunks.sort(byId);
+    dids.sort(byId);
+    routes.sort(byId);
+    carriers.sort(byId);
+
+    return { engineType, carriers, trunks, dids, routes };
   }
 
   // --- helpers --------------------------------------------------------------

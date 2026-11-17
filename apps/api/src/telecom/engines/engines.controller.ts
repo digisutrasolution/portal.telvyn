@@ -70,10 +70,12 @@ export class EnginesController {
     const base = await this.engineSvc.getStatus({ id, type: engine.type });
     const connection = await this.connection.resolve({ provider: engine.type, endpoint: engine.endpoint, credentialId: engine.credentialId, status: engine.status, correlationId });
     const version = await this.syncSvc.posture(id);
+    const desired = await this.syncSvc.previewDesired({ id, type: engine.type, endpoint: engine.endpoint, status: engine.status });
     return {
       ...base,
       connection: { state: connection.state, endpointConfigured: connection.endpointConfigured, detail: connection.detail },
       version, // { desiredVersion, appliedVersion, versions } — applied stays null until a real engine applies
+      desired, // live desired config from current resource assignments: { version, summary{carriers,trunks,dids,routes} }
     };
   }
 

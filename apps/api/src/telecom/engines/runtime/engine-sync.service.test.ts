@@ -3,6 +3,7 @@ import { TelecomEngineType, TelecomStatus } from "@prisma/client";
 import { EngineSyncService, decideSync, decideRollback } from "./engine-sync.service";
 import { EngineLockBusy, type EngineLockService } from "./engine-lock.service";
 import { EngineService } from "../engine.service";
+import type { EngineAssignmentsService } from "../engine-assignments.service";
 import { EngineErrorCode } from "../engine.types";
 
 describe("decideSync (pure idempotency)", () => {
@@ -50,7 +51,11 @@ function makeService(over: { syncResult?: () => Promise<unknown>; lockBusy?: boo
     },
   } as unknown as EngineLockService;
 
-  return { svc: new EngineSyncService(prisma, engineService, lock), created };
+  const assignments = {
+    buildConfigurationSource: async (_engineId: string, engineType: TelecomEngineType) => ({ engineType, carriers: [], trunks: [], dids: [], routes: [] }),
+  } as unknown as EngineAssignmentsService;
+
+  return { svc: new EngineSyncService(prisma, engineService, lock, assignments), created };
 }
 const engine = { id: "00000000-0000-7000-8000-000000000001", type: TelecomEngineType.KAMAILIO, endpoint: null, status: TelecomStatus.ACTIVE };
 

@@ -322,3 +322,15 @@ Format: Keep a Changelog; SemVer once releases begin.
   409 double-assign, 404 missing resource, DID+profile, enable→unassign→reactivate,
   customer 403 + unauth 401). API.md + CHANGELOG. Regression: **API 266/266 (259 + 7),
   web 13/13, typecheck ✓, lint ✓.**
+- 2026-11-17 — **Phase 12N-3 — desired config intent from assignments.** `EngineSyncService`
+  now builds the engine's desired `EngineConfigurationIntent` from its **enabled, non-deleted
+  assignments** (via new `EngineAssignmentsService.buildConfigurationSource`) instead of an
+  empty source — so the config **fingerprint is now meaningful**. Secret-free: trunks/DIDs/
+  routing-profile-rules map to the intent; carriers are derived from the assigned trunks'/DIDs'
+  carriers (priority 0 — no per-engine carrier ordering yet); soft-deleted/disabled resources
+  are excluded; deterministic order. `GET :id/status` gains a live `desired` preview
+  (`{version, summary{carriers,trunks,dids,routes}}`); `POST :id/sync` records the non-empty
+  desired version. **No config is pushed** (connector still honest `NOT_IMPLEMENTED` until
+  12N-4). No schema change. +3 e2e (empty→populated→disabled, counts + fingerprint change);
+  sync-service unit test updated for the new dependency. API.md updated. Regression: **API
+  269/269 (266 + 3), web 13/13, typecheck ✓, lint ✓.**
