@@ -514,3 +514,29 @@ default**; nothing changes until the platform opts in.
 - **Scope.** Kamailio is a SIP router (`originate:false`); this connector is
   read-only health introspection. Pushing configuration is a separate later
   concern (no engine↔resource model yet) and is not done here.
+
+## Live management plane validation (Phase 12M-4, 2026-11-17)
+
+The connector was proven end-to-end against a disposable Kamailio 6.1.5 test
+engine with the real transport — no mocks — confirming the security envelope
+holds on the wire:
+
+- **Private transport, SIP closed.** Management reaches Kamailio only via
+  WireGuard (`10.9.0.1`) → nginx **mTLS gateway** (`wg0:8443`, `ssl_verify_client
+  on`) → Kamailio JSONRPC on loopback (`127.0.0.1:8000`, source-restricted to
+  `127.0.0.1`, path `^/RPC`). SIP/RTP remain closed; the public interface exposes
+  only SSH + WireGuard. Kamailio runs a management-only config (no public SIP).
+- **mTLS, both directions.** nginx presents a CA-signed server cert (SAN
+  `IP:10.9.0.1`, which the connector verifies) and requires a client cert; the
+  client cert is the vault `ENGINE_API` credential. The client **private key was
+  generated on the control-plane host and never left it** (only its CSR went to
+  the VPS CA) — it never transited any chat or the VPS.
+- **Allowlisted egress.** The connector reaches the private IP only because
+  `ENGINE_MGMT_ALLOWLIST=10.9.0.1/32@8443` authorizes that exact IP+port; the
+  connect-time rebinding recheck re-validates the resolved IP. Result: honest
+  `HEALTHY` from a real `core.version`.
+- **Dev-host caveat (not a product control).** The control-plane host for this
+  test is a Windows dev box; a MITM antivirus there (AVG Web/Mail Shield) will
+  intercept TLS and present its own cert (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`),
+  which the connector correctly REFUSES — the strict `rejectUnauthorized` did its
+  job. A production control-plane host has no such interception. See RUNBOOK.md.

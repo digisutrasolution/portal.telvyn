@@ -127,3 +127,11 @@ the first real adapter lands"; neither re-litigates an accepted decision.
   remains deferred until `applyConfiguration` does real network work (there is no
   engine↔resource assignment model yet, so the desired intent is empty and nothing
   is pushed).
+
+- **Validated live (Phase 12M-4).** The connector was proven end-to-end against a
+  disposable Kamailio 6.1.5 engine over the private WireGuard + nginx-mTLS path —
+  honest `HEALTHY` from a real `core.version`, no mocks. This confirms the single-
+  connection-boundary + typed-operations decisions hold on the wire. The real path
+  is covered by an **opt-in** integration test (`telecom-engine-live.e2e.test.ts`,
+  skipped unless `ENGINE_LIVE_MTLS_DIR` is set) so CI stays hermetic. The DI default
+  is still `NullEngineConnector`; `ENGINE_CONNECTOR=kamailio` opts a deployment in.

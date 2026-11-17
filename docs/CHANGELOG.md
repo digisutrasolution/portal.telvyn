@@ -283,3 +283,17 @@ Format: Keep a Changelog; SemVer once releases begin.
   live network path integration-tested in 12M-4). ADR-0011 addendum + SECURITY.md +
   `.env.example` updated. Regression: **API 255/255 (236 + 19)**, web 13/13, typecheck ✓,
   lint ✓, build ✓.
+- 2026-11-17 — **Phase 12M-4 — live Kamailio engine integration PROVEN.** The real
+  `KamailioJsonRpcConnector` validated end-to-end against a disposable Kamailio 6.1.5
+  test engine — no mocks: vault decrypt → `NodeHttpsEngineTransport` (mTLS + connect-time
+  rebinding recheck) → nginx mTLS gateway (`wg0:8443`) over WireGuard → Kamailio JSONRPC
+  `core.version` → **HEALTHY** (`reachable — kamailio 6.1.5 (x86_64/Linux)`, ~750ms).
+  Management plane is PRIVATE (WireGuard + mTLS, SIP/RTP closed). New committed artifacts:
+  `scripts/probe-live-engine.ts` (ops proof) and `test/telecom-engine-live.e2e.test.ts`
+  (**opt-in** — skipped unless `ENGINE_LIVE_MTLS_DIR` is set, so CI/normal runs are
+  unaffected). RUNBOOK.md documents the full VPS + control-plane procedure with real
+  paths and the gotchas (wg-quick dropping the wg0 Address, stale-apt 404 from a hung
+  lock, MITM-antivirus TLS interception on the dev host, Windows schannel vs PEM certs).
+  No production-code change (the connector/transport shipped in 12M-3). Regression: **API
+  255/255 + 1 opt-in live PASS, 1 skipped by default**, web 13/13, typecheck ✓, lint ✓.
+  **Phase 12M COMPLETE** — real engine adapter delivered, review-gated, honest, live-proven.

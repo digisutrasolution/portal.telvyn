@@ -94,3 +94,55 @@ npx pnpm@9 --filter @telvyn/api exec prisma migrate dev
 npx pnpm@9 --filter @telvyn/api exec prisma db seed
 npx pnpm@9 --filter @telvyn/api test
 ```
+
+---
+
+## Live engine management plane — Kamailio over mTLS/WireGuard (Phase 12M-4)
+
+The first real engine connector (`KamailioJsonRpcConnector`) proven end-to-end
+against a disposable Kamailio 6.1 test engine. The management plane is PRIVATE:
+WireGuard transport + an nginx mTLS gateway; SIP/RTP stay closed. Default is
+unchanged (`NullEngineConnector`) until `ENGINE_CONNECTOR=kamailio` is set.
+
+**VPS (dedicated, `167.114.98.53` / host `vps-9345109a`, Ubuntu 24.04):**
+- Kamailio JSON-RPC on loopback only: `/etc/kamailio/kamailio.cfg` = a
+  management-only config (`listen=tcp:127.0.0.1:8000`, `xhttp` + `jsonrpcs`
+  `transport=1`, `event_route[xhttp:request]` → `127.0.0.1` source check →
+  `^/RPC` → `jsonrpc_dispatch()`). No public SIP. Verify:
+  `curl -s -X POST http://127.0.0.1:8000/RPC -d '{"jsonrpc":"2.0","method":"core.version","id":1}'`
+- mTLS gateway: `/etc/telvyn/mtls/` holds `ca.{crt,key}`, `server.{crt,key}`
+  (SAN `IP:10.9.0.1`), `client.crt`. nginx site `engine-mgmt` listens
+  `10.9.0.1:8443 ssl` (`ssl_verify_client on`) → `proxy_pass http://127.0.0.1:8000/RPC`.
+  Port opened on the tunnel only: `ufw allow in on wg0 to any port 8443 proto tcp`.
+- WireGuard: `wg0 = 10.9.0.1/24`, port `51820`; control-plane peer `10.9.0.2`.
+
+**Control-plane host (this dev box = `10.9.0.2`):** WireGuard for Windows tunnel
+(AllowedIPs `10.9.0.1/32`, endpoint `167.114.98.53:51820`). The `ENGINE_API`
+vault credential's secret is a JSON mTLS bundle `{"cert","key","ca"}`; the client
+private key is generated here and never leaves (only its CSR goes to the VPS CA).
+
+**Prove it (from `apps/api`, services up):**
+```bash
+node -r @swc-node/register scripts/probe-live-engine.ts "<dir with client.crt/client.key/ca.crt>" https://10.9.0.1:8443
+# → ENGINE PROBE RESULT: { "status": "HEALTHY", "detail": "reachable — kamailio 6.1.5 ...", "contacted": true }
+```
+Or the opt-in integration test:
+```bash
+ENGINE_LIVE_MTLS_DIR="<dir>" corepack pnpm exec vitest run test/telecom-engine-live.e2e.test.ts
+```
+To wire the running API to the live engine, set in `apps/api/.env`:
+`ENGINE_CONNECTOR=kamailio` and `ENGINE_MGMT_ALLOWLIST=10.9.0.1/32@8443`.
+
+**Gotchas hit (save yourself the time):**
+- `wg-quick save wg0` can DROP the `Address = 10.9.0.1/24` line → nginx
+  `bind() to 10.9.0.1:8443 failed (99: Cannot assign requested address)`. Re-add:
+  `ip addr add 10.9.0.1/24 dev wg0` and restore the line in `wg0.conf`.
+- A stale apt index gives nginx `404 Not Found`; if `apt-get update` won't lock,
+  a hung `apt-get update` may be holding it (`ps -o etime -p <pid>`) — kill it,
+  clear `/var/lib/apt/lists/lock` + dpkg locks, `dpkg --configure -a`, re-update.
+- A MITM antivirus on the control-plane host (e.g. AVG Web/Mail Shield) will
+  intercept the TLS and present its own cert → `UNABLE_TO_VERIFY_LEAF_SIGNATURE`.
+  Disable its HTTPS scanning / add an exception. A real control-plane host has no
+  such interception.
+- Windows `curl` uses the schannel TLS backend and cannot load a PEM client cert
+  (`schannel: Failed to import cert file`) — use Node (the connector) to test mTLS.
