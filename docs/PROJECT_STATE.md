@@ -62,10 +62,23 @@ server-derived tenant context (ADR-0004, **ADR-0014 Accepted**). No `@RequirePer
 at bootstrap before permissions are known); JwtAuthGuard + TenantGuard still require a live active
 membership; permissions are expanded/concrete/sorted (owner's `*` resolved, never raw). Additive
 only — no schema/migration/DI-default/API-auth change. **API 296/296 (+2 skipped), web 13/13,
-typecheck ✓.** Production stays on `NullEngineConnector`. Next (await owner go): **12O-2b** — typed
-API client (OpenAPI-generated types + RFC7807 handling) + in-memory token store + `SessionProvider`
-+ login/MFA pages + permission-aware nav; then the read-only NOC pages; the remaining backend read
-gaps (HealthEvent history, config-version history) stay separately approval-gated.
+typecheck ✓.** **12O-2b (DONE)** — the web app's first data layer, **client + session foundation
+only** (NO UI, NO CSP change, NOT yet mounted into the shell). Contract-first per ADR-0002: added
+`openapi-typescript` (web devDep) + a `gen:contracts` script generating
+`apps/web/src/lib/contracts/schema.ts` from the canonical `telvyn.v1.yaml` (committed, never
+hand-edited). New modules under `apps/web/src/lib/`: `api/client.ts` (centralized typed `fetch` —
+bearer attach, `credentials:include` for the later refresh cookie, timeout + caller cancellation on
+one AbortSignal, non-2xx → typed `ApiError` carrying RFC 7807 `problem+json`, **no auto-retry**);
+`api/token-store.ts` (**in-memory** access token only — never localStorage, XSS defense);
+`api/problem.ts`; `session/session-context.tsx` (`SessionProvider`/`useSession` loading
+`GET /v1/me/context`, exposing `status`/`isPlatform`/`hasPermission`-family/`reload`, loader
+injectable for tests; permission helpers are **UX-only**, server guards stay authoritative).
+**ADR-0015 Accepted. web 13 → 33 tests, typecheck ✓, lint ✓.** `next build` deferred to the mount
+slice (modules not imported by any route yet; a dev server also holds `.next`). Production stays on
+`NullEngineConnector`. Next (await owner go): **12O-2c** — mount `SessionProvider`, add login/MFA
+pages + permission-aware nav, and extend the frontend CSP `connect-src` to the API origin; then the
+read-only NOC pages; the backend read gaps (HealthEvent history, config-version history) stay
+separately approval-gated.
 
 ### (superseded) sub-phase plan
 

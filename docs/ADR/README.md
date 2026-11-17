@@ -20,3 +20,4 @@ ADR that references the old one. Template: `template.md`.
 | 0012 | Engine ↔ resource assignment model | Accepted |
 | 0013 | Kamailio configuration apply mechanism | Accepted |
 | 0014 | Authorization context endpoint (`/v1/me/context`) | Accepted |
+| 0015 | Frontend typed API client + contract type generation | Accepted |

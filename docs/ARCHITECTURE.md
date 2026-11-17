@@ -62,6 +62,17 @@ security risks.
 - **Security risks:** XSS (CSP + output encoding), token/session handling in
   the browser, CSRF on any cookie surface, clickjacking (frame-ancestors),
   sensitive data in client logs. All controls PLANNED in SECURITY.md.
+- **Data layer — EXISTING (Phase 12O-2b, 2026-11-18, ADR-0015):** stack is
+  Next.js (ADR-0002, no longer UNKNOWN). The first data layer ships as a
+  client + session foundation in `apps/web/src/lib/`: a centralized typed
+  `fetch` client (`lib/api/client.ts` — bearer from an **in-memory** token
+  store, `credentials:include` for the httpOnly refresh cookie, timeout +
+  cancellation, RFC 7807 → typed `ApiError`, no auto-retry); contract types
+  **generated** from `telvyn.v1.yaml` via `pnpm gen:contracts`
+  (`openapi-typescript`), never hand-written; and a `SessionProvider` that
+  reads `GET /v1/me/context` (ADR-0014) to drive **UX-only** permission gating
+  (server guards stay authoritative). Not yet mounted into the shell; login UI
+  and the CSP `connect-src` change land in 12O-2c.
 
 ## 3. Backend architecture — PLANNED (charter), framework UNKNOWN
 

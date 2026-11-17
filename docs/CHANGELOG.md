@@ -391,3 +391,19 @@ Format: Keep a Changelog; SemVer once releases begin.
   `authz.e2e.test.ts` (401, owner shape, operator-read-not-manage, no cross-tenant leak).
   ADR-0014 Accepted. This is the first backend prerequisite for the NOC auth frontend
   (Phase 12O-2b+).
+- 2026-11-18 — **Phase 12O-2b — frontend API client + session foundation.** The web
+  app's first data layer (client + session only — NO UI, NO CSP change, not yet mounted
+  into the shell). Contract-first per ADR-0002: added `openapi-typescript` (web devDep) +
+  a `gen:contracts` script that regenerates `apps/web/src/lib/contracts/schema.ts` from the
+  canonical `telvyn.v1.yaml`; the generated file is committed and never hand-edited.
+  Modules: `lib/api/client.ts` (centralized typed `fetch` — bearer attach, `credentials:
+  include` for the later refresh cookie, per-request timeout + caller cancellation on one
+  AbortSignal, non-2xx → typed `ApiError` carrying the RFC 7807 `problem+json`, **no auto-
+  retry**); `lib/api/token-store.ts` (in-memory access token only — never localStorage, XSS
+  defense); `lib/api/problem.ts` (`ApiError`/`isApiError`); `lib/session/session-context.tsx`
+  (`SessionProvider` + `useSession` loading `GET /v1/me/context`, exposing `status` /
+  `isPlatform` / `hasPermission`-family / `reload`, loader injectable for tests). Permission
+  helpers are **UX-only**; server guards remain authoritative. +20 unit tests (web 13 → 33),
+  typecheck ✓, lint ✓. ADR-0015 Accepted. `next build` deferred to the mount slice (modules
+  not yet imported by any route). Next: **12O-2c** — mount the provider, login/MFA pages,
+  permission-aware nav, and the CSP `connect-src` += API origin.

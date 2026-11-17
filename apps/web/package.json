@@ -9,7 +9,8 @@
     "start": "next start -p 3211",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "gen:contracts": "openapi-typescript ../../packages/contracts/openapi/telvyn.v1.yaml -o src/lib/contracts/schema.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.6",
@@ -36,6 +37,7 @@
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.4.1",
     "jsdom": "^26.1.0",
+    "openapi-typescript": "^7.13.0",
     "tailwindcss": "^4.1.7",
     "typescript": "^5.8.3",
     "vitest": "^3.1.3"
