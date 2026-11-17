@@ -102,6 +102,26 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Me" }
         "401": { $ref: "#/components/responses/Problem" }
+  /v1/me/context:
+    get:
+      tags: [authz]
+      summary: Current authorization context (identity + active tenant + roles + permissions)
+      description: >-
+        Self-scoped "whoami" for the authenticated session. Returns the
+        server-derived tenant context (ADR-0004): the active tenant and its
+        type, the membership's roles, and the expanded concrete permission keys.
+        No permission is required beyond an authenticated session with an active
+        membership — the frontend calls this at bootstrap, before it knows any
+        permissions. Never accepts or trusts a client-supplied tenant id.
+      operationId: meContext
+      responses:
+        "200":
+          description: Authorization context for the current session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeContext" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
   /v1/auth/sessions:
     get:
       tags: [auth]
@@ -330,6 +350,27 @@ components:
         fullName: { type: string, nullable: true }
         mfaEnabled: { type: boolean }
         emailVerified: { type: boolean }
+    MeContext:
+      type: object
+      required: [userId, tenantId, tenantType, roles, permissions]
+      properties:
+        userId: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        tenantType: { type: string, enum: [PLATFORM, RESELLER, CUSTOMER] }
+        roles:
+          type: array
+          items:
+            type: object
+            required: [id, key, name, isSystem]
+            properties:
+              id: { type: string, format: uuid }
+              key: { type: string }
+              name: { type: string }
+              isSystem: { type: boolean }
+        permissions:
+          type: array
+          items: { type: string }
+          description: Expanded concrete permission keys (wildcards resolved), sorted.
     Session:
       type: object
       required: [id, createdAt, lastSeenAt, current]

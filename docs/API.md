@@ -238,3 +238,25 @@ Route fields: `carrierId`, `sipTrunkId?`, `prefix`, `country?`, `costMicros`
 `effectiveFrom?/To?`. Duplicate name → 409; foreign/deleted carrier/trunk → 400.
 No new permission created (routing.manage reused). OpenAPI YAML still `/v1/auth`
 only (tracked debt).
+
+## Identity & authorization context — EXISTING (Phase 12O-2a, 2026-11-18)
+
+`GET /v1/me/context` — the self-scoped "whoami" the frontend calls at bootstrap
+(before it knows any permissions) to drive permission-aware navigation and
+route authorization. **No permission is required** beyond an authenticated
+session with a live, active membership (JwtAuthGuard + TenantGuard); there is
+deliberately no `@RequirePermissions` — gating on a permission would be a
+chicken-and-egg. All fields derive from the server-built tenant context
+(ADR-0004); no client-supplied tenant id is ever read, so there is no IDOR
+surface. See ADR-0014.
+
+| Method & path | Auth |
+|---|---|
+| `GET /v1/me/context` | authenticated session + active membership (no permission) |
+
+Response: `{ userId, tenantId, tenantType (PLATFORM\|RESELLER\|CUSTOMER), roles[{id,key,name,isSystem}], permissions[] }`.
+`permissions` are the **expanded concrete** keys (wildcards such as owner's `*`
+resolved), sorted — never the raw wildcard. `401` unauthenticated; `403` when
+the session has no active tenant/membership. Read-only; the server guards remain
+the authority — the frontend uses this only for UX gating. Contract: `MeContext`
+in `telvyn.v1.yaml`.

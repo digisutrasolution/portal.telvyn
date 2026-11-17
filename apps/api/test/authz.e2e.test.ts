@@ -192,3 +192,44 @@ describe("audit trail", () => {
     expect(logs.body.every((l: { actorId: string }) => l.actorId === alpha.userId)).toBe(true);
   });
 });
+
+describe("current authorization context (/v1/me/context)", () => {
+  it("rejects an unauthenticated request (401)", async () => {
+    await request(http).get("/v1/me/context").expect(401);
+  });
+
+  it("returns the session's own identity, tenant, roles and expanded permissions", async () => {
+    const owner = await provision("alpha", "owner");
+    const res = await request(http).get("/v1/me/context").set("Authorization", `Bearer ${owner.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.userId).toBe(owner.userId);
+    expect(res.body.tenantId).toBe(owner.tenantId);
+    expect(res.body.tenantType).toBe("CUSTOMER");
+    expect(res.body.roles.map((r: { key: string }) => r.key)).toContain("owner");
+    // owner's "*" grant is expanded to concrete keys — never the raw wildcard.
+    expect(res.body.permissions).toContain("role.read");
+    expect(res.body.permissions).toContain("telecom.read");
+    expect(res.body.permissions).not.toContain("*");
+    // Deterministically sorted.
+    expect(res.body.permissions).toEqual([...res.body.permissions].sort());
+  });
+
+  it("reflects a limited role's permission set (operator reads, cannot manage)", async () => {
+    const operator = await provision("alpha", "operator");
+    const res = await request(http).get("/v1/me/context").set("Authorization", `Bearer ${operator.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.roles.map((r: { key: string }) => r.key)).toContain("operator");
+    expect(res.body.permissions).toContain("telecom.read");
+    expect(res.body.permissions).not.toContain("telecom.manage");
+    expect(res.body.permissions).not.toContain("role.manage");
+  });
+
+  it("never leaks another tenant's context", async () => {
+    const alpha = await provision("alpha", "owner");
+    const beta = await provision("beta", "owner");
+    const res = await request(http).get("/v1/me/context").set("Authorization", `Bearer ${alpha.token}`);
+    expect(res.body.tenantId).toBe(alpha.tenantId);
+    expect(res.body.tenantId).not.toBe(beta.tenantId);
+    expect(res.body.userId).not.toBe(beta.userId);
+  });
+});

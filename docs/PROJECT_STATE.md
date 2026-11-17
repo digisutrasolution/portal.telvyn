@@ -50,8 +50,22 @@ via a fake transport + an opt-in live mutating test. After 12N-4b: **API 291/291
 typecheck ✓, lint ✓. **LIVE-VALIDATED 2026-11-17** (operator-authorized) against the
 disposable Kamailio 6.1.5 VPS: apply → verify → idempotent (0-op) → rollback-to-empty, htable
 left clean. **Phase 12N COMPLETE.** Production stays on `NullEngineConnector` (`ENGINE_CONNECTOR`
-unset). Next: await owner direction (e.g. the NOC frontend on live health/config, or a second
-engine adapter).
+unset).
+
+**Phase 12O IN PROGRESS — NOC frontend enablement.** **12O-1 (DONE — planning/inspection only)**
+confirmed the frontend has no auth/session/API-client/data layer (only `SHELL_CONFIG` seams) and
+that the single hard prerequisite for permission-aware UI was a server endpoint exposing the
+session's `tenantType` + permission set (none existed: `/v1/auth/me` is identity-only,
+`/v1/permissions` is the catalog). **12O-2a (DONE)** delivers that prerequisite: read-only
+`GET /v1/me/context` → `{ userId, tenantId, tenantType, roles[], permissions[] }` from the
+server-derived tenant context (ADR-0004, **ADR-0014 Accepted**). No `@RequirePermissions` (called
+at bootstrap before permissions are known); JwtAuthGuard + TenantGuard still require a live active
+membership; permissions are expanded/concrete/sorted (owner's `*` resolved, never raw). Additive
+only — no schema/migration/DI-default/API-auth change. **API 296/296 (+2 skipped), web 13/13,
+typecheck ✓.** Production stays on `NullEngineConnector`. Next (await owner go): **12O-2b** — typed
+API client (OpenAPI-generated types + RFC7807 handling) + in-memory token store + `SessionProvider`
++ login/MFA pages + permission-aware nav; then the read-only NOC pages; the remaining backend read
+gaps (HealthEvent history, config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

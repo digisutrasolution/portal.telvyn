@@ -54,6 +54,15 @@ export class AuthzController {
     return { groups: PERMISSION_GROUPS, permissions: PERMISSIONS };
   }
 
+  // ---- current session's authorization context (self-scoped "whoami") ----
+  // No @RequirePermissions: the frontend calls this at bootstrap BEFORE it knows
+  // any permissions. JwtAuthGuard + TenantGuard still require an authenticated
+  // session with a live, active membership; the context is server-derived.
+  @Get("me/context")
+  meContext(@CurrentTenant() ctx: TenantContext) {
+    return this.tenancy.memberContext(ctx);
+  }
+
   // ---- tenant ----
   @Get("tenant")
   @RequirePermissions("tenant.read")

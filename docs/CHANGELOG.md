@@ -379,3 +379,15 @@ Format: Keep a Changelog; SemVer once releases begin.
   only the `telvyn` htable touched, left clean. Added `scripts/live-apply-evidence.ts`; fixed a
   benign transport connect-listener accumulation under keep-alive socket reuse. **Production
   remains on `NullEngineConnector`.** ADR-0013 live-validated.
+- 2026-11-18 — **Phase 12O-2a — authorization context endpoint (`GET /v1/me/context`).**
+  Read-only, self-scoped "whoami" for the authenticated session: returns
+  `{ userId, tenantId, tenantType, roles[], permissions[] }` from the server-derived
+  tenant context (ADR-0004). No `@RequirePermissions` (the frontend calls it at bootstrap,
+  before it knows any permissions); JwtAuthGuard + TenantGuard still require a live, active
+  membership, and no client-supplied tenant id is read (no IDOR). `permissions` are the
+  **expanded concrete** keys (owner's `*` resolved), sorted. Additive only — no schema,
+  migration, DI-default, or API-auth-behavior change. New `TenancyService.memberContext`,
+  one route on `AuthzController`, `MeContext` in the OpenAPI contract, 4 e2e cases in
+  `authz.e2e.test.ts` (401, owner shape, operator-read-not-manage, no cross-tenant leak).
+  ADR-0014 Accepted. This is the first backend prerequisite for the NOC auth frontend
+  (Phase 12O-2b+).

@@ -12,6 +12,30 @@ import type { TenantContext } from "./tenant-context";
 export class TenancyService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Self-scoped authorization context for the current session (Phase 12O-2a).
+   * Identity + active tenant + the membership's roles + the expanded concrete
+   * permission keys. Everything derives from the server-built TenantContext
+   * (ADR-0004) — never a client-supplied id — so there is no IDOR surface and
+   * no permission gate is needed beyond an authenticated, active membership.
+   * The base client (not the scoped one) is used deliberately so system roles
+   * (tenantId = null) held by the membership are included.
+   */
+  async memberContext(ctx: TenantContext) {
+    const roles = await this.prisma.role.findMany({
+      where: { deletedAt: null, membershipRoles: { some: { membershipId: ctx.membershipId } } },
+      select: { id: true, key: true, name: true, isSystem: true },
+      orderBy: [{ isSystem: "desc" }, { name: "asc" }],
+    });
+    return {
+      userId: ctx.userId,
+      tenantId: ctx.tenantId,
+      tenantType: ctx.tenantType,
+      roles,
+      permissions: [...ctx.permissions].sort(),
+    };
+  }
+
   /** Current tenant profile (scoped: id comes from context, not the request). */
   async currentTenant(ctx: TenantContext) {
     const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: ctx.tenantId } });

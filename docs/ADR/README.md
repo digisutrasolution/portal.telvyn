@@ -19,3 +19,4 @@ ADR that references the old one. Template: `template.md`.
 | 0011 | Engine runtime integration boundary | Accepted |
 | 0012 | Engine ↔ resource assignment model | Accepted |
 | 0013 | Kamailio configuration apply mechanism | Accepted |
+| 0014 | Authorization context endpoint (`/v1/me/context`) | Accepted |
