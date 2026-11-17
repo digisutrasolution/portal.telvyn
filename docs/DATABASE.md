@@ -259,3 +259,24 @@ The **applied-version** state (`PENDING_RECONCILIATION` on a timed-out apply) is
 NOT a schema column — it extends the existing append-only snapshot model in
 `TelecomConfigVersion` (`newConfig.kind`), the option ADR-0011 reserved. No live
 egress, DI, or behavior changed by this sub-phase.
+
+## Engine ↔ resource assignment — EXISTING (Phase 12N-1, 2026-11-17)
+
+Additive migration `engine_resource_assignment` (ADR-0012) — the model of which
+resources deploy to which engine, so a future `EngineConfigurationIntent` is
+non-empty. Purely additive (reviewed; no existing table changed):
+
+- `enum EngineResourceKind` = `SIP_TRUNK | DID | ROUTING_PROFILE` (the resources a
+  SIP router needs; carriers are implied by trunks, not assigned directly).
+- `EngineResourceAssignment` (UUIDv7 PK, `enabled`, soft-delete): `engineId` FK →
+  `TelecomEngine` (Cascade); a denormalized `tenantId` FK → `Tenant` (Cascade;
+  null = platform resource); and **three explicit nullable FKs** `sipTrunkId` /
+  `didId` / `routingProfileId` (each Cascade) — real FKs, never a polymorphic id
+  (constitution: no FK-less tables).
+- **DB CHECK** `..._one_resource_matches_kind`: exactly one resource FK is set and
+  matches `kind` — the database refuses an ambiguous assignment. Per-kind
+  `@@unique([engineId, <resourceId>])` (NULLs distinct in PG) → a resource is
+  assigned to an engine at most once. Indexes on `(engineId, enabled)`,
+  `tenantId`, `kind`.
+
+Platform-managed (PlatformGuard, in 12N-2). No service/API/behavior yet.

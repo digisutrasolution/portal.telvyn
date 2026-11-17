@@ -297,3 +297,14 @@ Format: Keep a Changelog; SemVer once releases begin.
   No production-code change (the connector/transport shipped in 12M-3). Regression: **API
   255/255 + 1 opt-in live PASS, 1 skipped by default**, web 13/13, typecheck ✓, lint ✓.
   **Phase 12M COMPLETE** — real engine adapter delivered, review-gated, honest, live-proven.
+- 2026-11-17 — **Phase 12N-1 — engine↔resource assignment model (additive schema).** First
+  sub-phase of making an engine's desired config non-empty. Additive migration
+  `engine_resource_assignment` (ADR-0012, reviewed, no existing table changed): `enum
+  EngineResourceKind` (SIP_TRUNK/DID/ROUTING_PROFILE) + `EngineResourceAssignment` table —
+  `engineId` FK (Cascade), denormalized `tenantId` FK (Cascade; null = platform), and three
+  explicit nullable resource FKs (`sipTrunkId`/`didId`/`routingProfileId`, each Cascade) —
+  real FKs, never a polymorphic id. A **DB CHECK** enforces exactly-one-resource-matching-kind;
+  per-kind `@@unique([engineId, <resourceId>])` bars double assignment; `enabled` + soft delete.
+  Platform-managed (API in 12N-2). No service/API/behavior change. +4 integration tests
+  (assign each kind, unique, CHECK rejects zero/two/mismatch, cascades). ADR-0012 +
+  DATABASE.md. Regression: **API 259/259 (255 + 4), web 13/13, typecheck ✓, lint ✓.**

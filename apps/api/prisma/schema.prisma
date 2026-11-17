@@ -84,6 +84,7 @@ model Tenant {
   routingProfiles    RoutingProfile[]
   telecomCredentials TelecomCredential[]
   lcrPolicies        LcrPolicy[]
+  engineResourceAssignments EngineResourceAssignment[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -538,8 +539,9 @@ model TelecomEngine {
   credentialId String?            @db.Uuid
   credential   TelecomCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
 
-  capabilities EngineCapability[]
-  nodes        TelecomNode[]
+  capabilities        EngineCapability[]
+  nodes               TelecomNode[]
+  resourceAssignments EngineResourceAssignment[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -561,6 +563,51 @@ model EngineCapability {
   createdAt DateTime @default(now())
 
   @@unique([engineId, capability])
+}
+
+// --- Engine ↔ resource assignment (platform; Phase 12N) --------------------
+// Which tenant/platform resources are deployed to which engine. A future
+// EngineConfigurationIntent is built from the ENABLED, non-deleted rows here.
+// Exactly ONE resource FK is set and must match `kind` (enforced by a DB CHECK
+// in the migration). Platform-managed (PlatformGuard); `tenantId` is the
+// denormalized owner (null = platform resource) for scope + audit.
+enum EngineResourceKind {
+  SIP_TRUNK
+  DID
+  ROUTING_PROFILE
+}
+
+model EngineResourceAssignment {
+  id       String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  engineId String             @db.Uuid
+  engine   TelecomEngine      @relation(fields: [engineId], references: [id], onDelete: Cascade)
+  kind     EngineResourceKind
+  tenantId String?            @db.Uuid // denormalized owner (null = platform resource)
+  tenant   Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Exactly ONE of these is non-null, matching `kind` (DB CHECK). Cascade so a
+  // hard-deleted resource takes its assignment with it.
+  sipTrunkId       String?         @db.Uuid
+  sipTrunk         SipTrunk?       @relation(fields: [sipTrunkId], references: [id], onDelete: Cascade)
+  didId            String?         @db.Uuid
+  did              Did?            @relation(fields: [didId], references: [id], onDelete: Cascade)
+  routingProfileId String?         @db.Uuid
+  routingProfile   RoutingProfile? @relation(fields: [routingProfileId], references: [id], onDelete: Cascade)
+
+  enabled Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // A resource is assigned at most once per engine. NULLs are distinct in PG, so
+  // each unique constrains only its own kind's (non-null) rows.
+  @@unique([engineId, sipTrunkId])
+  @@unique([engineId, didId])
+  @@unique([engineId, routingProfileId])
+  @@index([engineId, enabled])
+  @@index([tenantId])
+  @@index([kind])
 }
 
 // --- Telecom node: CONFIG (durable) ----------------------------------------
@@ -696,8 +743,9 @@ model SipTrunk {
   credentialId String?            @db.Uuid
   credential   TelecomCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
 
-  dids      Did[]
-  lcrRoutes LcrRoute[]
+  dids             Did[]
+  lcrRoutes        LcrRoute[]
+  engineAssignments EngineResourceAssignment[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -727,6 +775,8 @@ model Did {
 
   routingProfileId String?         @db.Uuid
   routingProfile   RoutingProfile? @relation(fields: [routingProfileId], references: [id], onDelete: SetNull)
+
+  engineAssignments EngineResourceAssignment[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -760,8 +810,9 @@ model RoutingProfile {
   overallTimeoutSeconds Int?
   version             Int                         @default(0)
 
-  rules RoutingRule[]
-  dids  Did[]
+  rules             RoutingRule[]
+  dids              Did[]
+  engineAssignments EngineResourceAssignment[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
