@@ -56,6 +56,10 @@ the existing `AuditService`. None of these resources hold secrets.
 | `POST /v1/telecom/engines/:id/health-check` | `telecom.health.read` |
 | `POST /v1/telecom/engines/:id/sync` | `telecom.manage` |
 | `POST /v1/telecom/engines/:id/sync/rollback` | `telecom.manage` |
+| `GET /v1/telecom/engines/:engineId/assignments` | `telecom.read` |
+| `POST /v1/telecom/engines/:engineId/assignments` (`{kind, resourceId}`) | `telecom.manage` |
+| `PATCH /v1/telecom/engines/:engineId/assignments/:assignmentId` (`{enabled}`) | `telecom.manage` |
+| `DELETE /v1/telecom/engines/:engineId/assignments/:assignmentId` | `telecom.manage` |
 | `GET /v1/telecom/nodes` · `GET /v1/telecom/nodes/:id` | `telecom.read` |
 | `GET /v1/telecom/nodes/:id/health` | `telecom.health.read` |
 | `POST/PUT/DELETE /v1/telecom/nodes[/:id]` | `telecom.manage` |
@@ -94,7 +98,18 @@ Redis-lock outage → **503**), still honest `501 NOT_IMPLEMENTED`, audited with
 desired version (append-only; **400** when there is no previous version), audited
 `telecom.engine.rollback_attempted`. The management **endpoint** on engine
 create/update is SSRF-validated (private/loopback/metadata/malformed → **400**).
-All runtime endpoints are platform-only. Lists are bounded (take 500); cursor pagination lands with the
+All runtime endpoints are platform-only.
+
+**Engine resource assignments (Phase 12N-2, ADR-0012).** Platform-only CRUD for
+which resources deploy to an engine. `POST …/assignments` takes `{kind, resourceId}`
+(`kind` ∈ `SIP_TRUNK`/`DID`/`ROUTING_PROFILE`); the resource is validated against
+the table implied by `kind` (missing → **404**), and `tenantId` is derived from the
+resource's owner — **never client-supplied**. A resource already assigned to the
+engine → **409**; re-assigning a previously-unassigned resource reactivates it.
+`PATCH …/:assignmentId {enabled}` toggles without removing; `DELETE …/:assignmentId`
+soft-unassigns (**204**). PlatformGuard (customer **403**, unauth **401**); every
+mutation audited (`telecom.engine.resource_{assigned,assignment_updated,unassigned}`).
+No config is pushed — assignments feed the desired intent in a later sub-phase. Lists are bounded (take 500); cursor pagination lands with the
 high-cardinality tenant resources (DIDs, 12G). **Note:** the hand-authored
 OpenAPI YAML currently covers `/v1/auth` only; authz + telecom endpoints are
 documented here (pre-existing gap, tracked — YAML expansion is future work).

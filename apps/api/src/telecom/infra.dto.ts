@@ -4,6 +4,7 @@ import {
   TelecomEnvironment,
   TelecomStatus,
   EngineCapabilityKey,
+  EngineResourceKind,
 } from "@prisma/client";
 import { isSafeEngineEndpoint } from "./engines/runtime/engine-endpoint";
 
@@ -54,6 +55,20 @@ export const SetEngineCapabilitiesDto = z.object({
 export type CreateEngineInput = z.infer<typeof CreateEngineDto>;
 export type UpdateEngineInput = z.infer<typeof UpdateEngineDto>;
 export type SetEngineCapabilitiesInput = z.infer<typeof SetEngineCapabilitiesDto>;
+
+// ---- Engine resource assignment (Phase 12N) ----
+// `resourceId` is validated against the table implied by `kind`; `tenantId` is
+// NEVER client-supplied — it is derived server-side from the resource's owner.
+export const AssignEngineResourceDto = z
+  .object({
+    kind: z.nativeEnum(EngineResourceKind),
+    resourceId: z.string().uuid(),
+    enabled: z.boolean().optional(),
+  })
+  .strict();
+export const UpdateEngineAssignmentDto = z.object({ enabled: z.boolean() }).strict();
+export type AssignEngineResourceInput = z.infer<typeof AssignEngineResourceDto>;
+export type UpdateEngineAssignmentInput = z.infer<typeof UpdateEngineAssignmentDto>;
 
 // ---- Node ----
 export const CreateNodeDto = z.object({

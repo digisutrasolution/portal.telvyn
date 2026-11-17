@@ -308,3 +308,17 @@ Format: Keep a Changelog; SemVer once releases begin.
   Platform-managed (API in 12N-2). No service/API/behavior change. +4 integration tests
   (assign each kind, unique, CHECK rejects zero/two/mismatch, cascades). ADR-0012 +
   DATABASE.md. Regression: **API 259/259 (255 + 4), web 13/13, typecheck ✓, lint ✓.**
+- 2026-11-17 — **Phase 12N-2 — engine resource assignment service + platform API.**
+  `EngineAssignmentsService` + `EngineAssignmentsController` under
+  `/v1/telecom/engines/:engineId/assignments` (PlatformGuard). `POST {kind, resourceId}`
+  validates the resource against the table implied by `kind` (missing → 404) and derives
+  `tenantId` from the resource's owner — **never client-supplied**; a resource already
+  assigned → **409**; re-assigning a previously-unassigned resource **reactivates** it
+  (no unique conflict, soft-delete preserved). `GET` lists active assignments with a
+  non-secret resource label; `PATCH :id {enabled}` toggles; `DELETE :id` soft-unassigns
+  (204). RBAC reuses `telecom.read`/`telecom.manage`; every mutation audited
+  (`telecom.engine.resource_{assigned,assignment_updated,unassigned}`). No schema change;
+  no config pushed (assignments feed the desired intent in 12N-3). +7 e2e (assign/list,
+  409 double-assign, 404 missing resource, DID+profile, enable→unassign→reactivate,
+  customer 403 + unauth 401). API.md + CHANGELOG. Regression: **API 266/266 (259 + 7),
+  web 13/13, typecheck ✓, lint ✓.**

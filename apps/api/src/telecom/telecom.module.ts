@@ -19,6 +19,8 @@ import { RegionsService } from "./regions/regions.service";
 import { RegionsController } from "./regions/regions.controller";
 import { EnginesService } from "./engines/engines.service";
 import { EnginesController } from "./engines/engines.controller";
+import { EngineAssignmentsService } from "./engines/engine-assignments.service";
+import { EngineAssignmentsController } from "./engines/engine-assignments.controller";
 import { NodesService } from "./nodes/nodes.service";
 import { NodesController } from "./nodes/nodes.controller";
 import { TelecomCredentialService } from "./secrets/telecom-credential.service";
@@ -44,7 +46,7 @@ import { LcrController } from "./lcr/lcr.controller";
  */
 @Module({
   imports: [AuthModule, AuthzModule],
-  controllers: [RegionsController, EnginesController, NodesController, CarriersController, SipTrunksController, DidsController, RoutingProfilesController, LcrController],
+  controllers: [RegionsController, EnginesController, EngineAssignmentsController, NodesController, CarriersController, SipTrunksController, DidsController, RoutingProfilesController, LcrController],
   providers: [
     PrismaService,
     RedisService,
@@ -68,6 +70,7 @@ import { LcrController } from "./lcr/lcr.controller";
     EngineSyncService,
     RegionsService,
     EnginesService,
+    EngineAssignmentsService,
     NodesService,
     TelecomCredentialService,
     CarriersService,
