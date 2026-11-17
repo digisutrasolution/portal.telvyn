@@ -371,3 +371,11 @@ Format: Keep a Changelog; SemVer once releases begin.
   mutation NOT executed** (Phase-5 gate: needs the VPS `telvyn` htable + operator confirmation).
   Production remains on `NullEngineConnector`. Regression: **API 291/291 (274 + 17), web 13/13,
   typecheck ✓, lint ✓** (1 opt-in apply + 1 opt-in health skipped).
+- 2026-11-17 — **Phase 12N-4b LIVE-VALIDATED (operator-authorized) — Phase 12N COMPLETE.** With
+  the `telvyn` htable declared on the disposable VPS and the real dump shape confirmed (pinned
+  in a test, `ba29e4f`), ran the opt-in live apply over WireGuard+mTLS against Kamailio 6.1.5:
+  before `[]` → reset (0/0) → apply desired (2 set, **verified by re-dump**) → **idempotent
+  re-apply (0 set/0 del)** → **rollback-to-empty (2 del)** → `[]`. Formal opt-in test PASS (1/1);
+  only the `telvyn` htable touched, left clean. Added `scripts/live-apply-evidence.ts`; fixed a
+  benign transport connect-listener accumulation under keep-alive socket reuse. **Production
+  remains on `NullEngineConnector`.** ADR-0013 live-validated.

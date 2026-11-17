@@ -1,7 +1,8 @@
 # ADR-0013 — Kamailio configuration apply mechanism
 
-- **Status:** Accepted (owner-approved; mechanism implemented in 12N-4b — the live
-  mutation against the disposable VPS remains operator-gated, Phase 5)
+- **Status:** Accepted (owner-approved; implemented in 12N-4b and **live-validated**
+  against the disposable Kamailio 6.1.5 VPS — apply → verify → idempotent → rollback,
+  htable left empty; production stays `NullEngineConnector`)
 - **Date:** 2026-11-17
 - **Deciders:** Architect / Telecom / Security
 - **Related:** ADR-0006 (control vs data plane), ADR-0007 (engine abstraction),

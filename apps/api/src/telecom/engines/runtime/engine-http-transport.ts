@@ -133,7 +133,13 @@ export class NodeHttpsEngineTransport extends EngineHttpTransport {
       const connectTimer = setTimeout(() => {
         request.destroy(new Error("engine connect timeout"));
       }, req.connectTimeoutMs);
-      request.on("socket", (s) => s.on("connect", () => clearTimeout(connectTimer)));
+      // Clear the connect timer once connected. A reused (keep-alive) socket is
+      // already connected — clear immediately; otherwise wait once (no listener
+      // accumulation across requests).
+      request.on("socket", (s) => {
+        if (s.connecting) s.once("connect", () => clearTimeout(connectTimer));
+        else clearTimeout(connectTimer);
+      });
       request.on("timeout", () => request.destroy(new Error("engine request timeout")));
       request.on("error", (e) => {
         clearTimeout(connectTimer);
