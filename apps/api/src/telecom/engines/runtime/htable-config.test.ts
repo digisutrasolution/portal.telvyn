@@ -104,4 +104,17 @@ describe("parseDumpEntries — defensive, managed-only", () => {
     expect(parseDumpEntries({ result: [] }).size).toBe(0);
     expect(parseDumpEntries("oops").size).toBe(0);
   });
+
+  it("parses the REAL Kamailio 6.1 htable.dump shape (slot items carry name/value/type)", () => {
+    // Verified live against vps-9345109a (Kamailio 6.1.5):
+    const real = [
+      { entry: 157, size: 1, slot: [{ name: "did:+10000000000", value: "probe", type: "str" }] },
+      { entry: 200, size: 1, slot: [{ name: `trunk:${TRUNK}`, value: "UDP", type: "str" }] },
+      { entry: 300, size: 1, slot: [{ name: "foreign:x", value: "nope", type: "str" }] },
+    ];
+    const m = parseDumpEntries(real);
+    expect(m.get("did:+10000000000")).toBe("probe");
+    expect(m.get(`trunk:${TRUNK}`)).toBe("UDP");
+    expect(m.has("foreign:x")).toBe(false);
+  });
 });
