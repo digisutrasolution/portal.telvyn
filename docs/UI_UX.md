@@ -267,5 +267,16 @@ then an MFA-code step; disabled-while-pending; RFC 7807 error alert) and
 **auth-boundary** (authenticated → shell; unauthenticated → sign-in; forbidden →
 no-workspace notice; error → retry; loading). Verified: `tsc` clean · 53/53
 Vitest · `next build` clean · live browser render of the gate (brand + notice +
-accent button, correct tokens) with no console errors. Still to come: password-
-reset / email-verify screens, permission-aware nav + route gating.
+accent button, correct tokens) with no console errors.
+
+Account recovery — EXISTING (Phase 12O-2d, 2026-11-18, ADR-0016 addendum):
+**public** screens reached from emailed `?token=` links, rendered themed but
+bare (no shell — `AppProviders` routes them past the gate via `isPublicAuthPath`).
+**reset-password-screen** (request an email → non-enumerating confirmation; or,
+with a token, set a new password with client-side length/match checks),
+**verify-email-screen** (confirms on mount → success/failure), a "Forgot
+password?" link on sign-in, and a shared **auth-card** now backing all three
+screens. Verified: `tsc` clean · 69/69 Vitest · `next build` clean · the
+`/reset-password` (request + token) and `/verify-email` routes render-verified
+**bare** (no sidebar/topbar) in the browser. Still to come: permission-aware nav
++ route gating, MFA enroll/manage, an email-unverified banner.

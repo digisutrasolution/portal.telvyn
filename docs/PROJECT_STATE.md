@@ -87,10 +87,20 @@ via the httpOnly cookie restores the session on reload — token never stored) a
 env-overridable (`NEXT_DIST_DIR`) for building beside a live dev server. **No backend/API/schema/DI
 change** — server authn/z stays the authority (gate is UX only). **ADR-0016 Accepted. web 33 → 53
 tests, typecheck ✓, lint ✓, `next build` ✓**, live browser check passed (gate render + graceful
-API-down state, no console errors). Production stays on `NullEngineConnector`. Next (await owner go):
-**12O-2d** — password-reset + email-verification pages, then permission-aware nav + route gating,
-then the read-only NOC pages; backend read gaps (HealthEvent history, config-version history) stay
-separately approval-gated.
+API-down state, no console errors). **12O-2d (DONE)** — password reset + email verification flows.
+New **public** routes `/reset-password` + `/verify-email` (reached from emailed `?token=` links)
+render themed but **bare** — no session provider, gate, or shell; the decision lives in
+`<AppProviders>` via a tested `isPublicAuthPath(usePathname())` helper. `ResetPasswordScreen`
+(request mode: non-enumerating 202; token mode: client-validate ≥12 + match → confirm, server revokes
+all sessions) reached from a "Forgot password?" link; `VerifyEmailScreen` confirms on mount
+(StrictMode-guarded) → success/failure. 4 new `auth-actions`; shared `AuthCard`/`messageFor` adopted
+by sign-in too. Email-verification *resend* action exists but its in-app trigger is deferred (needs
+`emailVerified`, absent from `/v1/me/context`). Contract already covered these endpoints (no change).
+`.next-build/` added to eslint ignores. **No backend/API/schema/DI change.** **web 53 → 69 tests,
+typecheck ✓, lint ✓, `next build` ✓**; routes render-verified bare in the browser. ADR-0016 addendum.
+Production stays on `NullEngineConnector`. Next (await owner go): **12O-2e** — permission-aware nav +
+route gating; then read-only NOC pages; then MFA enroll/manage + the email-unverified banner; backend
+read gaps (HealthEvent history, config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

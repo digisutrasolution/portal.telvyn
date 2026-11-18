@@ -35,3 +35,26 @@ export function logout(signal?: AbortSignal): Promise<void> {
 export function isMfaRequired(result: LoginResult): result is { mfaRequired: true; mfaToken: string } {
   return typeof result === "object" && result !== null && "mfaRequired" in result && result.mfaRequired === true;
 }
+
+/**
+ * Request a password-reset email. Always resolves (202) whether or not the
+ * account exists — the server never reveals account existence (no enumeration).
+ */
+export function requestPasswordReset(email: string, signal?: AbortSignal): Promise<void> {
+  return api.post<void>("/v1/auth/password-reset/request", { email }, { auth: false, signal });
+}
+
+/** Set a new password with a reset token (revokes all sessions server-side). */
+export function confirmPasswordReset(token: string, newPassword: string, signal?: AbortSignal): Promise<void> {
+  return api.post<void>("/v1/auth/password-reset/confirm", { token, newPassword }, { auth: false, signal });
+}
+
+/** Queue an email-verification message for the current user (authenticated). */
+export function requestEmailVerification(signal?: AbortSignal): Promise<void> {
+  return api.post<void>("/v1/auth/email-verification/request", undefined, { signal });
+}
+
+/** Confirm email ownership with a verification token. */
+export function confirmEmailVerification(token: string, signal?: AbortSignal): Promise<void> {
+  return api.post<void>("/v1/auth/email-verification/confirm", { token }, { auth: false, signal });
+}

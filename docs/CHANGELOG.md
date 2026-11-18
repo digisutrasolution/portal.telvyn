@@ -423,3 +423,18 @@ Format: Keep a Changelog; SemVer once releases begin.
   typecheck ✓, lint ✓, `next build` ✓; live browser check shows the gate render + graceful API-down
   state with no console errors. ADR-0016 Accepted. Deferred: password-reset/email-verify pages,
   permission-aware nav + route gating, MFA enroll/manage (12O-2d+).
+- 2026-11-18 — **Phase 12O-2d — password reset + email verification flows.** Public, token-bearing
+  screens against the existing `/v1/auth/*` endpoints (contract already covered them — no contract
+  change). New public routes `/reset-password` and `/verify-email` render themed but **bare** (no
+  session provider, no gate, no shell): the decision moves to `<AppProviders>` via a tested
+  `isPublicAuthPath(usePathname())` helper. `ResetPasswordScreen` (no token → request email, always
+  202/non-enumerating; with token → set new password, client-validates ≥12 + match → confirm,
+  server revokes all sessions), reached from a new "Forgot password?" link on the sign-in screen.
+  `VerifyEmailScreen` confirms the token on mount (StrictMode-guarded) → success/failure. Four new
+  `auth-actions` (request/confirm reset, request[authed]/confirm verify). Shared `AuthCard` +
+  `messageFor` extracted and adopted by the sign-in screen too. The authed email-verification
+  *resend* action exists but its in-app trigger is deferred (needs `emailVerified`, absent from
+  `/v1/me/context`). `.next-build/` added to eslint ignores (a stray isolated build dir no longer
+  pollutes `eslint .`). **No backend/API/schema/DI change.** web 53 → 69 tests, typecheck ✓, lint ✓,
+  `next build` ✓ (both routes); routes render-verified bare in the browser. ADR-0016 addendum.
+  Deferred: permission-aware nav + route gating, MFA enroll/manage, the email-unverified banner.

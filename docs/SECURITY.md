@@ -599,3 +599,19 @@ browser side only.
   in-memory token.
 - **No backend change.** No API, schema, DI-default, or auth-behavior change;
   production DI stays `NullEngineConnector`.
+
+### Password reset + email verification (Phase 12O-2d, ADR-0016 addendum)
+
+- **No account enumeration.** The reset-request UI always reports the same
+  "if an account exists…" outcome (the endpoint is a fixed 202); the frontend
+  never branches on existence.
+- **Public routes are bare and isolated.** `/reset-password` and `/verify-email`
+  render outside the session provider, the gate, and the shell (decided in
+  `AppProviders`), so a token link exposes nothing of the authenticated app and
+  fires no session calls. They read their one-time token only from the URL and
+  send it only in a POST body.
+- **Tokens, not sessions.** Reset/verify use short single-purpose tokens; a
+  successful reset revokes all of the user's sessions server-side. No password
+  or token is logged; errors surface the RFC 7807 title only.
+- Server remains the authority on token validity, expiry, and rate limiting
+  (login-ip / reset / verify limiters unchanged). No backend change.
