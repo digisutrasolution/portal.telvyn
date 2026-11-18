@@ -305,4 +305,13 @@ detail — identity header + Health / Connectivity / Configuration-version /
 Desired-config cards, loaded from `GET /v1/telecom/engines/:id` and `/:id/status`
 via two `useResource` calls, with honest UNKNOWN/UNCONFIGURED states under the
 Null connector. No mutating actions. Verified: `tsc` clean · 95/95 Vitest ·
-`next build` clean. Next: nodes/regions, then mutating NOC actions.
+`next build` clean.
+
+NOC — Nodes + Regions + sub-nav — EXISTING (Phase 12O-2h, 2026-11-18, ADR-0018
+addendum): the infrastructure section gains a sub-nav (Engines / Nodes /
+Regions via `<InfraTabs>` in `app/infrastructure/layout.tsx`) and two read-only
+tables — `/infrastructure/nodes` (name/environment/zone/status/heartbeat
+health/version) and `/infrastructure/regions` (code/name/country/timezone/
+status) — loaded via `useResource` with honest UNKNOWN heartbeat health. All
+platform-gated. Verified: `tsc` clean · 107/107 Vitest · `next build` clean (all
+four /infrastructure routes). Next: mutating NOC actions (health-check / sync).

@@ -350,6 +350,40 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/regions:
+    get:
+      tags: [telecom]
+      summary: List telecom regions (platform)
+      description: Platform-scoped list of regions. Requires PLATFORM + `telecom.read`. Read-only.
+      operationId: listRegions
+      responses:
+        "200":
+          description: Regions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Region" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/nodes:
+    get:
+      tags: [telecom]
+      summary: List telecom nodes with heartbeat health (platform)
+      description: >-
+        Platform-scoped list of nodes with honest heartbeat health (UNKNOWN until
+        a node reports). Requires PLATFORM + `telecom.read`. Read-only.
+      operationId: listNodes
+      responses:
+        "200":
+          description: Nodes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Node" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -538,3 +572,43 @@ components:
         connection: { $ref: "#/components/schemas/EngineConnection" }
         version: { $ref: "#/components/schemas/EngineVersionPosture" }
         desired: { $ref: "#/components/schemas/EngineDesiredPreview" }
+    Region:
+      type: object
+      required: [id, code, name, country, timezone, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, description: "Stable region code, e.g. us-east." }
+        name: { type: string }
+        country: { type: string, description: "ISO-3166-1 alpha-2." }
+        timezone: { type: string, description: "IANA timezone." }
+        providerRegion: { type: string, nullable: true }
+        failoverRegionId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    NodeHealth:
+      type: object
+      required: [status]
+      description: Heartbeat health for a node; UNKNOWN until it reports.
+      properties:
+        status: { type: string, enum: [HEALTHY, DEGRADED, UNHEALTHY, UNKNOWN, DISABLED] }
+        latencyMs: { type: integer, nullable: true }
+        lastHeartbeatAt: { type: string, format: date-time, nullable: true }
+    Node:
+      type: object
+      required: [id, name, engineId, environment, status, health, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        engineId: { type: string, format: uuid }
+        regionId: { type: string, format: uuid, nullable: true }
+        zone: { type: string, nullable: true }
+        environment: { type: string, enum: [DEVELOPMENT, STAGING, PRODUCTION] }
+        hostRef: { type: string, nullable: true, description: "Address reference — never a secret." }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED] }
+        version: { type: string, nullable: true }
+        maxCps: { type: integer, nullable: true, description: "Configured capacity ceiling, not a live value." }
+        maxConcurrentCalls: { type: integer, nullable: true }
+        health: { $ref: "#/components/schemas/NodeHealth" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }

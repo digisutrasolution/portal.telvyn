@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/api/client", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 
 import { api } from "@/lib/api/client";
-import { getEngine, getEngineStatus, listEngines } from "./telecom-actions";
+import { getEngine, getEngineStatus, listEngines, listNodes, listRegions } from "./telecom-actions";
 
 afterEach(() => vi.clearAllMocks());
 
@@ -31,5 +31,17 @@ describe("telecom-actions", () => {
     vi.mocked(api.get).mockResolvedValue({});
     await getEngineStatus("eng-1");
     expect(api.get).toHaveBeenCalledWith("/v1/telecom/engines/eng-1/status", { signal: undefined });
+  });
+
+  it("listRegions GETs the regions endpoint", async () => {
+    vi.mocked(api.get).mockResolvedValue([]);
+    await listRegions();
+    expect(api.get).toHaveBeenCalledWith("/v1/telecom/regions", { signal: undefined });
+  });
+
+  it("listNodes GETs the nodes endpoint", async () => {
+    vi.mocked(api.get).mockResolvedValue([]);
+    await listNodes();
+    expect(api.get).toHaveBeenCalledWith("/v1/telecom/nodes", { signal: undefined });
   });
 });

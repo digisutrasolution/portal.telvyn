@@ -34,3 +34,9 @@ export type EngineHealth = Schemas["EngineHealth"];
 
 /** Normalized engine status: health + connection + config-version posture. */
 export type EngineStatus = Schemas["EngineStatus"];
+
+/** A telecom region (platform). */
+export type Region = Schemas["Region"];
+
+/** A telecom node with heartbeat health (platform). */
+export type Node = Schemas["Node"];

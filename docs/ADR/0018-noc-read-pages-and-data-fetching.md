@@ -90,3 +90,23 @@ per-screen contract-authoring pattern.
 - Covered by unit tests (`getEngine`/`getEngineStatus`; detail view data + error)
   and a production build. No backend/API/schema/DI change; health stays `UNKNOWN`
   with the Null connector.
+
+## Addendum — nodes + regions + section sub-nav (Phase 12O-2h, 2026-11-18)
+
+Rounds out the read-only NOC infrastructure section.
+
+- **Contract.** Authored `GET /v1/telecom/regions` (→ new `Region`) and
+  `GET /v1/telecom/nodes` (→ new `Node` + `NodeHealth`) from the real service
+  view shapes (region code/country/timezone/failover + status; node
+  engine/region/zone/host-ref/capacity + heartbeat health). Both `telecom.read`,
+  platform.
+- **UI.** An `app/infrastructure/layout.tsx` adds a sub-nav (`<InfraTabs>`:
+  Engines / Nodes / Regions) above every infrastructure page; engines stays at
+  `/infrastructure` (and engine detail at `/infrastructure/[id]`, under the
+  Engines tab), with `/infrastructure/nodes` and `/infrastructure/regions` as
+  static siblings (Next routes static over the dynamic `[id]`). `<NodesView>` and
+  `<RegionsView>` are read-only tables with the same loading/empty/error pattern
+  and honest `UNKNOWN` heartbeat health.
+- Covered by unit tests (`listRegions`/`listNodes`; both views rows/empty/error;
+  `InfraTabs` active state per route) and a production build. All four
+  `/infrastructure*` routes build. No backend/API/schema/DI change.

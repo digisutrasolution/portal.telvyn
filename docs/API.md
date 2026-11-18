@@ -167,14 +167,16 @@ Response is a safe DTO (config + carrier summary + safe credential metadata +
 honest `health: UNKNOWN`) — never `secretEnc`/passwords. OpenAPI YAML still
 covers `/v1/auth` only (tracked debt) — endpoints documented here.
 
-> **OpenAPI debt — partial closure (Phase 12O-2f/2g, 2026-11-18):** the contract
-> now also covers `GET /v1/me/context`, `GET /v1/telecom/engines`,
-> `GET /v1/telecom/engines/{id}`, and `GET /v1/telecom/engines/{id}/status`
-> (+ the `Engine`/`EngineHealth`/`EngineCapabilities`/`EngineStatus`/
-> `EngineConnection`/`EngineVersionPosture`/`EngineDesiredPreview` schemas),
-> authored from the real service shapes so the NOC frontend can generate its
-> types (ADR-0018). The remaining telecom/authz endpoints are still documented
-> here only; each is added to the contract as a frontend screen consumes it.
+> **OpenAPI debt — partial closure (Phase 12O-2f/2g/2h, 2026-11-18):** the
+> contract now also covers `GET /v1/me/context`, `GET /v1/telecom/engines`,
+> `GET /v1/telecom/engines/{id}`, `GET /v1/telecom/engines/{id}/status`,
+> `GET /v1/telecom/regions`, and `GET /v1/telecom/nodes` (+ the `Engine`/
+> `EngineHealth`/`EngineCapabilities`/`EngineStatus`/`EngineConnection`/
+> `EngineVersionPosture`/`EngineDesiredPreview`/`Region`/`Node`/`NodeHealth`
+> schemas), authored from the real service shapes so the NOC frontend can
+> generate its types (ADR-0018). The remaining telecom/authz endpoints are still
+> documented here only; each is added to the contract as a frontend screen
+> consumes it.
 
 ## DID API — EXISTING (Phase 12G, 2026-08-29)
 

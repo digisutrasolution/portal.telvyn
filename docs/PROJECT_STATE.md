@@ -125,9 +125,18 @@ regenerated types. `getEngine`/`getEngineStatus`; `/infrastructure/[id]` → `<E
 table name links to detail. Honest UNKNOWN health / UNCONFIGURED connection with Null connector.
 **Read-only** (health-check/sync POSTs not wired). **ADR-0018 addendum. web 91 → 95 tests, typecheck ✓,
 lint ✓, `next build` ✓** (both /infrastructure routes). **No backend/API/schema/DI change.** Production
-stays on `NullEngineConnector`. Next (await owner go): nodes/regions NOC views; then mutating NOC
-actions (health-check/sync); then MFA enroll/manage + email-unverified banner + `cdr.read`; backend
-read gaps (HealthEvent history, config-version history) stay separately approval-gated.
+stays on `NullEngineConnector`. **12O-2h (DONE)** — NOC nodes + regions + section sub-nav. Contract-
+first: authored `GET /v1/telecom/regions` (→ `Region`) + `/v1/telecom/nodes` (→ `Node` + `NodeHealth`)
+from the real service views, regenerated types. `listRegions`/`listNodes`; `<RegionsView>` +
+`<NodesView>` read-only tables (honest UNKNOWN health). New `app/infrastructure/layout.tsx` + `<InfraTabs>`
+(Engines/Nodes/Regions sub-nav); nodes/regions = static sibling routes, engines at `/infrastructure`
+(detail `[id]`). Platform-gated. **ADR-0018 addendum. web 95 → 107 tests, typecheck ✓, lint ✓,
+`next build` ✓** (all four /infrastructure routes). **No backend/API/schema/DI change.** Production
+stays on `NullEngineConnector`. Next (await owner go): mutating NOC actions (health-check POST
+:id/health-check, sync POST :id/sync — first NOC mutations, need confirm/step-up); then MFA
+enroll/manage + email-unverified banner + `cdr.read`; carrier/sip-trunk/did/routing/lcr read endpoints
+still absent from the contract (author per-screen); backend read gaps (HealthEvent/config-version
+history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

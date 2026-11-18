@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { Engine, EngineStatus } from "@/lib/contracts";
+import type { Engine, EngineStatus, Node, Region } from "@/lib/contracts";
 
 /**
  * Read-only telecom (NOC) API calls. Platform-scoped on the server
@@ -20,4 +20,14 @@ export function getEngine(id: string, signal?: AbortSignal): Promise<Engine> {
 /** Normalized engine status: health + connection + config-version posture (read-only). */
 export function getEngineStatus(id: string, signal?: AbortSignal): Promise<EngineStatus> {
   return api.get<EngineStatus>(`/v1/telecom/engines/${id}/status`, { signal });
+}
+
+/** Platform list of telecom regions. */
+export function listRegions(signal?: AbortSignal): Promise<Region[]> {
+  return api.get<Region[]>("/v1/telecom/regions", { signal });
+}
+
+/** Platform list of telecom nodes with heartbeat health. */
+export function listNodes(signal?: AbortSignal): Promise<Node[]> {
+  return api.get<Node[]>("/v1/telecom/nodes", { signal });
 }

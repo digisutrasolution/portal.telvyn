@@ -370,6 +370,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/regions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List telecom regions (platform)
+         * @description Platform-scoped list of regions. Requires PLATFORM + `telecom.read`. Read-only.
+         */
+        get: operations["listRegions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/telecom/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List telecom nodes with heartbeat health (platform)
+         * @description Platform-scoped list of nodes with honest heartbeat health (UNKNOWN until a node reports). Requires PLATFORM + `telecom.read`. Read-only.
+         */
+        get: operations["listNodes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -547,6 +587,59 @@ export interface components {
             connection: components["schemas"]["EngineConnection"];
             version: components["schemas"]["EngineVersionPosture"];
             desired: components["schemas"]["EngineDesiredPreview"];
+        };
+        Region: {
+            /** Format: uuid */
+            id: string;
+            /** @description Stable region code, e.g. us-east. */
+            code: string;
+            name: string;
+            /** @description ISO-3166-1 alpha-2. */
+            country: string;
+            /** @description IANA timezone. */
+            timezone: string;
+            providerRegion?: string | null;
+            /** Format: uuid */
+            failoverRegionId?: string | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "SUSPENDED" | "DISABLED";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @description Heartbeat health for a node; UNKNOWN until it reports. */
+        NodeHealth: {
+            /** @enum {string} */
+            status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN" | "DISABLED";
+            latencyMs?: number | null;
+            /** Format: date-time */
+            lastHeartbeatAt?: string | null;
+        };
+        Node: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            engineId: string;
+            /** Format: uuid */
+            regionId?: string | null;
+            zone?: string | null;
+            /** @enum {string} */
+            environment: "DEVELOPMENT" | "STAGING" | "PRODUCTION";
+            /** @description Address reference — never a secret. */
+            hostRef?: string | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "SUSPENDED" | "DISABLED";
+            version?: string | null;
+            /** @description Configured capacity ceiling, not a live value. */
+            maxCps?: number | null;
+            maxConcurrentCalls?: number | null;
+            health: components["schemas"]["NodeHealth"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
         };
     };
     responses: {
@@ -1051,6 +1144,50 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listRegions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Regions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Region"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listNodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Nodes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Node"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
 }

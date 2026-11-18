@@ -477,3 +477,15 @@ Format: Keep a Changelog; SemVer once releases begin.
   wired. Route gated by the existing `/infrastructure` platform guard. +4 unit tests (web 91 → 95).
   **No backend/API/schema/DI change.** typecheck ✓, lint ✓, `next build` ✓ (both routes). ADR-0018
   addendum. Deferred: nodes/regions NOC views, mutating NOC actions, MFA enroll/manage, `cdr.read`.
+- 2026-11-18 — **Phase 12O-2h — NOC nodes + regions + section sub-nav.** Rounds out the read-only NOC
+  infrastructure section. **Contract-first:** authored `GET /v1/telecom/regions` (→ `Region`) and
+  `GET /v1/telecom/nodes` (→ `Node` + `NodeHealth`) into `telvyn.v1.yaml` from the real service view
+  shapes, regenerated types. `listRegions`/`listNodes` actions; `<RegionsView>` (code/name/country/
+  timezone/status) and `<NodesView>` (name/environment/zone/status/heartbeat-health/version) read-only
+  tables with honest loading/empty/error and UNKNOWN health. New `app/infrastructure/layout.tsx` adds a
+  sub-nav (`<InfraTabs>`: Engines / Nodes / Regions) above every infrastructure page; nodes/regions are
+  static sibling routes (`/infrastructure/nodes`, `/infrastructure/regions`), engines stays at
+  `/infrastructure` with detail at `[id]`. All gated by the existing `/infrastructure` platform guard.
+  +12 unit tests (web 95 → 107). **No backend/API/schema/DI change.** typecheck ✓, lint ✓, `next build`
+  ✓ (all four /infrastructure routes). ADR-0018 addendum. Deferred: mutating NOC actions
+  (health-check/sync), MFA enroll/manage, `cdr.read`.
