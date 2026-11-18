@@ -554,3 +554,16 @@ Format: Keep a Changelog; SemVer once releases begin.
   Tests: the enroll test asserts the QR is fed the full otpauth URI (qrcode.react stubbed) and the
   manual key remains the fallback (web still 131). typecheck ✓, lint ✓, `next build` ✓ (`/account`
   5.2 → 11.3 kB). Deferred: the remaining tenant read screens.
+- 2026-11-19 — **Phase 12O-2o — carriers read screen (contract-first).** First tenant-connectivity
+  screen: a read-only `/carriers` list of the session's visible carriers (own + system), gated on
+  `carrier.read`. Contract-first (ADR-0002): authored `GET /v1/telecom/carriers` (cursor pagination;
+  `limit`/`cursor`/`status`/`regionId`/`scope`/`q`) and schemas `Carrier`/`CarrierCredentialRef`/
+  `CarrierHealth`/`CarrierPage` into `telvyn.v1.yaml` from the real backend view, then regenerated
+  `schema.ts` (never hand-edited). Health is honest UNKNOWN (no carrier probe exists); secrets never
+  appear (only a non-secret credential reference). New `carriers-actions.ts` (`listCarriers`), a
+  `<CarriersView>` (first page + Load more, loading/empty/error states, scope/status/health badges),
+  `/carriers` route + page, and a **Carriers** nav item (phase 10, `carrier.read`, not platform-only).
+  Only the list endpoint was contracted (per-screen as consumed); `GET …/{id}` + create/update/delete
+  stay for later. +4 web unit tests (131 → 135). **No backend/API change** (the carrier API already
+  existed + was documented). typecheck ✓, lint ✓, `next build` ✓. Deferred: carrier detail drawer,
+  list filters (scope/status/search), and the sip-trunk/did/routing/lcr read screens.

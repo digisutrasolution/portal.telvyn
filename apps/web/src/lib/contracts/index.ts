@@ -55,3 +55,12 @@ export type EngineHealthReport = Schemas["EngineHealthReport"];
 
 /** Outcome of an engine config sync / rollback attempt. */
 export type SyncOutcome = Schemas["SyncOutcome"];
+
+/** A carrier (tenant or system), with honest health and a non-secret credential ref. */
+export type Carrier = Schemas["Carrier"];
+
+/** Cursor-paginated page of carriers. */
+export type CarrierPage = Schemas["CarrierPage"];
+
+/** Non-secret vault credential reference attached to a carrier. */
+export type CarrierCredentialRef = Schemas["CarrierCredentialRef"];

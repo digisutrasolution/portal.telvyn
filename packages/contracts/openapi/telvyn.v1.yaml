@@ -449,6 +449,32 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/carriers:
+    get:
+      tags: [telecom]
+      summary: List carriers (tenant + system)
+      description: >-
+        Carriers visible to the session — the tenant's own plus system
+        (platform-owned) carriers; a foreign tenant's carriers are never
+        returned. Cursor-paginated. Health is honest (UNKNOWN — no carrier probe
+        exists yet, never fabricated). Secrets never appear: a carrier carries
+        only a non-secret vault credential reference. Requires `carrier.read`.
+      operationId: listCarriers
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: cursor, in: query, required: false, schema: { type: string, format: uuid }, description: "nextCursor from a prior page." }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED] } }
+        - { name: regionId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: scope, in: query, required: false, schema: { type: string, enum: [all, system, tenant], default: all } }
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 120 }, description: "Case-insensitive name search." }
+      responses:
+        "200":
+          description: Carriers
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CarrierPage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -702,3 +728,52 @@ components:
         changed: { type: boolean }
         correlationId: { type: string }
         detail: { type: string }
+    CarrierCredentialRef:
+      type: object
+      required: [id, type, label, scope]
+      description: Non-secret vault reference attached to a carrier — never the secret itself.
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [SIP_PASSWORD, CARRIER_API, ENGINE_API] }
+        label: { type: string }
+        hint: { type: string, nullable: true }
+        scope: { type: string, enum: [SYSTEM, TENANT] }
+    CarrierHealth:
+      type: object
+      required: [status, detail]
+      description: Honest carrier health; UNKNOWN until a real probe exists (never fabricated).
+      properties:
+        status: { type: string, enum: [HEALTHY, DEGRADED, UNHEALTHY, UNKNOWN, DISABLED] }
+        detail: { type: string }
+    Carrier:
+      type: object
+      required: [id, scope, name, status, codecs, credential, health, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        scope: { type: string, enum: [SYSTEM, TENANT], description: "System (platform-owned) or tenant-owned." }
+        name: { type: string }
+        type: { type: string, nullable: true, enum: [ORIGINATION, TERMINATION, BIDIRECTIONAL] }
+        country: { type: string, nullable: true, description: "ISO-3166-1 alpha-2." }
+        regionId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED], description: "Administrative status (distinct from health)." }
+        priority: { type: integer, nullable: true }
+        codecs:
+          type: array
+          items: { type: string, enum: [PCMU, PCMA, G722, G729, OPUS, AMR, AMR_WB] }
+        maxCps: { type: integer, nullable: true }
+        maxConcurrentCalls: { type: integer, nullable: true }
+        credential:
+          oneOf:
+            - $ref: "#/components/schemas/CarrierCredentialRef"
+            - type: "null"
+        health: { $ref: "#/components/schemas/CarrierHealth" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CarrierPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Carrier" }
+        nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next page; null when exhausted." }

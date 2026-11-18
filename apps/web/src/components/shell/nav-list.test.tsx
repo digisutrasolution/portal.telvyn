@@ -23,8 +23,8 @@ function renderNav(permissions: string[], tenantType: "PLATFORM" | "CUSTOMER" = 
 
 describe("NavList", () => {
   it("renders the nav items the session can access", async () => {
-    renderNav(["did.read", "wallet.read", "cdr.read", "member.read"]);
-    for (const label of ["Operations", "Numbers", "Porting", "Billing", "CDRs", "Admin"]) {
+    renderNav(["did.read", "carrier.read", "wallet.read", "cdr.read", "member.read"]);
+    for (const label of ["Operations", "Numbers", "Porting", "Carriers", "Billing", "CDRs", "Admin"]) {
       expect(await screen.findByRole("link", { name: label })).toHaveAttribute("href");
     }
   });

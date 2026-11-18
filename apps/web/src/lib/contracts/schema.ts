@@ -470,6 +470,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/carriers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List carriers (tenant + system)
+         * @description Carriers visible to the session — the tenant's own plus system (platform-owned) carriers; a foreign tenant's carriers are never returned. Cursor-paginated. Health is honest (UNKNOWN — no carrier probe exists yet, never fabricated). Secrets never appear: a carrier carries only a non-secret vault credential reference. Requires `carrier.read`.
+         */
+        get: operations["listCarriers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -729,6 +749,62 @@ export interface components {
             changed: boolean;
             correlationId: string;
             detail?: string;
+        };
+        /** @description Non-secret vault reference attached to a carrier — never the secret itself. */
+        CarrierCredentialRef: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            type: "SIP_PASSWORD" | "CARRIER_API" | "ENGINE_API";
+            label: string;
+            hint?: string | null;
+            /** @enum {string} */
+            scope: "SYSTEM" | "TENANT";
+        };
+        /** @description Honest carrier health; UNKNOWN until a real probe exists (never fabricated). */
+        CarrierHealth: {
+            /** @enum {string} */
+            status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN" | "DISABLED";
+            detail: string;
+        };
+        Carrier: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description System (platform-owned) or tenant-owned.
+             * @enum {string}
+             */
+            scope: "SYSTEM" | "TENANT";
+            name: string;
+            /** @enum {string|null} */
+            type?: "ORIGINATION" | "TERMINATION" | "BIDIRECTIONAL" | null;
+            /** @description ISO-3166-1 alpha-2. */
+            country?: string | null;
+            /** Format: uuid */
+            regionId?: string | null;
+            /**
+             * @description Administrative status (distinct from health).
+             * @enum {string}
+             */
+            status: "ACTIVE" | "SUSPENDED" | "DISABLED";
+            priority?: number | null;
+            codecs: ("PCMU" | "PCMA" | "G722" | "G729" | "OPUS" | "AMR" | "AMR_WB")[];
+            maxCps?: number | null;
+            maxConcurrentCalls?: number | null;
+            credential: components["schemas"]["CarrierCredentialRef"] | null;
+            health: components["schemas"]["CarrierHealth"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CarrierPage: {
+            items: components["schemas"]["Carrier"][];
+            /**
+             * Format: uuid
+             * @description Pass as `cursor` to fetch the next page; null when exhausted.
+             */
+            nextCursor: string | null;
         };
     };
     responses: {
@@ -1359,6 +1435,37 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
+        };
+    };
+    listCarriers: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+                status?: "ACTIVE" | "SUSPENDED" | "DISABLED";
+                regionId?: string;
+                scope?: "all" | "system" | "tenant";
+                /** @description Case-insensitive name search. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Carriers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarrierPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
 }

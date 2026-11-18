@@ -2,6 +2,7 @@ import {
   Activity,
   Hash,
   ArrowLeftRight,
+  Waypoints,
   Wallet,
   ListOrdered,
   Settings,
@@ -41,6 +42,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Operations", href: "/", icon: Activity, phase: 16 },
   { label: "Numbers", href: "/numbers", icon: Hash, phase: 9, permission: "did.read" },
   { label: "Porting", href: "/porting", icon: ArrowLeftRight, phase: 9, queueKey: "porting", permission: "did.read" },
+  // Carriers / connectivity — tenant resource (own + system carriers); not platform-only.
+  { label: "Carriers", href: "/carriers", icon: Waypoints, phase: 10, permission: "carrier.read" },
   { label: "Billing", href: "/billing", icon: Wallet, phase: 13, permission: "wallet.read" },
   // CDRs / usage gate on their own catalog key (billing-adjacent). Granted to the
   // billing-visible roles (owner, operator, auditor); routes land in Phase 14.

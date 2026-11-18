@@ -182,8 +182,19 @@ data-only, unit-covered — no controller/guard/route touched); owner re-seeds t
 dark-on-white with a quiet zone regardless of theme so it always scans, with an accessible `<title>`.
 Frontend-only; no contract/backend change. **web 131 (enroll test asserts the QR gets the full otpauth
 URI; manual key remains the fallback), typecheck ✓, lint ✓, `next build` ✓ (`/account` 5.2 → 11.3 kB).**
-Next (await owner go): carrier/sip-trunk/did/routing/lcr read screens (author per-screen); backend read
-gaps (HealthEvent/config-version history) stay separately approval-gated.
+**12O-2o (DONE)** — carriers read screen (contract-first). First tenant-connectivity screen: read-only
+`/carriers` list of the session's visible carriers (own + system), gated on `carrier.read` (not
+platform). Contract-first (ADR-0002): authored `GET /v1/telecom/carriers` (cursor pagination +
+`status`/`regionId`/`scope`/`q`) and `Carrier`/`CarrierCredentialRef`/`CarrierHealth`/`CarrierPage` into
+`telvyn.v1.yaml` from the real backend view, regenerated `schema.ts`. Honest UNKNOWN health; secrets
+never appear (credential reference only). `carriers-actions.ts` (`listCarriers`), `<CarriersView>`
+(first page + Load more; loading/empty/error states), `/carriers` page, and a **Carriers** nav item
+(phase 10). Only the list endpoint was contracted (per-screen as consumed); `…/{id}` + mutations stay
+for later. **web 131 → 135, typecheck ✓, lint ✓, `next build` ✓. No backend/API change** (carrier API
+already existed + documented).
+Next (await owner go): carrier detail drawer + list filters; sip-trunk/did/routing/lcr read screens
+(author per-screen); backend read gaps (HealthEvent/config-version history) stay separately
+approval-gated.
 
 ### (superseded) sub-phase plan
 

@@ -351,3 +351,14 @@ Numeric code input (strips non-digits), inline validation, RFC 7807 error alerts
 disabled-while-pending. The QR (`qrcode.react`, SVG) is drawn dark-on-white with a
 quiet zone regardless of theme so it always scans, with an accessible `<title>`.
 Verified: `tsc` clean · 131/131 Vitest · `next build` clean.
+
+Carriers — read list — EXISTING (Phase 12O-2o, 2026-11-19): a read-only
+`/carriers` table of the session's visible carriers (own + system), reached from
+a new **Carriers** nav item (gated on `carrier.read`; tenant resource, not
+platform-only). Columns: name, scope (SYSTEM/TENANT badge), type, country,
+administrative status, codecs, and honest UNKNOWN health. Cursor-paginated with a
+"Load more" button; loading / empty / error (RFC 7807 title) states. Secrets never
+appear (a carrier carries only a non-secret credential reference). Contract-first:
+`GET /v1/telecom/carriers` + `Carrier`/`CarrierPage` authored into the contract and
+the client type generated. Verified: `tsc` clean · 135/135 Vitest · `next build`
+clean. To come: a carrier detail drawer and list filters (scope/status/search).
