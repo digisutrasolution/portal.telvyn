@@ -24,7 +24,7 @@ function renderNav(permissions: string[], tenantType: "PLATFORM" | "CUSTOMER" = 
 describe("NavList", () => {
   it("renders the nav items the session can access", async () => {
     renderNav(["did.read", "carrier.read", "sip_trunk.read", "routing.read", "wallet.read", "cdr.read", "member.read"]);
-    for (const label of ["Operations", "Numbers", "Porting", "Carriers", "SIP trunks", "Routing", "Billing", "CDRs", "Admin"]) {
+    for (const label of ["Operations", "Numbers", "Porting", "Carriers", "SIP trunks", "Routing", "LCR", "Billing", "CDRs", "Admin"]) {
       expect(await screen.findByRole("link", { name: label })).toHaveAttribute("href");
     }
   });

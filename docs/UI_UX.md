@@ -396,3 +396,15 @@ Contract-first: `GET /v1/telecom/routing-profiles` + `RoutingProfile`/`RoutingPo
 `RoutingRule`/`RoutingProfilePage` authored into the contract and the client type
 generated. Verified: `tsc` clean · 147/147 Vitest · `next build` clean. To come:
 a routing detail drawer and list filters.
+
+LCR — policies read list — EXISTING (Phase 12O-2s, 2026-11-19): a read-only `/lcr`
+table of the tenant's own least-cost-routing policies, reached from a new **LCR**
+nav item (gated on `routing.read`; LCR is part of the routing domain). Declarative
+route selection only — nothing is executed, rated or billed. The list shows a
+per-policy summary: name, selection strategy, state (enabled/disabled), candidate
+count, and version; the ordered route candidates (carried in the response) belong
+in a detail drawer (deferred). Cursor-paginated with "Load more"; loading / empty /
+error (RFC 7807 title) states. Contract-first: `GET /v1/telecom/lcr-policies` +
+`LcrPolicy`/`LcrRoute`/`LcrPolicyPage` authored into the contract and the client
+type generated. Verified: `tsc` clean · 151/151 Vitest · `next build` clean. This
+completes the telecom read-screen set (carriers, SIP trunks, numbers, routing, LCR).

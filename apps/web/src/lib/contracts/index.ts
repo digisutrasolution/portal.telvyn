@@ -82,3 +82,9 @@ export type RoutingProfile = Schemas["RoutingProfile"];
 
 /** Cursor-paginated page of routing profiles. */
 export type RoutingProfilePage = Schemas["RoutingProfilePage"];
+
+/** An LCR policy (tenant) with its ordered route candidates. */
+export type LcrPolicy = Schemas["LcrPolicy"];
+
+/** Cursor-paginated page of LCR policies. */
+export type LcrPolicyPage = Schemas["LcrPolicyPage"];

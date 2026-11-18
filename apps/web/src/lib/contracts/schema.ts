@@ -550,6 +550,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/lcr-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List LCR policies (tenant)
+         * @description The tenant's own least-cost-routing policies (strictly tenant-owned). Declarative route SELECTION only — nothing is executed, rated or billed. Each policy carries its route candidates in deterministic selection order for its strategy. `costMicros` is millionths of a currency unit (integer). Cursor-paginated. Requires `routing.read` (LCR is part of the routing domain).
+         */
+        get: operations["listLcrPolicies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1037,6 +1057,57 @@ export interface components {
         };
         RoutingProfilePage: {
             items: components["schemas"]["RoutingProfile"][];
+            /**
+             * Format: uuid
+             * @description Pass as `cursor` to fetch the next page; null when exhausted.
+             */
+            nextCursor: string | null;
+        };
+        /** @description A single LCR route candidate. Config only — never dialled or rated. */
+        LcrRoute: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            carrierId: string;
+            /** Format: uuid */
+            sipTrunkId: string | null;
+            /** @description E.164-style destination prefix, e.g. 44, 9198. */
+            prefix: string;
+            /** @description ISO-3166-1 alpha-2. */
+            country: string | null;
+            /** @description Millionths of a currency unit (integer, non-negative). */
+            costMicros: number;
+            /** @enum {string} */
+            currency: "USD" | "EUR" | "GBP" | "INR" | "AUD" | "CAD" | "JPY";
+            /** @description Lower number = higher preference. */
+            priority: number;
+            /** @description For the WEIGHTED strategy. */
+            weight: number | null;
+            enabled: boolean;
+            /** Format: date-time */
+            effectiveFrom: string | null;
+            /** Format: date-time */
+            effectiveTo: string | null;
+        };
+        LcrPolicy: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string | null;
+            /** @enum {string} */
+            selectionStrategy: "LOWEST_COST" | "HIGHEST_PRIORITY" | "WEIGHTED" | "QUALITY_FIRST";
+            enabled: boolean;
+            /** @description Optimistic-concurrency version. */
+            version: number;
+            /** @description Route candidates in deterministic selection order for the policy's strategy. */
+            candidates: components["schemas"]["LcrRoute"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        LcrPolicyPage: {
+            items: components["schemas"]["LcrPolicy"][];
             /**
              * Format: uuid
              * @description Pass as `cursor` to fetch the next page; null when exhausted.
@@ -1797,6 +1868,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoutingProfilePage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listLcrPolicies: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+                enabled?: boolean;
+                strategy?: "LOWEST_COST" | "HIGHEST_PRIORITY" | "WEIGHTED" | "QUALITY_FIRST";
+                /** @description Case-insensitive name search. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description LCR policies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LcrPolicyPage"];
                 };
             };
             401: components["responses"]["Problem"];

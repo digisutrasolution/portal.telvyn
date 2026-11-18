@@ -223,9 +223,20 @@ error), `/routing` page, and a **Routing** nav item (phase 12). Full rules → d
 Only the list endpoint was contracted (per-screen as consumed); `…/{id}` + mutations stay for later.
 **web 143 → 147, typecheck ✓, lint ✓, `next build` ✓. No backend change** (routing API already existed;
 API.md gained the `strategy` filter it had omitted).
-Next (await owner go): carrier/trunk/DID/routing detail drawers + list filters; the LCR read screen
-(author per-screen); backend read gaps (HealthEvent/config-version history) stay separately
-approval-gated.
+**12O-2s (DONE)** — LCR policies read screen (contract-first). Read-only `/lcr` list of the tenant's own
+least-cost-routing policies, gated on `routing.read` (LCR is part of the routing domain). Contract-first
+(ADR-0002): authored `GET /v1/telecom/lcr-policies` (cursor pagination + `enabled`/`strategy`/`q`) and
+`LcrPolicy`/`LcrRoute`/`LcrPolicyPage` into `telvyn.v1.yaml` from the real backend view (list returns
+route candidates in deterministic selection order; `costMicros` JSON-safe integer), regenerated
+`schema.ts`. Declarative selection only — nothing executed/rated/billed. `lcr-actions.ts`
+(`listLcrPolicies`), `<LcrView>` (per-policy summary: strategy/enabled/candidate-count/version; first
+page + Load more; loading/empty/error), `/lcr` page, and an **LCR** nav item (phase 12). Ordered
+candidates → detail drawer (deferred). Only the list endpoint was contracted (per-screen as consumed);
+`…/{id}` + mutations stay for later. **web 147 → 151, typecheck ✓, lint ✓, `next build` ✓. No
+backend/API change** (LCR API already existed + documented). **This completes the telecom read-screen
+set: carriers, SIP trunks, numbers (DIDs), routing, LCR.**
+Next (await owner go): detail drawers + list filters across the telecom read screens; backend read gaps
+(HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

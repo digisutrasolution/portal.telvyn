@@ -607,3 +607,17 @@ Format: Keep a Changelog; SemVer once releases begin.
   consumed); `…/{id}` + mutations stay for later. +4 web unit tests (143 → 147). **No backend change**;
   docs-only API.md touch-up (added the `strategy` filter to the documented list query). typecheck ✓,
   lint ✓, `next build` ✓. Deferred: routing detail drawer + filters, and the LCR read screen.
+- 2026-11-19 — **Phase 12O-2s — LCR policies read screen (contract-first).** A read-only `/lcr` list of
+  the tenant's own least-cost-routing policies, gated on `routing.read` (LCR is part of the routing
+  domain). Contract-first (ADR-0002): authored `GET /v1/telecom/lcr-policies` (cursor pagination;
+  `enabled`/`strategy`/`q`) and schemas `LcrPolicy`/`LcrRoute`/`LcrPolicyPage` into `telvyn.v1.yaml` from
+  the real backend view (the list returns each policy's route candidates in deterministic selection
+  order; `costMicros` is a JSON-safe integer), then regenerated `schema.ts`. Declarative route selection
+  only — nothing executed, rated or billed. New `lcr-actions.ts` (`listLcrPolicies`), an `<LcrView>`
+  (per-policy summary — selection strategy, enabled state, candidate count, version; first page + Load
+  more; loading/empty/error states), `/lcr` route + page, and an **LCR** nav item (phase 12,
+  `routing.read`, tenant-scoped). The ordered candidates belong in a detail drawer (deferred). Only the
+  list endpoint was contracted (per-screen as consumed); `…/{id}` + mutations stay for later. +4 web unit
+  tests (147 → 151). **No backend/API change** (the LCR API already existed + was documented). typecheck
+  ✓, lint ✓, `next build` ✓. This completes the telecom read-screen set (carriers, SIP trunks, numbers,
+  routing, LCR). Deferred: detail drawers + list filters across all telecom read screens.
