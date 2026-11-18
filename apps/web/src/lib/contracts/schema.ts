@@ -510,6 +510,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/dids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List DIDs (tenant)
+         * @description The tenant's own DIDs (strictly tenant-owned — the platform inventory pool and other tenants' numbers are never returned). Control-plane only; health is honest UNKNOWN (no live SIP-path check). Cursor-paginated. Responses carry safe reference ids only (no embedded related objects). Requires `did.read`.
+         */
+        get: operations["listDids"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -889,6 +909,49 @@ export interface components {
         };
         SipTrunkPage: {
             items: components["schemas"]["SipTrunk"][];
+            /**
+             * Format: uuid
+             * @description Pass as `cursor` to fetch the next page; null when exhausted.
+             */
+            nextCursor: string | null;
+        };
+        /** @description Honest DID health; UNKNOWN (no live SIP-path check exists), never fabricated. */
+        DidHealth: {
+            /** @enum {string} */
+            status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN" | "DISABLED";
+            detail: string;
+        };
+        /** @description A DID (phone number). Related resources are carried as reference ids only — never embedded objects. */
+        Did: {
+            /** Format: uuid */
+            id: string;
+            /** @description Canonical E.164, e.g. +14155550100. */
+            e164: string;
+            /** @description ISO-3166-1 alpha-2, derived from the number. */
+            country: string;
+            /**
+             * @description Lifecycle/administrative status (distinct from health).
+             * @enum {string}
+             */
+            status: "AVAILABLE" | "RESERVED" | "ASSIGNED" | "ACTIVE" | "SUSPENDED" | "PORTING" | "RELEASED";
+            /** Format: uuid */
+            carrierId: string | null;
+            /** Format: uuid */
+            sipTrunkId: string | null;
+            /** Format: uuid */
+            routingProfileId: string | null;
+            /** Format: uuid */
+            regionId: string | null;
+            /** Format: date-time */
+            assignedAt: string | null;
+            health: components["schemas"]["DidHealth"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        DidPage: {
+            items: components["schemas"]["Did"][];
             /**
              * Format: uuid
              * @description Pass as `cursor` to fetch the next page; null when exhausted.
@@ -1583,6 +1646,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SipTrunkPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listDids: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+                status?: "AVAILABLE" | "RESERVED" | "ASSIGNED" | "ACTIVE" | "SUSPENDED" | "PORTING" | "RELEASED";
+                carrierId?: string;
+                sipTrunkId?: string;
+                routingProfileId?: string;
+                regionId?: string;
+                /** @description ISO-3166-1 alpha-2 (uppercase). */
+                country?: string;
+                /** @description Substring match against the canonical E.164. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DIDs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DidPage"];
                 };
             };
             401: components["responses"]["Problem"];

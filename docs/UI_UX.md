@@ -373,3 +373,14 @@ Secrets never appear (non-secret credential reference + carrier summary only).
 Contract-first: `GET /v1/telecom/sip-trunks` + `SipTrunk`/`SipTrunkPage` authored
 into the contract and the client type generated. Verified: `tsc` clean · 139/139
 Vitest · `next build` clean. To come: a trunk detail drawer and list filters.
+
+Numbers — DID inventory read list — EXISTING (Phase 12O-2q, 2026-11-19): the
+`/numbers` module (existing nav item, `did.read`) now shows the tenant's real DID
+inventory instead of a placeholder. Columns: number (E.164), country, lifecycle
+status (AVAILABLE/RESERVED/ASSIGNED/ACTIVE/SUSPENDED/PORTING/RELEASED badge),
+carrier and trunk (short reference ids — the DID API returns ids, not names, with
+the full id on hover), assigned date, and honest UNKNOWN health (control-plane
+only). Cursor-paginated with "Load more"; loading / empty / error (RFC 7807 title)
+states. Contract-first: `GET /v1/telecom/dids` + `Did`/`DidPage` authored into the
+contract and the client type generated. Verified: `tsc` clean · 143/143 Vitest ·
+`next build` clean. To come: a DID detail drawer and list filters.

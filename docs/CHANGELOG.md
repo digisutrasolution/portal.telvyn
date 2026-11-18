@@ -580,3 +580,17 @@ Format: Keep a Changelog; SemVer once releases begin.
   stay for later. +4 web unit tests (135 → 139). **No backend/API change** (the SIP-trunk API already
   existed + was documented). typecheck ✓, lint ✓, `next build` ✓. Deferred: trunk detail drawer, list
   filters, and the did/routing/lcr read screens.
+- 2026-11-19 — **Phase 12O-2q — DIDs (Numbers) read screen (contract-first).** The existing `/numbers`
+  module placeholder is replaced by the real DID inventory — a read-only list of the tenant's own
+  numbers with their lifecycle status, gated on `did.read` (the Numbers nav item already existed; no nav
+  change). Contract-first (ADR-0002): authored `GET /v1/telecom/dids` (cursor pagination;
+  `status`/`carrierId`/`sipTrunkId`/`routingProfileId`/`regionId`/`country`/`q`) and schemas `Did`/
+  `DidPage`/`DidHealth` into `telvyn.v1.yaml` from the real backend view, then regenerated `schema.ts`.
+  Control-plane only — health is honest UNKNOWN (no live SIP-path check). The DID API returns reference
+  ids only (no embedded objects), so carrier/trunk render as short refs (full id on hover). New
+  `dids-actions.ts` (`listDids`), a `<NumbersView>` (first page + Load more; loading/empty/error states;
+  number, country, lifecycle status, carrier/trunk refs, assigned date, health), and the `/numbers`
+  page swapped from `ModuleGate` to the live view. Only the list endpoint was contracted (per-screen as
+  consumed); `…/{id}` + mutations stay for later. +4 web unit tests (139 → 143). **No backend/API change**
+  (the DID API already existed + was documented). typecheck ✓, lint ✓, `next build` ✓. Deferred: DID
+  detail drawer, list filters (status/country/search), and the routing/lcr read screens.

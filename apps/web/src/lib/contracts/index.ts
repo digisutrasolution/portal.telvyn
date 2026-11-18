@@ -70,3 +70,9 @@ export type SipTrunk = Schemas["SipTrunk"];
 
 /** Cursor-paginated page of SIP trunks. */
 export type SipTrunkPage = Schemas["SipTrunkPage"];
+
+/** A DID (phone number); related resources are reference ids only. */
+export type Did = Schemas["Did"];
+
+/** Cursor-paginated page of DIDs. */
+export type DidPage = Schemas["DidPage"];

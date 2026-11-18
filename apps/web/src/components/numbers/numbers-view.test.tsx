@@ -1,0 +1,78 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { ApiError } from "@/lib/api/problem";
+import type { Did } from "@/lib/contracts";
+
+vi.mock("@/lib/telecom/dids-actions", () => ({ listDids: vi.fn() }));
+
+import { listDids } from "@/lib/telecom/dids-actions";
+import { NumbersView } from "./numbers-view";
+
+function did(overrides: Partial<Did> = {}): Did {
+  return {
+    id: crypto.randomUUID(),
+    e164: "+14155550100",
+    country: "US",
+    status: "ACTIVE",
+    carrierId: null,
+    sipTrunkId: null,
+    routingProfileId: null,
+    regionId: null,
+    assignedAt: null,
+    health: { status: "UNKNOWN", detail: "no health check configured" },
+    createdAt: "2026-11-19T00:00:00.000Z",
+    updatedAt: "2026-11-19T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+afterEach(() => vi.clearAllMocks());
+
+describe("NumbersView", () => {
+  it("renders the first page with number, status and honest UNKNOWN health", async () => {
+    vi.mocked(listDids).mockResolvedValue({
+      items: [
+        did({ e164: "+14155550100", status: "ACTIVE", assignedAt: "2026-10-01T12:00:00.000Z", carrierId: "c0ffee00-0000-0000-0000-000000000000" }),
+        did({ e164: "+442071234567", status: "AVAILABLE", country: "GB" }),
+      ],
+      nextCursor: null,
+    });
+    render(<NumbersView />);
+
+    expect(await screen.findByText("+14155550100")).toBeInTheDocument();
+    expect(screen.getByText("+442071234567")).toBeInTheDocument();
+    expect(screen.getByText("ACTIVE")).toBeInTheDocument();
+    expect(screen.getByText("AVAILABLE")).toBeInTheDocument();
+    expect(screen.getByText("2026-10-01")).toBeInTheDocument(); // assignedAt date-only
+    expect(screen.getByText("c0ffee00")).toBeInTheDocument(); // carrier short ref
+    expect(screen.getAllByText("UNKNOWN").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+
+  it("shows the empty state when there are no numbers", async () => {
+    vi.mocked(listDids).mockResolvedValue({ items: [], nextCursor: null });
+    render(<NumbersView />);
+    expect(await screen.findByText(/No numbers in your inventory yet/i)).toBeInTheDocument();
+  });
+
+  it("shows an error state (RFC 7807 title) when the load fails", async () => {
+    vi.mocked(listDids).mockRejectedValue(new ApiError({ title: "Forbidden", status: 403 }));
+    render(<NumbersView />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Forbidden");
+  });
+
+  it("loads more with the cursor and appends the next page", async () => {
+    vi.mocked(listDids)
+      .mockResolvedValueOnce({ items: [did({ e164: "+1111111111" })], nextCursor: "cur-2" })
+      .mockResolvedValueOnce({ items: [did({ e164: "+2222222222" })], nextCursor: null });
+    render(<NumbersView />);
+
+    expect(await screen.findByText("+1111111111")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+    await waitFor(() => expect(listDids).toHaveBeenLastCalledWith({ cursor: "cur-2" }));
+    expect(await screen.findByText("+2222222222")).toBeInTheDocument();
+    expect(screen.getByText("+1111111111")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+});

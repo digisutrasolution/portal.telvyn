@@ -202,7 +202,17 @@ secrets never appear (credential reference + carrier summary only). `sip-trunks-
 and a **SIP trunks** nav item (phase 11). Only the list endpoint was contracted (per-screen as
 consumed); `…/{id}` + mutations stay for later. **web 135 → 139, typecheck ✓, lint ✓, `next build` ✓.
 No backend/API change** (SIP-trunk API already existed + documented).
-Next (await owner go): carrier/trunk detail drawers + list filters; did/routing/lcr read screens
+**12O-2q (DONE)** — DIDs (Numbers) read screen (contract-first). The `/numbers` placeholder is replaced
+by the real DID inventory — read-only list of the tenant's own numbers + lifecycle status, gated on
+`did.read` (the Numbers nav item already existed; no nav change). Contract-first (ADR-0002): authored
+`GET /v1/telecom/dids` (cursor pagination + `status`/`carrierId`/`sipTrunkId`/`routingProfileId`/
+`regionId`/`country`/`q`) and `Did`/`DidPage`/`DidHealth` into `telvyn.v1.yaml` from the real backend
+view, regenerated `schema.ts`. Control-plane only — honest UNKNOWN health; the DID API returns reference
+ids only, so carrier/trunk render as short refs. `dids-actions.ts` (`listDids`), `<NumbersView>` (first
+page + Load more; loading/empty/error), `/numbers` page swapped from `ModuleGate`. Only the list
+endpoint was contracted (per-screen as consumed); `…/{id}` + mutations stay for later. **web 139 → 143,
+typecheck ✓, lint ✓, `next build` ✓. No backend/API change** (DID API already existed + documented).
+Next (await owner go): carrier/trunk/DID detail drawers + list filters; routing/lcr read screens
 (author per-screen); backend read gaps (HealthEvent/config-version history) stay separately
 approval-gated.
 
