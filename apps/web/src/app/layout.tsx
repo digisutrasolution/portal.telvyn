@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Space_Grotesk, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
-import { AppShell } from "@/components/shell/app-shell";
+import { AppProviders } from "@/components/app-providers";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -40,7 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       className={`${spaceGrotesk.variable} ${plexSans.variable} ${plexMono.variable}`}
     >
       <body>
-        <AppShell nonce={nonce}>{children}</AppShell>
+        <AppProviders nonce={nonce}>{children}</AppProviders>
       </body>
     </html>
   );

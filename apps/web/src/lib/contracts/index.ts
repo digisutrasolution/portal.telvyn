@@ -19,3 +19,9 @@ export type Role = MeContext["roles"][number];
 
 /** RFC 7807 problem body (application/problem+json). */
 export type Problem = Schemas["Problem"];
+
+/** Access token (+ expiry) returned by login / mfa-verify / refresh. */
+export type TokenPair = Schemas["TokenPair"];
+
+/** Login step-1 result: either a token pair or an MFA challenge. */
+export type LoginResult = Schemas["LoginResult"];

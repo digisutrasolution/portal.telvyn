@@ -1,8 +1,20 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { MeContext } from "@/lib/contracts";
 import { ApiError } from "@/lib/api/problem";
-import { SessionProvider, useSession, type SessionLoader } from "./session-context";
+
+vi.mock("@/lib/auth/auth-actions", () => ({ refresh: vi.fn(), logout: vi.fn() }));
+vi.mock("@/lib/api/client", () => ({ api: { get: vi.fn() } }));
+vi.mock("@/lib/api/token-store", () => ({
+  getAccessToken: vi.fn(() => null),
+  setAccessToken: vi.fn(),
+  clearAccessToken: vi.fn(),
+}));
+
+import { api } from "@/lib/api/client";
+import { getAccessToken, setAccessToken, clearAccessToken } from "@/lib/api/token-store";
+import { logout, refresh } from "@/lib/auth/auth-actions";
+import { SessionProvider, defaultSessionLoader, useSession, type SessionLoader } from "./session-context";
 
 function ctx(overrides: Partial<MeContext> = {}): MeContext {
   return {
@@ -37,6 +49,8 @@ function renderWith(loader: SessionLoader) {
     </SessionProvider>,
   );
 }
+
+afterEach(() => vi.clearAllMocks());
 
 describe("SessionProvider", () => {
   it("exposes an authenticated session with working permission checks", async () => {
@@ -99,6 +113,28 @@ describe("SessionProvider", () => {
     await waitFor(() => expect(loader).toHaveBeenCalledTimes(2));
   });
 
+  it("signOut revokes the server session and drops to unauthenticated", async () => {
+    vi.mocked(logout).mockResolvedValue(undefined);
+    function SignOutProbe() {
+      const s = useSession();
+      return (
+        <button type="button" onClick={() => void s.signOut()}>
+          {s.status}
+        </button>
+      );
+    }
+    render(
+      <SessionProvider loader={async () => ctx()}>
+        <SignOutProbe />
+      </SessionProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole("button").textContent).toBe("authenticated"));
+    fireEvent.click(screen.getByRole("button"));
+    await waitFor(() => expect(screen.getByRole("button").textContent).toBe("unauthenticated"));
+    expect(logout).toHaveBeenCalledTimes(1);
+    expect(clearAccessToken).toHaveBeenCalled();
+  });
+
   it("useSession throws outside a provider", () => {
     function Orphan() {
       useSession();
@@ -107,5 +143,31 @@ describe("SessionProvider", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => render(<Orphan />)).toThrow(/useSession must be used inside/);
     spy.mockRestore();
+  });
+});
+
+describe("defaultSessionLoader", () => {
+  it("refreshes when there is no access token, then loads the context", async () => {
+    vi.mocked(getAccessToken).mockReturnValue(null);
+    vi.mocked(refresh).mockResolvedValue({ accessToken: "new-tok", expiresIn: 900 });
+    vi.mocked(api.get).mockResolvedValue(ctx());
+    const signal = new AbortController().signal;
+
+    const result = await defaultSessionLoader(signal);
+
+    expect(refresh).toHaveBeenCalledWith(signal);
+    expect(setAccessToken).toHaveBeenCalledWith("new-tok");
+    expect(api.get).toHaveBeenCalledWith("/v1/me/context", { signal });
+    expect(result).toEqual(ctx());
+  });
+
+  it("skips refresh when an access token already exists", async () => {
+    vi.mocked(getAccessToken).mockReturnValue("existing");
+    vi.mocked(api.get).mockResolvedValue(ctx());
+
+    await defaultSessionLoader(new AbortController().signal);
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(api.get).toHaveBeenCalledWith("/v1/me/context", expect.anything());
   });
 });

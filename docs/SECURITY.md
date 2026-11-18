@@ -567,3 +567,35 @@ The first operation that **changes engine state**. It mutates ONLY the dedicated
 - **Off by default.** Production DI stays `NullEngineConnector` (NOT_IMPLEMENTED).
   The real apply engages only with `ENGINE_CONNECTOR=kamailio` + an allowlisted
   endpoint + an `ENGINE_API` credential, and the live mutation is operator-gated.
+
+## Auth frontend security (Phase 12O-2c, 2026-11-18, ADR-0016)
+
+The frontend sign-in flow against the existing `/v1/auth/*` endpoints. The
+backend auth model (argon2id, short access token + rotating refresh with reuse
+detection, server-revocable sessions, TOTP MFA) is unchanged — this is the
+browser side only.
+
+- **No token in JS-readable storage.** The short-lived access token lives only
+  in memory (a module closure); it is never written to localStorage /
+  sessionStorage / IndexedDB, so an XSS payload cannot exfiltrate it. The
+  long-lived rotating refresh token is an httpOnly cookie the browser holds and
+  JS cannot read; `credentials:"include"` carries it and we never send
+  `x-token-transport: body`, so the refresh token never enters JS.
+- **Reload survival via the cookie, not storage.** On load the client exchanges
+  the refresh cookie at `/v1/auth/refresh` for a fresh access token. A full-page
+  reload clears the in-memory token by design; the cookie re-bootstraps it.
+- **Server stays the authority.** The `<AuthBoundary>` gate and the session
+  context are UX only (what to render). Every API route keeps its own
+  authentication + permission + platform checks; the frontend never makes an
+  authorization decision. Permission checks are exact-match over the
+  server-expanded set.
+- **CSP.** Production `connect-src` is `'self'` plus the API origin, derived from
+  `NEXT_PUBLIC_API_URL` so policy and client cannot drift; unset or same-origin
+  collapses to `'self'`. No other CSP relaxation; `script-src` stays nonce-locked
+  with `'strict-dynamic'`, no `unsafe-eval`.
+- **No secrets in logs / URLs.** Credentials and MFA codes are sent only in POST
+  bodies over the client; errors surface the RFC 7807 `title`/`detail`, never
+  tokens. Sign-out revokes the server session (`/v1/auth/logout`) and clears the
+  in-memory token.
+- **No backend change.** No API, schema, DI-default, or auth-behavior change;
+  production DI stays `NullEngineConnector`.

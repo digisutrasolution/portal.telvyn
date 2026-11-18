@@ -16,10 +16,22 @@ import { NextRequest, NextResponse } from "next/server";
  * Permissions-Policy, frame/referrer/nosniff) live in next.config.ts and apply
  * in both environments.
  *
- * connect-src is 'self' only today (the shell makes no cross-origin calls).
- * When the auth frontend (next phase) calls the API on another origin, add the
- * API origin to connect-src here. See docs/SECURITY.md.
+ * connect-src is 'self' plus the API origin (Phase 12O-2c): the auth frontend
+ * calls the API via NEXT_PUBLIC_API_URL, which may be a different origin. We
+ * derive the origin from that same env var so the policy and the client never
+ * drift; if it is unset or same-origin, connect-src is effectively just 'self'.
+ * See docs/SECURITY.md.
  */
+function apiConnectOrigin(): string {
+  const raw = process.env.NEXT_PUBLIC_API_URL;
+  if (!raw) return "";
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return "";
+  }
+}
+
 export function middleware(request: NextRequest): NextResponse {
   if (process.env.NODE_ENV !== "production") {
     return NextResponse.next();
@@ -29,13 +41,16 @@ export function middleware(request: NextRequest): NextResponse {
   crypto.getRandomValues(bytes);
   const nonce = btoa(String.fromCharCode(...bytes));
 
+  const apiOrigin = apiConnectOrigin();
+  const connectSrc = ["'self'", apiOrigin].filter(Boolean).join(" ");
+
   const csp = [
     `default-src 'self'`,
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data:`,
     `font-src 'self'`,
-    `connect-src 'self'`,
+    `connect-src ${connectSrc}`,
     `object-src 'none'`,
     `base-uri 'none'`,
     `form-action 'self'`,

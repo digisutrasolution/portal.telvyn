@@ -407,3 +407,19 @@ Format: Keep a Changelog; SemVer once releases begin.
   typecheck ✓, lint ✓. ADR-0015 Accepted. `next build` deferred to the mount slice (modules
   not yet imported by any route). Next: **12O-2c** — mount the provider, login/MFA pages,
   permission-aware nav, and the CSP `connect-src` += API origin.
+- 2026-11-18 — **Phase 12O-2c — auth frontend: sign-in gate + login/MFA flow.** Mounts the session
+  layer and makes the app require authentication. New `<AuthBoundary>` gates the shell on session
+  status (authenticated → app; unauthenticated → sign-in screen; forbidden → no-workspace notice;
+  error → retry; loading). `ThemeProvider`/`TooltipProvider` hoisted from `AppShell` into a new
+  `<AppProviders>` so the sign-in screen and shell share theming. `LoginScreen`: email+password →
+  `/v1/auth/login`, MFA code step → `/v1/auth/mfa/verify`; on success the access token enters the
+  in-memory store and the session reloads. `SessionProvider` gains **refresh-on-bootstrap**
+  (`/v1/auth/refresh` via the httpOnly cookie restores the session on reload — the token is never
+  stored) and `signOut` (`/v1/auth/logout` + clear + unauthenticated), wired into the account menu.
+  CSP `connect-src` now includes the API origin (derived from `NEXT_PUBLIC_API_URL`; unset/same-origin
+  → `'self'`). First form primitives added: `Input`/`Label`/`Field` (v0.1 tokens). `distDir` made
+  env-overridable (`NEXT_DIST_DIR`) so a build can run beside a live dev server. **No backend/API/
+  schema/DI change** — server authn/z stays the authority; the gate is UX only. web 33 → 53 tests,
+  typecheck ✓, lint ✓, `next build` ✓; live browser check shows the gate render + graceful API-down
+  state with no console errors. ADR-0016 Accepted. Deferred: password-reset/email-verify pages,
+  permission-aware nav + route gating, MFA enroll/manage (12O-2d+).

@@ -7,6 +7,9 @@ const isProd = process.env.NODE_ENV === "production";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Defaults to ".next"; overridable so a build can run beside a live dev
+  // server (or in parallel CI) without clobbering the shared output dir.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   async headers() {
     return [
       {

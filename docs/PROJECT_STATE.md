@@ -75,9 +75,21 @@ one AbortSignal, non-2xx → typed `ApiError` carrying RFC 7807 `problem+json`, 
 injectable for tests; permission helpers are **UX-only**, server guards stay authoritative).
 **ADR-0015 Accepted. web 13 → 33 tests, typecheck ✓, lint ✓.** `next build` deferred to the mount
 slice (modules not imported by any route yet; a dev server also holds `.next`). Production stays on
-`NullEngineConnector`. Next (await owner go): **12O-2c** — mount `SessionProvider`, add login/MFA
-pages + permission-aware nav, and extend the frontend CSP `connect-src` to the API origin; then the
-read-only NOC pages; the backend read gaps (HealthEvent history, config-version history) stay
+`NullEngineConnector`. **12O-2c (DONE)** — auth frontend: the session layer is **mounted** and the
+app now **requires authentication**. New `<AuthBoundary>` gates the shell on session status
+(authenticated → app; unauthenticated → sign-in; forbidden → no-workspace; error → retry; loading);
+`ThemeProvider`/`TooltipProvider` hoisted from `AppShell` into a new `<AppProviders>`. `LoginScreen`
+(email+password → `/v1/auth/login`, MFA code → `/v1/auth/mfa/verify`) stores the access token in
+memory and reloads the session; `SessionProvider` gained **refresh-on-bootstrap** (`/v1/auth/refresh`
+via the httpOnly cookie restores the session on reload — token never stored) and `signOut`
+(`/v1/auth/logout`, wired into the account menu). CSP `connect-src` += API origin (from
+`NEXT_PUBLIC_API_URL`). First form primitives: `Input`/`Label`/`Field` (v0.1 tokens). `distDir`
+env-overridable (`NEXT_DIST_DIR`) for building beside a live dev server. **No backend/API/schema/DI
+change** — server authn/z stays the authority (gate is UX only). **ADR-0016 Accepted. web 33 → 53
+tests, typecheck ✓, lint ✓, `next build` ✓**, live browser check passed (gate render + graceful
+API-down state, no console errors). Production stays on `NullEngineConnector`. Next (await owner go):
+**12O-2d** — password-reset + email-verification pages, then permission-aware nav + route gating,
+then the read-only NOC pages; backend read gaps (HealthEvent history, config-version history) stay
 separately approval-gated.
 
 ### (superseded) sub-phase plan

@@ -3,19 +3,21 @@
 import * as React from "react";
 import { api } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/problem";
+import { clearAccessToken, getAccessToken, setAccessToken } from "@/lib/api/token-store";
+import { logout as logoutAction, refresh } from "@/lib/auth/auth-actions";
 import type { MeContext } from "@/lib/contracts";
 
 /**
  * Session + authorization context for the frontend.
  *
- * On mount it loads the server-derived authorization context from
- * GET /v1/me/context (ADR-0014) and exposes it, plus permission helpers, to
- * the tree. These helpers drive UX only — permission-aware nav and route
- * gating. They are NEVER an authorization decision: every API route keeps its
- * own server-side permission + platform checks, which remain the authority.
- *
- * Permissions arrive already expanded to concrete keys (the server resolves
- * wildcards such as an owner's "*"), so `hasPermission` is a plain set lookup.
+ * On mount it bootstraps the session: if there is no in-memory access token
+ * (e.g. a fresh page load), it first exchanges the httpOnly refresh cookie for
+ * a new access token, then loads the server-derived authorization context from
+ * GET /v1/me/context (ADR-0014). The context + permission helpers drive UX
+ * only — permission-aware nav and route gating. They are NEVER an authorization
+ * decision: every API route keeps its own server-side permission + platform
+ * checks, which remain the authority. Permissions arrive already expanded to
+ * concrete keys, so `hasPermission` is a plain set lookup.
  */
 export type SessionStatus =
   | "loading"
@@ -33,20 +35,29 @@ export interface SessionState {
   hasPermission: (key: string) => boolean;
   hasAnyPermission: (...keys: string[]) => boolean;
   hasAllPermissions: (...keys: string[]) => boolean;
-  /** Re-fetch the context (e.g. after login or a tenant switch). */
+  /** Re-run the bootstrap (e.g. after a successful login). */
   reload: () => void;
+  /** Revoke the server session, clear the access token, drop to unauthenticated. */
+  signOut: () => Promise<void>;
 }
 
 /** Loads the authorization context. Injectable so tests need no network. */
 export type SessionLoader = (signal: AbortSignal) => Promise<MeContext>;
 
-const defaultLoader: SessionLoader = (signal) => api.get<MeContext>("/v1/me/context", { signal });
+/** Default bootstrap: refresh (if needed) → fetch context. */
+export const defaultSessionLoader: SessionLoader = async (signal) => {
+  if (!getAccessToken()) {
+    const pair = await refresh(signal); // throws ApiError 401 when there is no valid refresh cookie
+    setAccessToken(pair.accessToken);
+  }
+  return api.get<MeContext>("/v1/me/context", { signal });
+};
 
 const SessionCtx = React.createContext<SessionState | null>(null);
 
 export function SessionProvider({
   children,
-  loader = defaultLoader,
+  loader = defaultSessionLoader,
 }: {
   children: React.ReactNode;
   loader?: SessionLoader;
@@ -80,6 +91,18 @@ export function SessionProvider({
 
   const permissions = React.useMemo(() => new Set(context?.permissions ?? []), [context]);
 
+  const signOut = React.useCallback(async () => {
+    try {
+      await logoutAction();
+    } catch {
+      // Best-effort: even if the server call fails, drop local auth state.
+    } finally {
+      clearAccessToken();
+      setContext(null);
+      setStatus("unauthenticated");
+    }
+  }, []);
+
   const value = React.useMemo<SessionState>(
     () => ({
       status,
@@ -89,8 +112,9 @@ export function SessionProvider({
       hasAnyPermission: (...keys) => keys.some((k) => permissions.has(k)),
       hasAllPermissions: (...keys) => keys.every((k) => permissions.has(k)),
       reload: () => setReloadKey((n) => n + 1),
+      signOut,
     }),
-    [status, context, permissions],
+    [status, context, permissions, signOut],
   );
 
   return <SessionCtx.Provider value={value}>{children}</SessionCtx.Provider>;

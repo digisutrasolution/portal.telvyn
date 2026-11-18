@@ -245,6 +245,27 @@ mock data; each seam is replaced by the generated API client when its phase
 lands. Nav + palette + breadcrumbs share one config (`src/lib/nav.ts`).
 
 Not yet implemented from the section-10 contracts (arrive with their
-consuming phases): input/select/form fields, data table, drawer (detail),
-tabs, alert, toast, charts. UX-006 (axe + both-theme CI checks) still open —
-lands with CI.
+consuming phases): select/form fields beyond text input, data table, drawer
+(detail), tabs, alert, toast, charts. UX-006 (axe + both-theme CI checks)
+still open — lands with CI.
+
+## Auth frontend — EXISTING (Phase 12O-2c, shipped 2026-11-18, ADR-0016)
+
+The app now **requires sign-in**: `<AppProviders>` (theme + tooltip + session)
+wraps an `<AuthBoundary>` that renders the sign-in screen for unauthenticated
+sessions and the shell only once authenticated. `ThemeProvider`/`TooltipProvider`
+moved up from `app-shell` into `app-providers` so the sign-in screen is themed;
+`user-menu` now reads the live session and offers sign-out.
+
+New form primitives (`apps/web/src/components/ui/`), skinned to v0.1 tokens,
+focus via the global `:focus-visible` ring: **input** (text, `aria-invalid`
+border), **label**, **field** (label + control + error[`role=alert`]/hint,
+id-wired). First consumers of the section-10 input contract.
+
+Auth screens (`apps/web/src/components/auth/`): **login-screen** (email+password,
+then an MFA-code step; disabled-while-pending; RFC 7807 error alert) and
+**auth-boundary** (authenticated → shell; unauthenticated → sign-in; forbidden →
+no-workspace notice; error → retry; loading). Verified: `tsc` clean · 53/53
+Vitest · `next build` clean · live browser render of the gate (brand + notice +
+accent button, correct tokens) with no console errors. Still to come: password-
+reset / email-verify screens, permission-aware nav + route gating.
