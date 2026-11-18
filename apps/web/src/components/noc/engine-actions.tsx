@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { isApiError } from "@/lib/api/problem";
 import { messageFor } from "@/components/auth/auth-message";
 import type { EngineHealthReport, SyncOutcome } from "@/lib/contracts";
@@ -48,18 +50,37 @@ const CONFIRM_COPY = {
 /**
  * Mutating engine actions (ADR-0019). Health-check is non-destructive and fires
  * directly; sync and rollback are state-changing, gated on `telecom.manage`, and
- * confirmed first. Results (including the honest 501 under the Null connector)
- * are shown plainly. The API re-checks permission + platform on every call.
+ * confirmed first with a type-to-confirm guard — the operator must type the exact
+ * engine name before the action is enabled (defence against a mis-click once a
+ * real connector is wired). Results (including the honest 501 under the Null
+ * connector) are shown plainly. The API re-checks permission + platform on every
+ * call; this guard is UX only.
  */
-export function EngineActions({ engineId, onChanged }: { engineId: string; onChanged: () => void }) {
+export function EngineActions({
+  engineId,
+  engineName,
+  onChanged,
+}: {
+  engineId: string;
+  engineName: string;
+  onChanged: () => void;
+}) {
   const { hasPermission } = useSession();
   const [pending, setPending] = React.useState(false);
   const [result, setResult] = React.useState<Result>(null);
   const [confirm, setConfirm] = React.useState<Confirm>(null);
+  const [confirmText, setConfirmText] = React.useState("");
+
+  // Reset the typed confirmation whenever the dialog opens on a new action or closes.
+  React.useEffect(() => {
+    setConfirmText("");
+  }, [confirm]);
 
   const canHealth = hasPermission("telecom.health.read");
   const canManage = hasPermission("telecom.manage");
   if (!canHealth && !canManage) return null;
+
+  const confirmMatches = confirmText.trim() === engineName;
 
   async function run(fn: () => Promise<EngineHealthReport | SyncOutcome>, describe: (r: never) => string) {
     setPending(true);
@@ -76,6 +97,7 @@ export function EngineActions({ engineId, onChanged }: { engineId: string; onCha
   }
 
   function onConfirm() {
+    if (!confirmMatches) return; // guard: the CTA is disabled until the name matches
     const action = confirm?.action;
     setConfirm(null);
     if (action === "sync") {
@@ -130,14 +152,37 @@ export function EngineActions({ engineId, onChanged }: { engineId: string; onCha
               <DialogDescription className="text-[13px] text-ink-2">
                 {CONFIRM_COPY[confirm.action].body}
               </DialogDescription>
-              <div className="mt-4 flex justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setConfirm(null)}>
-                  Cancel
-                </Button>
-                <Button variant={CONFIRM_COPY[confirm.action].variant} size="sm" onClick={onConfirm}>
-                  {CONFIRM_COPY[confirm.action].cta}
-                </Button>
-              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  onConfirm();
+                }}
+              >
+                <Field
+                  id="engine-confirm"
+                  label="Confirm engine name"
+                  className="mt-4"
+                  hint={`Type ${engineName} to enable this action.`}
+                >
+                  <Input
+                    id="engine-confirm"
+                    autoFocus
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
+                    placeholder={engineName}
+                  />
+                </Field>
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setConfirm(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant={CONFIRM_COPY[confirm.action].variant} size="sm" disabled={!confirmMatches}>
+                    {CONFIRM_COPY[confirm.action].cta}
+                  </Button>
+                </div>
+              </form>
             </>
           )}
         </DialogContent>

@@ -523,3 +523,13 @@ Format: Keep a Changelog; SemVer once releases begin.
   covered; response types aliased from the generated `operations`). +9 unit tests (web 120 → 129).
   **No backend/API/schema/DI change.** typecheck ✓, lint ✓, `next build` ✓. Deferred: a QR-code render
   for enrollment, a type-to-confirm guard for engine sync/rollback, a `cdr.read` permission.
+- 2026-11-19 — **Phase 12O-2l — type-to-confirm guard on engine sync / rollback (ADR-0019 addendum).**
+  The destructive engine actions (Sync, Roll back) now require the operator to type the exact engine
+  name in the confirm dialog before the action is enabled — a mis-click guard for when a real connector
+  is wired (today both still return the honest `501 NOT_IMPLEMENTED` under the Null connector). The CTA
+  is disabled until the typed name matches exactly (case-sensitive, trimmed); the typed value resets
+  when the dialog opens on a new action or closes. Health-check stays direct (non-destructive).
+  `EngineActions` gains an `engineName` prop (passed from the detail view). UX only — the API re-checks
+  permission + platform on every call. +2 unit tests (web 129 → 131). **No contract/backend/API/schema/
+  DI change.** typecheck ✓, lint ✓, `next build` ✓. Deferred: a QR-code render for MFA enrollment,
+  a `cdr.read` permission, the remaining tenant read screens.

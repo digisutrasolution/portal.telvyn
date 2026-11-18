@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ApiError } from "@/lib/api/problem";
 import { SessionProvider, type SessionLoader, useSession } from "@/lib/session/session-context";
 
@@ -20,13 +20,15 @@ function Probe() {
   return <span data-testid="status">{useSession().status}</span>;
 }
 
+const ENGINE_NAME = "Edge SIP 1";
+
 function renderActions(permissions: string[]) {
   const onChanged = vi.fn();
   const loader: SessionLoader = async () => ctx(permissions);
   render(
     <SessionProvider loader={loader}>
       <Probe />
-      <EngineActions engineId="eng-1" onChanged={onChanged} />
+      <EngineActions engineId="eng-1" engineName={ENGINE_NAME} onChanged={onChanged} />
     </SessionProvider>,
   );
   return { onChanged };
@@ -66,12 +68,27 @@ describe("EngineActions", () => {
     expect(onChanged).toHaveBeenCalled();
   });
 
-  it("confirms before syncing and shows the honest 501 result", async () => {
+  it("type-to-confirm: the Sync CTA stays disabled until the engine name is typed exactly", async () => {
+    renderActions(["telecom.manage"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Sync configuration" }));
+
+    const cta = await screen.findByRole("button", { name: "Sync" });
+    expect(cta).toBeDisabled();
+
+    const input = screen.getByLabelText("Confirm engine name");
+    fireEvent.change(input, { target: { value: "edge sip 1" } }); // wrong case → no match
+    expect(cta).toBeDisabled();
+
+    fireEvent.change(input, { target: { value: ENGINE_NAME } }); // exact match
+    expect(cta).toBeEnabled();
+  });
+
+  it("syncs once the name matches and shows the honest 501 result", async () => {
     vi.mocked(syncEngine).mockRejectedValue(new ApiError({ title: "engine not_implemented", status: 501 }));
     renderActions(["telecom.manage"]);
     fireEvent.click(await screen.findByRole("button", { name: "Sync configuration" }));
-    // confirm dialog CTA
-    fireEvent.click(await screen.findByRole("button", { name: "Sync" }));
+    fireEvent.change(await screen.findByLabelText("Confirm engine name"), { target: { value: ENGINE_NAME } });
+    fireEvent.click(screen.getByRole("button", { name: "Sync" }));
     await waitFor(() => expect(syncEngine).toHaveBeenCalledWith("eng-1"));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("engine not_implemented"));
   });
@@ -80,6 +97,17 @@ describe("EngineActions", () => {
     renderActions(["telecom.manage"]);
     fireEvent.click(await screen.findByRole("button", { name: "Roll back" }));
     fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    expect(rollbackEngine).not.toHaveBeenCalled();
+  });
+
+  it("does not roll back while the typed name does not match", async () => {
+    renderActions(["telecom.manage"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Roll back" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Confirm engine name"), { target: { value: "wrong" } });
+    const cta = within(dialog).getByRole("button", { name: "Roll back" });
+    expect(cta).toBeDisabled();
+    fireEvent.click(cta);
     expect(rollbackEngine).not.toHaveBeenCalled();
   });
 });

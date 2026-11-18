@@ -160,9 +160,16 @@ entry) → prove a 6-digit code to enable (new `enableMfa`) → one-time recover
 (new `disableMfa`) in a confirm dialog needing the current password AND a TOTP/recovery code. No QR
 dependency; response types aliased from the generated `operations` (no contract change). **web 120 →
 129 tests, typecheck ✓, lint ✓, `next build` ✓. No backend/API/schema/DI change.**
-Next (await owner go): a QR-code render for MFA enrollment; type-to-confirm guard once a real engine
-connector is wired; `cdr.read` permission; carrier/sip-trunk/did/routing/lcr read screens (author
-per-screen); backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
+**12O-2l (DONE)** — type-to-confirm guard on engine sync/rollback (ADR-0019 addendum). The Sync and
+Roll back confirm dialogs now require typing the exact engine name (case-sensitive, trimmed) before the
+CTA enables — a mis-click guard for when a real connector is wired (both still return the honest
+`501 NOT_IMPLEMENTED` under the Null connector today). `EngineActions` gained an `engineName` prop from
+the detail view; Check-health stays direct; the typed value resets on open/close. UX only — the API
+re-checks permission + platform. **web 129 → 131 tests, typecheck ✓, lint ✓, `next build` ✓. No
+contract/backend/API/schema/DI change.**
+Next (await owner go): a QR-code render for MFA enrollment; `cdr.read` permission; carrier/sip-trunk/
+did/routing/lcr read screens (author per-screen); backend read gaps (HealthEvent/config-version
+history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

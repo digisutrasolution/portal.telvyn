@@ -322,8 +322,15 @@ non-destructive, needs `telecom.health.read`) and Sync / Roll back (confirm
 dialog first, need `telecom.manage`). Results are shown plainly, including the
 honest `501 NOT_IMPLEMENTED` under the Null connector; one action in flight
 disables the panel and no mutation is ever auto-retried. Verified: `tsc` clean ·
-115/115 Vitest · `next build` clean. Next: a type-to-confirm guard once a real
-connector is wired.
+115/115 Vitest · `next build` clean.
+
+NOC — engine sync/rollback type-to-confirm guard — EXISTING (Phase 12O-2l,
+2026-11-19, ADR-0019 addendum): the Sync and Roll back confirm dialogs now carry
+a type-to-confirm input — the operator must type the exact engine name before the
+CTA enables (case-sensitive, trimmed; GitHub-style mis-click guard for when a real
+connector is wired). The typed value resets on open/close; Check-health stays
+direct. UX only — the API re-checks permission + platform on every call. Verified:
+`tsc` clean · 131/131 Vitest · `next build` clean.
 
 Email-unverified banner — EXISTING (Phase 12O-2j, 2026-11-18): a quiet warn-tone
 strip below the topbar (`<EmailVerificationBanner>`) shown when the signed-in

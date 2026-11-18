@@ -140,7 +140,7 @@ export function EngineDetailView({ engineId }: { engineId: string }) {
             </Card>
           </div>
 
-          <EngineActions engineId={engineId} onChanged={() => { engine.reload(); status.reload(); }} />
+          <EngineActions engineId={engineId} engineName={engine.data.name} onChanged={() => { engine.reload(); status.reload(); }} />
         </>
       ) : null}
     </section>
