@@ -331,3 +331,15 @@ user's email is unverified (read from `GET /v1/auth/me`), with a "Resend email"
 action (→ "Verification email sent") and a session dismiss. Renders nothing while
 loading, on error, or once verified. Verified: `tsc` clean · 120/120 Vitest ·
 `next build` clean.
+
+Account & security — MFA enroll/manage — EXISTING (Phase 12O-2k, 2026-11-19): a
+new `/account` page reached from the account menu (no module permission — any
+authenticated member; the API authorizes every action). `<MfaSettings>` reads the
+authoritative `mfaEnabled` from `GET /v1/auth/me` and drives the contracted TOTP
+lifecycle: enroll (otpauth URI → base32 setup key shown for manual authenticator
+entry, no QR dependency) → enter a 6-digit code to turn on → one-time recovery
+codes revealed once ("won't be shown again") → step-up disable in a confirm dialog
+needing the current password AND a TOTP/recovery code. Numeric code input (strips
+non-digits), inline validation, RFC 7807 error alerts, disabled-while-pending.
+Verified: `tsc` clean · 129/129 Vitest · `next build` clean. To come: a QR-code
+render for enrollment.

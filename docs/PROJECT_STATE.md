@@ -152,7 +152,15 @@ the already-contracted `GET /v1/auth/me` (new `getMe` action; `emailVerified` is
 and resends via the existing `requestEmailVerification`; shows email + "Resend email" → "sent" when
 unverified, renders nothing while loading/on-error/once-verified, session-dismissible. No contract
 change. **web 115 → 120 tests, typecheck ✓, lint ✓, `next build` ✓. No backend/API/schema/DI change.**
-Next (await owner go): MFA enroll/manage account-settings UI; type-to-confirm guard once a real engine
+**12O-2k (DONE)** — MFA enroll/manage. New `/account` (Account & security) page, reached from the user
+menu, with no module permission (self-service for any authenticated member; the API still authorizes).
+`<MfaSettings>` reads the authoritative `mfaEnabled` from `GET /v1/auth/me` and drives the
+already-contracted TOTP lifecycle: enroll (new `enrollMfa` → otpauth URI, base32 key shown for manual
+entry) → prove a 6-digit code to enable (new `enableMfa`) → one-time recovery codes → step-up disable
+(new `disableMfa`) in a confirm dialog needing the current password AND a TOTP/recovery code. No QR
+dependency; response types aliased from the generated `operations` (no contract change). **web 120 →
+129 tests, typecheck ✓, lint ✓, `next build` ✓. No backend/API/schema/DI change.**
+Next (await owner go): a QR-code render for MFA enrollment; type-to-confirm guard once a real engine
 connector is wired; `cdr.read` permission; carrier/sip-trunk/did/routing/lcr read screens (author
 per-screen); backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
 

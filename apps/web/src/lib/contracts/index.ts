@@ -7,7 +7,7 @@
  * after the contract changes. This file only re-exports named shapes so the
  * app imports `MeContext` instead of `components["schemas"]["MeContext"]`.
  */
-import type { components } from "./schema";
+import type { components, operations } from "./schema";
 
 export type Schemas = components["schemas"];
 
@@ -28,6 +28,12 @@ export type LoginResult = Schemas["LoginResult"];
 
 /** The authenticated user's identity (GET /v1/auth/me). */
 export type Me = Schemas["Me"];
+
+/** Begin-TOTP-enrollment result (POST /v1/auth/mfa/enroll): an otpauth:// URI. */
+export type MfaEnrollResult = operations["mfaEnroll"]["responses"]["200"]["content"]["application/json"];
+
+/** Enable-MFA result (POST /v1/auth/mfa/enable): one-time recovery codes. */
+export type MfaEnableResult = operations["mfaEnable"]["responses"]["200"]["content"]["application/json"];
 
 /** A telecom engine (platform), with honest health. */
 export type Engine = Schemas["Engine"];

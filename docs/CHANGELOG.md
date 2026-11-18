@@ -511,3 +511,15 @@ Format: Keep a Changelog; SemVer once releases begin.
   only shows for authenticated sessions). No contract change (endpoint already covered). +5 unit tests
   (web 115 → 120). **No backend/API/schema/DI change.** typecheck ✓, lint ✓, `next build` ✓. Deferred:
   MFA enroll/manage, a type-to-confirm guard for engine sync/rollback, a `cdr.read` permission.
+- 2026-11-19 — **Phase 12O-2k — MFA enroll / manage (Account & security).** Self-service two-factor
+  management on a new `/account` page (reached from the account menu; no module permission — any
+  authenticated member; the API authorizes every action). `<MfaSettings>` reads the authoritative
+  `mfaEnabled` from `GET /v1/auth/me` and drives the already-contracted TOTP lifecycle: enroll
+  (`POST /v1/auth/mfa/enroll` → otpauth URI; new `enrollMfa` action) shows the base32 setup key for
+  manual authenticator entry → prove a 6-digit code to enable (`.../mfa/enable`; new `enableMfa`) →
+  one-time recovery codes revealed once → step-up disable (`.../mfa/disable`; new `disableMfa`) in a
+  confirm dialog requiring the current password AND a TOTP/recovery code. No QR dependency (setup key
+  shown as copy-ready text). Account link added to the user menu. No contract change (endpoints already
+  covered; response types aliased from the generated `operations`). +9 unit tests (web 120 → 129).
+  **No backend/API/schema/DI change.** typecheck ✓, lint ✓, `next build` ✓. Deferred: a QR-code render
+  for enrollment, a type-to-confirm guard for engine sync/rollback, a `cdr.read` permission.

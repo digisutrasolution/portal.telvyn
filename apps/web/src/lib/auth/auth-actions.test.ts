@@ -6,6 +6,9 @@ import { api } from "@/lib/api/client";
 import {
   confirmEmailVerification,
   confirmPasswordReset,
+  disableMfa,
+  enableMfa,
+  enrollMfa,
   getMe,
   isMfaRequired,
   login,
@@ -82,5 +85,23 @@ describe("auth-actions", () => {
     post.mockResolvedValue(undefined);
     await confirmEmailVerification("tok");
     expect(post).toHaveBeenCalledWith("/v1/auth/email-verification/confirm", { token: "tok" }, { auth: false, signal: undefined });
+  });
+
+  it("enrollMfa posts authenticated (no body)", async () => {
+    post.mockResolvedValue({ otpauthUri: "otpauth://totp/x?secret=ABC" });
+    await enrollMfa();
+    expect(post).toHaveBeenCalledWith("/v1/auth/mfa/enroll", undefined, { signal: undefined });
+  });
+
+  it("enableMfa posts the code authenticated", async () => {
+    post.mockResolvedValue({ recoveryCodes: ["a", "b"] });
+    await enableMfa("123456");
+    expect(post).toHaveBeenCalledWith("/v1/auth/mfa/enable", { code: "123456" }, { signal: undefined });
+  });
+
+  it("disableMfa posts password + code authenticated (step-up)", async () => {
+    post.mockResolvedValue(undefined);
+    await disableMfa("pw", "123456");
+    expect(post).toHaveBeenCalledWith("/v1/auth/mfa/disable", { password: "pw", code: "123456" }, { signal: undefined });
   });
 });

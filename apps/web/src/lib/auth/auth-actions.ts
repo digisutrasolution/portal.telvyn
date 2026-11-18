@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { LoginResult, Me, TokenPair } from "@/lib/contracts";
+import type { LoginResult, Me, MfaEnableResult, MfaEnrollResult, TokenPair } from "@/lib/contracts";
 
 /**
  * Typed auth actions over the API client.
@@ -62,4 +62,29 @@ export function requestEmailVerification(signal?: AbortSignal): Promise<void> {
 /** Confirm email ownership with a verification token. */
 export function confirmEmailVerification(token: string, signal?: AbortSignal): Promise<void> {
   return api.post<void>("/v1/auth/email-verification/confirm", { token }, { auth: false, signal });
+}
+
+/**
+ * Begin TOTP enrollment (authenticated). Returns an `otpauth://` provisioning
+ * URI to load into an authenticator app. MFA is NOT yet active — the user must
+ * prove a code via `enableMfa` to turn it on.
+ */
+export function enrollMfa(signal?: AbortSignal): Promise<MfaEnrollResult> {
+  return api.post<MfaEnrollResult>("/v1/auth/mfa/enroll", undefined, { signal });
+}
+
+/**
+ * Enable MFA by proving a 6-digit TOTP code from the enrolled authenticator.
+ * Returns one-time recovery codes — shown to the user ONCE, never again.
+ */
+export function enableMfa(code: string, signal?: AbortSignal): Promise<MfaEnableResult> {
+  return api.post<MfaEnableResult>("/v1/auth/mfa/enable", { code }, { signal });
+}
+
+/**
+ * Disable MFA. Step-up: requires the current password AND a valid TOTP or
+ * recovery code (the server enforces both — this is UX, not the gate).
+ */
+export function disableMfa(password: string, code: string, signal?: AbortSignal): Promise<void> {
+  return api.post<void>("/v1/auth/mfa/disable", { password, code }, { signal });
 }

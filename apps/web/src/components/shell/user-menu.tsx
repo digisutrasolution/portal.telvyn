@@ -1,6 +1,7 @@
 "use client";
 
-import { CircleUserRound, LogOut } from "lucide-react";
+import Link from "next/link";
+import { CircleUserRound, LogOut, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -41,6 +42,13 @@ export function UserMenu() {
           <span className="block text-ink">{primaryRole ?? "Signed in"}</span>
           {tenantType && <span className="block text-muted">{tenantType} workspace</span>}
         </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/account">
+            <ShieldCheck aria-hidden strokeWidth={1.5} />
+            Account &amp; security
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void signOut()}>
           <LogOut aria-hidden strokeWidth={1.5} />
