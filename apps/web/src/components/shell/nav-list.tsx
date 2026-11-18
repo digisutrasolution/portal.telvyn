@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV_ITEMS, navItemForPath } from "@/lib/nav";
+import { navItemForPath } from "@/lib/nav";
 import { SHELL_CONFIG } from "@/lib/shell-config";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useVisibleNavItems } from "./use-visible-nav";
 
 /**
  * Primary navigation list — shared by the desktop sidebar and mobile sheet.
@@ -21,10 +22,11 @@ export function NavList({
   const pathname = usePathname();
   const active = navItemForPath(pathname);
   const queues = SHELL_CONFIG.telemetry.queues;
+  const items = useVisibleNavItems();
 
   return (
     <nav aria-label="Primary" className="flex flex-col gap-0.5 px-2">
-      {NAV_ITEMS.map((item) => {
+      {items.map((item) => {
         const isActive = active?.href === item.href;
         const count = item.queueKey && queues ? queues[item.queueKey] : undefined;
         const link = (

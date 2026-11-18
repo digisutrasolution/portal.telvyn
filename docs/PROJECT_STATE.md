@@ -98,9 +98,17 @@ by sign-in too. Email-verification *resend* action exists but its in-app trigger
 `emailVerified`, absent from `/v1/me/context`). Contract already covered these endpoints (no change).
 `.next-build/` added to eslint ignores. **No backend/API/schema/DI change.** **web 53 → 69 tests,
 typecheck ✓, lint ✓, `next build` ✓**; routes render-verified bare in the browser. ADR-0016 addendum.
-Production stays on `NullEngineConnector`. Next (await owner go): **12O-2e** — permission-aware nav +
-route gating; then read-only NOC pages; then MFA enroll/manage + the email-unverified banner; backend
-read gaps (HealthEvent history, config-version history) stay separately approval-gated.
+Production stays on `NullEngineConnector`. **12O-2e (DONE)** — permission-aware nav + route gating.
+`NavItem` gains a `permission` key (real catalog keys, owner-approved map): Numbers/Porting →
+`did.read`, Billing/CDRs → `wallet.read` (CDRs provisional, no `cdr.read` yet), Admin → `member.read`,
+Operations landing unguarded. `useVisibleNavItems()` hook filters the sidebar, mobile sheet, and
+command palette from one source; a central `<RouteGuard>` wraps the shell `<main>` and gates every
+module route by `requiredPermissionForPath` (page when allowed, else "Access restricted"). **UX gating
+only** — API re-checks every request. **ADR-0017 Accepted. web 69 → 77 tests, typecheck ✓, lint ✓,
+`next build` ✓** (nav/guard behavior is unit-tested + build-verified; end-to-end per-role needs the API
+up + a signed-in member). Production stays on `NullEngineConnector`. Next (await owner go): read-only
+NOC pages; then MFA enroll/manage + the email-unverified banner + a `cdr.read` permission; backend read
+gaps (HealthEvent history, config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

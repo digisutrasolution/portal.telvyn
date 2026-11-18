@@ -4,9 +4,9 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Sun, Moon, Monitor, CornerDownLeft } from "lucide-react";
-import { NAV_ITEMS } from "@/lib/nav";
 import { paletteMatch } from "@/lib/palette-filter";
 import { useShell } from "./shell-provider";
+import { useVisibleNavItems } from "./use-visible-nav";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   Command,
@@ -27,6 +27,7 @@ export function CommandPalette() {
   const { paletteOpen, setPaletteOpen } = useShell();
   const router = useRouter();
   const { setTheme } = useTheme();
+  const navItems = useVisibleNavItems();
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -57,7 +58,7 @@ export function CommandPalette() {
           <CommandList>
             <CommandEmpty>No results. Number search connects with the DID module (Phase 9).</CommandEmpty>
             <CommandGroup heading="Go to">
-              {NAV_ITEMS.map((item) => (
+              {navItems.map((item) => (
                 <CommandItem key={item.href} value={`go ${item.label}`} onSelect={() => run(() => router.push(item.href))}>
                   <item.icon aria-hidden strokeWidth={1.5} />
                   {item.label}

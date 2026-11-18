@@ -22,3 +22,4 @@ ADR that references the old one. Template: `template.md`.
 | 0014 | Authorization context endpoint (`/v1/me/context`) | Accepted |
 | 0015 | Frontend typed API client + contract type generation | Accepted |
 | 0016 | Auth frontend: sign-in gate + login/MFA flow | Accepted |
+| 0017 | Permission-aware navigation + route gating | Accepted |

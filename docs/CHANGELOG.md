@@ -438,3 +438,15 @@ Format: Keep a Changelog; SemVer once releases begin.
   pollutes `eslint .`). **No backend/API/schema/DI change.** web 53 → 69 tests, typecheck ✓, lint ✓,
   `next build` ✓ (both routes); routes render-verified bare in the browser. ADR-0016 addendum.
   Deferred: permission-aware nav + route gating, MFA enroll/manage, the email-unverified banner.
+- 2026-11-18 — **Phase 12O-2e — permission-aware navigation + route gating.** The shell now reflects
+  what a member can access. `NavItem` gains a `permission` key (real catalog keys): Numbers/Porting →
+  `did.read`, Billing/CDRs → `wallet.read` (CDRs provisional — no `cdr.read` key exists yet), Admin →
+  `member.read`, Operations landing unguarded. A `useVisibleNavItems()` hook filters the sidebar,
+  mobile sheet, and command palette from one source (no drift). A central `<RouteGuard>` wraps the
+  shell `<main>` and renders the page only when the session holds the route's permission
+  (`requiredPermissionForPath`), else an honest "Access restricted" state — no per-page boilerplate.
+  **UX gating only** — every API route keeps its own server-side authz, so a hand-typed URL reveals
+  nothing. +8 unit tests (web 69 → 77; `requiredPermissionForPath` mapping, NavList show/hide,
+  RouteGuard allow/deny/unguarded). **No backend/API/schema/DI change.** typecheck ✓, lint ✓,
+  `next build` ✓. ADR-0017 Accepted. Deferred: read-only NOC pages, MFA enroll/manage,
+  email-unverified banner, a `cdr.read` permission.

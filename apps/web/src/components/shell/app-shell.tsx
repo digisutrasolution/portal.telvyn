@@ -5,6 +5,7 @@ import { ShellProvider } from "./shell-provider";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { CommandPalette } from "./command-palette";
+import { RouteGuard } from "./route-guard";
 
 /**
  * Application shell: shell state provider, rail, topbar, palette. Theme and
@@ -25,7 +26,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />
           <main id="main" tabIndex={-1} className="flex-1 p-4 outline-none md:p-6">
-            {children}
+            <RouteGuard>{children}</RouteGuard>
           </main>
         </div>
       </div>

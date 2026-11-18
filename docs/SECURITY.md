@@ -615,3 +615,18 @@ browser side only.
   or token is logged; errors surface the RFC 7807 title only.
 - Server remains the authority on token validity, expiry, and rate limiting
   (login-ip / reset / verify limiters unchanged). No backend change.
+
+### Permission-aware nav + route gating (Phase 12O-2e, ADR-0017)
+
+- **Frontend gating is UX, never authorization.** The nav filter
+  (`useVisibleNavItems`) and the route gate (`RouteGuard`) only decide what to
+  render, from the session's expanded permission set. Every API route keeps its
+  own permission + platform checks, so a hidden link, a hand-typed URL, or a
+  tampered client exposes no data — the API refuses the call regardless.
+- **Deny-by-default UX.** A module shows only when the session holds its
+  permission key (from the server catalog); unknown/missing permission → the
+  "Access restricted" state, not the page. The Operations landing is the one
+  unguarded route so every member has a home.
+- **No secret in the gate.** The gate compares plain permission keys already
+  expanded server-side; it never sees roles' internals or any secret. No
+  backend/API/schema/DI change.

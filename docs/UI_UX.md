@@ -278,5 +278,14 @@ with a token, set a new password with client-side length/match checks),
 password?" link on sign-in, and a shared **auth-card** now backing all three
 screens. Verified: `tsc` clean · 69/69 Vitest · `next build` clean · the
 `/reset-password` (request + token) and `/verify-email` routes render-verified
-**bare** (no sidebar/topbar) in the browser. Still to come: permission-aware nav
-+ route gating, MFA enroll/manage, an email-unverified banner.
+**bare** (no sidebar/topbar) in the browser.
+
+Permission-aware nav + route gating — EXISTING (Phase 12O-2e, 2026-11-18,
+ADR-0017): `NavItem` carries a `permission` key, so the sidebar, mobile sheet,
+and command palette (all via one `useVisibleNavItems()` hook) show only the
+modules the member can access; a central **route-guard** wraps `<main>` and
+renders an honest "Access restricted" state for a module the session lacks.
+Operations stays the one unguarded landing. UX gating only (the API is the
+authority). Verified: `tsc` clean · 77/77 Vitest · `next build` clean (per-role
+nav/guard behavior is unit-tested; end-to-end needs the API up + sign-in). Still
+to come: read-only NOC pages, MFA enroll/manage, an email-unverified banner.
