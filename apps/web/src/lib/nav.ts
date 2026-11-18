@@ -3,6 +3,7 @@ import {
   Hash,
   ArrowLeftRight,
   Waypoints,
+  Cable,
   Wallet,
   ListOrdered,
   Settings,
@@ -44,6 +45,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Porting", href: "/porting", icon: ArrowLeftRight, phase: 9, queueKey: "porting", permission: "did.read" },
   // Carriers / connectivity — tenant resource (own + system carriers); not platform-only.
   { label: "Carriers", href: "/carriers", icon: Waypoints, phase: 10, permission: "carrier.read" },
+  // SIP trunks — strictly tenant-owned connectivity config (no live connectivity).
+  { label: "SIP trunks", href: "/sip-trunks", icon: Cable, phase: 11, permission: "sip_trunk.read" },
   { label: "Billing", href: "/billing", icon: Wallet, phase: 13, permission: "wallet.read" },
   // CDRs / usage gate on their own catalog key (billing-adjacent). Granted to the
   // billing-visible roles (owner, operator, auditor); routes land in Phase 14.

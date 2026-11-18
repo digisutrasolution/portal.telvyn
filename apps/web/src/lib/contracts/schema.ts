@@ -490,6 +490,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/sip-trunks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List SIP trunks (tenant)
+         * @description The tenant's own SIP trunks (strictly tenant-owned — a foreign tenant's trunks are never returned). Control-plane configuration only; there is no live connectivity, so health is honest UNKNOWN (never fabricated). Cursor-paginated. Secrets never appear — a trunk carries only a non-secret credential reference and a carrier summary. Requires `sip_trunk.read`.
+         */
+        get: operations["listSipTrunks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -800,6 +820,75 @@ export interface components {
         };
         CarrierPage: {
             items: components["schemas"]["Carrier"][];
+            /**
+             * Format: uuid
+             * @description Pass as `cursor` to fetch the next page; null when exhausted.
+             */
+            nextCursor: string | null;
+        };
+        /** @description Compact carrier reference carried on a SIP trunk. */
+        CarrierSummary: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            scope: "SYSTEM" | "TENANT";
+        };
+        /** @description Non-secret vault reference attached to a trunk — never the secret itself. */
+        SipTrunkCredentialRef: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            type: "SIP_PASSWORD" | "CARRIER_API" | "ENGINE_API";
+            label: string;
+            hint?: string | null;
+        };
+        /** @description Honest trunk health; UNKNOWN (no live connectivity in the control plane), never fabricated. */
+        SipTrunkHealth: {
+            /** @enum {string} */
+            status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN" | "DISABLED";
+            detail: string;
+        };
+        SipTrunk: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            carrierId: string;
+            carrier?: components["schemas"]["CarrierSummary"] | null;
+            /** @enum {string} */
+            direction: "INBOUND" | "OUTBOUND" | "BIDIRECTIONAL";
+            sipUri?: string | null;
+            /** @description Host/IP reference — never a secret. */
+            host?: string | null;
+            port: number;
+            /** @enum {string} */
+            transport: "UDP" | "TCP" | "TLS";
+            tls: boolean;
+            /** @enum {string} */
+            authMode: "IP" | "CREDENTIALS";
+            /** @description IP-auth ACL (addresses / CIDRs). */
+            allowedIps: string[];
+            codecs: ("PCMU" | "PCMA" | "G722" | "G729" | "OPUS" | "AMR" | "AMR_WB")[];
+            srtp: boolean;
+            /** @description DTMF relay mode, e.g. rfc2833 / info / inband. */
+            dtmfMode?: string | null;
+            maxCps?: number | null;
+            maxConcurrentCalls?: number | null;
+            /**
+             * @description Administrative status (distinct from health).
+             * @enum {string}
+             */
+            status: "ACTIVE" | "SUSPENDED" | "DISABLED";
+            credential: components["schemas"]["SipTrunkCredentialRef"] | null;
+            health: components["schemas"]["SipTrunkHealth"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SipTrunkPage: {
+            items: components["schemas"]["SipTrunk"][];
             /**
              * Format: uuid
              * @description Pass as `cursor` to fetch the next page; null when exhausted.
@@ -1462,6 +1551,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CarrierPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listSipTrunks: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+                status?: "ACTIVE" | "SUSPENDED" | "DISABLED";
+                direction?: "INBOUND" | "OUTBOUND" | "BIDIRECTIONAL";
+                transport?: "UDP" | "TCP" | "TLS";
+                carrierId?: string;
+                /** @description Case-insensitive name search. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SIP trunks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SipTrunkPage"];
                 };
             };
             401: components["responses"]["Problem"];

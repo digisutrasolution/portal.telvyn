@@ -475,6 +475,33 @@ paths:
               schema: { $ref: "#/components/schemas/CarrierPage" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/sip-trunks:
+    get:
+      tags: [telecom]
+      summary: List SIP trunks (tenant)
+      description: >-
+        The tenant's own SIP trunks (strictly tenant-owned — a foreign tenant's
+        trunks are never returned). Control-plane configuration only; there is no
+        live connectivity, so health is honest UNKNOWN (never fabricated).
+        Cursor-paginated. Secrets never appear — a trunk carries only a non-secret
+        credential reference and a carrier summary. Requires `sip_trunk.read`.
+      operationId: listSipTrunks
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: cursor, in: query, required: false, schema: { type: string, format: uuid }, description: "nextCursor from a prior page." }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED] } }
+        - { name: direction, in: query, required: false, schema: { type: string, enum: [INBOUND, OUTBOUND, BIDIRECTIONAL] } }
+        - { name: transport, in: query, required: false, schema: { type: string, enum: [UDP, TCP, TLS] } }
+        - { name: carrierId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 120 }, description: "Case-insensitive name search." }
+      responses:
+        "200":
+          description: SIP trunks
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SipTrunkPage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -776,4 +803,74 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/Carrier" }
+        nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next page; null when exhausted." }
+    CarrierSummary:
+      type: object
+      required: [id, name, scope]
+      description: Compact carrier reference carried on a SIP trunk.
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        scope: { type: string, enum: [SYSTEM, TENANT] }
+    SipTrunkCredentialRef:
+      type: object
+      required: [id, type, label]
+      description: Non-secret vault reference attached to a trunk — never the secret itself.
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [SIP_PASSWORD, CARRIER_API, ENGINE_API] }
+        label: { type: string }
+        hint: { type: string, nullable: true }
+    SipTrunkHealth:
+      type: object
+      required: [status, detail]
+      description: Honest trunk health; UNKNOWN (no live connectivity in the control plane), never fabricated.
+      properties:
+        status: { type: string, enum: [HEALTHY, DEGRADED, UNHEALTHY, UNKNOWN, DISABLED] }
+        detail: { type: string }
+    SipTrunk:
+      type: object
+      required:
+        [id, name, carrierId, direction, port, transport, tls, authMode, allowedIps, codecs, srtp, status, credential, health, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        carrierId: { type: string, format: uuid }
+        carrier:
+          oneOf:
+            - $ref: "#/components/schemas/CarrierSummary"
+            - type: "null"
+        direction: { type: string, enum: [INBOUND, OUTBOUND, BIDIRECTIONAL] }
+        sipUri: { type: string, nullable: true }
+        host: { type: string, nullable: true, description: "Host/IP reference — never a secret." }
+        port: { type: integer }
+        transport: { type: string, enum: [UDP, TCP, TLS] }
+        tls: { type: boolean }
+        authMode: { type: string, enum: [IP, CREDENTIALS] }
+        allowedIps:
+          type: array
+          items: { type: string }
+          description: "IP-auth ACL (addresses / CIDRs)."
+        codecs:
+          type: array
+          items: { type: string, enum: [PCMU, PCMA, G722, G729, OPUS, AMR, AMR_WB] }
+        srtp: { type: boolean }
+        dtmfMode: { type: string, nullable: true, description: "DTMF relay mode, e.g. rfc2833 / info / inband." }
+        maxCps: { type: integer, nullable: true }
+        maxConcurrentCalls: { type: integer, nullable: true }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED], description: "Administrative status (distinct from health)." }
+        credential:
+          oneOf:
+            - $ref: "#/components/schemas/SipTrunkCredentialRef"
+            - type: "null"
+        health: { $ref: "#/components/schemas/SipTrunkHealth" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SipTrunkPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SipTrunk" }
         nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next page; null when exhausted." }

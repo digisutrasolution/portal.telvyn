@@ -64,3 +64,9 @@ export type CarrierPage = Schemas["CarrierPage"];
 
 /** Non-secret vault credential reference attached to a carrier. */
 export type CarrierCredentialRef = Schemas["CarrierCredentialRef"];
+
+/** A SIP trunk (tenant-owned), with honest health and a non-secret credential ref. */
+export type SipTrunk = Schemas["SipTrunk"];
+
+/** Cursor-paginated page of SIP trunks. */
+export type SipTrunkPage = Schemas["SipTrunkPage"];

@@ -362,3 +362,14 @@ appear (a carrier carries only a non-secret credential reference). Contract-firs
 `GET /v1/telecom/carriers` + `Carrier`/`CarrierPage` authored into the contract and
 the client type generated. Verified: `tsc` clean · 135/135 Vitest · `next build`
 clean. To come: a carrier detail drawer and list filters (scope/status/search).
+
+SIP trunks — read list — EXISTING (Phase 12O-2p, 2026-11-19): a read-only
+`/sip-trunks` table of the tenant's own trunks, reached from a new **SIP trunks**
+nav item (gated on `sip_trunk.read`; tenant-scoped). Columns: name, carrier,
+direction, transport (with a TLS marker), endpoint (host or SIP URI), status, and
+honest UNKNOWN health (control-plane config only — no live connectivity). Cursor-
+paginated with "Load more"; loading / empty / error (RFC 7807 title) states.
+Secrets never appear (non-secret credential reference + carrier summary only).
+Contract-first: `GET /v1/telecom/sip-trunks` + `SipTrunk`/`SipTrunkPage` authored
+into the contract and the client type generated. Verified: `tsc` clean · 139/139
+Vitest · `next build` clean. To come: a trunk detail drawer and list filters.

@@ -192,7 +192,17 @@ never appear (credential reference only). `carriers-actions.ts` (`listCarriers`)
 (phase 10). Only the list endpoint was contracted (per-screen as consumed); `…/{id}` + mutations stay
 for later. **web 131 → 135, typecheck ✓, lint ✓, `next build` ✓. No backend/API change** (carrier API
 already existed + documented).
-Next (await owner go): carrier detail drawer + list filters; sip-trunk/did/routing/lcr read screens
+**12O-2p (DONE)** — SIP trunks read screen (contract-first). Read-only `/sip-trunks` list of the
+tenant's own trunks, gated on `sip_trunk.read` (tenant-scoped). Contract-first (ADR-0002): authored
+`GET /v1/telecom/sip-trunks` (cursor pagination + `status`/`direction`/`transport`/`carrierId`/`q`) and
+`SipTrunk`/`SipTrunkPage`/`SipTrunkCredentialRef`/`SipTrunkHealth`/`CarrierSummary` into `telvyn.v1.yaml`
+from the real backend view, regenerated `schema.ts`. Control-plane only — honest UNKNOWN health;
+secrets never appear (credential reference + carrier summary only). `sip-trunks-actions.ts`
+(`listSipTrunks`), `<SipTrunksView>` (first page + Load more; loading/empty/error), `/sip-trunks` page,
+and a **SIP trunks** nav item (phase 11). Only the list endpoint was contracted (per-screen as
+consumed); `…/{id}` + mutations stay for later. **web 135 → 139, typecheck ✓, lint ✓, `next build` ✓.
+No backend/API change** (SIP-trunk API already existed + documented).
+Next (await owner go): carrier/trunk detail drawers + list filters; did/routing/lcr read screens
 (author per-screen); backend read gaps (HealthEvent/config-version history) stay separately
 approval-gated.
 

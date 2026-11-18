@@ -567,3 +567,16 @@ Format: Keep a Changelog; SemVer once releases begin.
   stay for later. +4 web unit tests (131 → 135). **No backend/API change** (the carrier API already
   existed + was documented). typecheck ✓, lint ✓, `next build` ✓. Deferred: carrier detail drawer,
   list filters (scope/status/search), and the sip-trunk/did/routing/lcr read screens.
+- 2026-11-19 — **Phase 12O-2p — SIP trunks read screen (contract-first).** A read-only `/sip-trunks`
+  list of the tenant's own trunks, gated on `sip_trunk.read`. Contract-first (ADR-0002): authored
+  `GET /v1/telecom/sip-trunks` (cursor pagination; `status`/`direction`/`transport`/`carrierId`/`q`) and
+  schemas `SipTrunk`/`SipTrunkPage`/`SipTrunkCredentialRef`/`SipTrunkHealth`/`CarrierSummary` into
+  `telvyn.v1.yaml` from the real backend view, then regenerated `schema.ts`. Control-plane config only —
+  health is honest UNKNOWN (no live connectivity); secrets never appear (non-secret credential reference
+  + carrier summary only). New `sip-trunks-actions.ts` (`listSipTrunks`), a `<SipTrunksView>` (first page
+  + Load more; loading/empty/error states; carrier, direction, transport (+TLS), endpoint, status,
+  health columns), `/sip-trunks` route + page, and a **SIP trunks** nav item (phase 11, `sip_trunk.read`,
+  tenant-scoped). Only the list endpoint was contracted (per-screen as consumed); `…/{id}` + mutations
+  stay for later. +4 web unit tests (135 → 139). **No backend/API change** (the SIP-trunk API already
+  existed + was documented). typecheck ✓, lint ✓, `next build` ✓. Deferred: trunk detail drawer, list
+  filters, and the did/routing/lcr read screens.
