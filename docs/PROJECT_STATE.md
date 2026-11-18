@@ -138,6 +138,19 @@ enroll/manage + email-unverified banner + `cdr.read`; carrier/sip-trunk/did/rout
 still absent from the contract (author per-screen); backend read gaps (HealthEvent/config-version
 history) stay separately approval-gated.
 
+**12O-2i (DONE)** — NOC's first mutating actions. Contract-first: authored the three POST endpoints
+(`/v1/telecom/engines/{id}/health-check`→`EngineHealthReport`; `/{id}/sync` + `/{id}/sync/rollback`→
+`SyncOutcome`) into `telvyn.v1.yaml`, regenerated types. New `<EngineActions>` on the engine detail
+page: permission-gated buttons (Check-health=`telecom.health.read`; Sync/Rollback=`telecom.manage`),
+**confirm dialog** before sync/rollback, **no auto-retry**, **honest results** (successful `SyncOutcome`
+as `outcome — syncState`; expected `501` under Null connector shown neutrally; 409/5xx/400 as warnings);
+each action refreshes engine + status. Server re-checks every call (gate is UX only). **ADR-0019
+Accepted. web 107 → 115 tests, typecheck ✓, lint ✓, `next build` ✓.** **No backend/API/schema/DI change.**
+Production stays on `NullEngineConnector` (sync/rollback → NOT_IMPLEMENTED). Next (await owner go):
+type-to-confirm guard once a real connector is wired; MFA enroll/manage; email-unverified banner;
+`cdr.read`; carrier/sip-trunk/did/routing/lcr read endpoints still absent from the contract (author
+per-screen); backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
+
 ### (superseded) sub-phase plan
 
 **Phase 12M — real engine adapter (Kamailio first), built in additive review-gated sub-phases.** A disposable Kamailio 6.1.5 test engine is provisioned

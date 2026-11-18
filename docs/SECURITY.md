@@ -641,4 +641,17 @@ browser side only.
 - **No secrets in the engine DTO.** The contracted `Engine` shape exposes
   `credentialId` as a vault reference only (never the secret) and `endpoint` as a
   management host reference (never a credential). Health is honest `UNKNOWN` for
-  stub adapters — never fabricated. Read-only; no mutating NOC actions shipped.
+  stub adapters — never fabricated.
+
+### NOC mutating actions (Phase 12O-2i, ADR-0019)
+
+- **Gated, confirmed, non-retrying.** The engine actions show per permission
+  (Check-health → `telecom.health.read`; Sync/Rollback → `telecom.manage`); the
+  server (PlatformGuard + permission) re-checks every call, so a visible button
+  never implies authorization. Sync and rollback — state-changing — require a
+  confirm dialog. Mutations go through the client, which **never auto-retries**,
+  so a failed or ambiguous sync is never silently replayed (double-apply risk).
+- **Honest outcomes.** The `501 NOT_IMPLEMENTED` returned by the Null connector
+  is shown as the honest result it is, not a fabricated success. No secrets in
+  the `SyncOutcome` / `EngineHealthReport` (versions are short fingerprints,
+  details are safe reasons). No backend/API/schema/DI change.

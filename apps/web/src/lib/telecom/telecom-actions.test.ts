@@ -3,7 +3,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/api/client", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 
 import { api } from "@/lib/api/client";
-import { getEngine, getEngineStatus, listEngines, listNodes, listRegions } from "./telecom-actions";
+import {
+  checkEngineHealth,
+  getEngine,
+  getEngineStatus,
+  listEngines,
+  listNodes,
+  listRegions,
+  rollbackEngine,
+  syncEngine,
+} from "./telecom-actions";
 
 afterEach(() => vi.clearAllMocks());
 
@@ -43,5 +52,23 @@ describe("telecom-actions", () => {
     vi.mocked(api.get).mockResolvedValue([]);
     await listNodes();
     expect(api.get).toHaveBeenCalledWith("/v1/telecom/nodes", { signal: undefined });
+  });
+
+  it("checkEngineHealth POSTs the health-check endpoint (authenticated)", async () => {
+    vi.mocked(api.post).mockResolvedValue({});
+    await checkEngineHealth("eng-1");
+    expect(api.post).toHaveBeenCalledWith("/v1/telecom/engines/eng-1/health-check");
+  });
+
+  it("syncEngine POSTs the sync endpoint", async () => {
+    vi.mocked(api.post).mockResolvedValue({});
+    await syncEngine("eng-1");
+    expect(api.post).toHaveBeenCalledWith("/v1/telecom/engines/eng-1/sync");
+  });
+
+  it("rollbackEngine POSTs the rollback endpoint", async () => {
+    vi.mocked(api.post).mockResolvedValue({});
+    await rollbackEngine("eng-1");
+    expect(api.post).toHaveBeenCalledWith("/v1/telecom/engines/eng-1/sync/rollback");
   });
 });

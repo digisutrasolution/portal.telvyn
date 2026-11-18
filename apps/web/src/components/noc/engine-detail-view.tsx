@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { Engine, EngineHealth, EngineStatus } from "@/lib/contracts";
 import { getEngine, getEngineStatus } from "@/lib/telecom/telecom-actions";
 import { useResource } from "@/lib/use-resource";
+import { EngineActions } from "./engine-actions";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 
@@ -138,6 +139,8 @@ export function EngineDetailView({ engineId }: { engineId: string }) {
               ))}
             </Card>
           </div>
+
+          <EngineActions engineId={engineId} onChanged={() => { engine.reload(); status.reload(); }} />
         </>
       ) : null}
     </section>

@@ -410,6 +410,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/engines/{id}/health-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Probe engine health (platform)
+         * @description Actively probe the engine's health (SSRF-guarded; honest UNKNOWN with the Null connector) and record a health event on a transition. Requires PLATFORM + `telecom.health.read`.
+         */
+        post: operations["checkEngineHealth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/telecom/engines/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Synchronize control-plane config to the engine (platform)
+         * @description Versioned, idempotent, concurrency-guarded config sync. With a stub adapter this returns a normalized NOT_IMPLEMENTED (501) — no fake success and no live connectivity. A concurrent sync is refused (409); a lock outage fails closed (503). Requires PLATFORM + `telecom.manage`.
+         */
+        post: operations["syncEngine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/telecom/engines/{id}/sync/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Roll back to the previous desired config version (platform)
+         * @description Append-only rollback to the prior desired version. 400 when there is no previous version. Requires PLATFORM + `telecom.manage`.
+         */
+        post: operations["rollbackEngine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -640,6 +700,35 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        EngineHealthReport: {
+            /** Format: uuid */
+            engineId: string;
+            /** @enum {string} */
+            provider: "KAMAILIO" | "ASTERISK" | "FREESWITCH";
+            /** @enum {string} */
+            status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN" | "DISABLED";
+            /** @enum {string} */
+            reachability: "UNCONFIGURED" | "DISABLED" | "BLOCKED" | "UNVERIFIED" | "REACHABLE" | "UNREACHABLE";
+            latencyMs?: number;
+            /** @description Safe reason — never secrets or raw provider errors. */
+            detail: string;
+            correlationId: string;
+            /** Format: date-time */
+            checkedAt: string;
+        };
+        SyncOutcome: {
+            ok: boolean;
+            outcome: string;
+            /** @enum {string} */
+            code?: "NOT_IMPLEMENTED" | "UNAVAILABLE" | "TIMEOUT" | "INVALID_CONFIG" | "UNSUPPORTED" | "INTERNAL";
+            /** @enum {string} */
+            syncState: "NOOP" | "APPLIED" | "PENDING_RECONCILIATION" | "FAILED";
+            desiredVersion: string;
+            appliedVersion: string | null;
+            changed: boolean;
+            correlationId: string;
+            detail?: string;
         };
     };
     responses: {
@@ -1188,6 +1277,88 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    checkEngineHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Health report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineHealthReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    syncEngine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sync outcome */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncOutcome"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            501: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+            504: components["responses"]["Problem"];
+        };
+    };
+    rollbackEngine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sync outcome */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncOutcome"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
 }

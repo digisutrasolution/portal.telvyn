@@ -314,4 +314,13 @@ tables — `/infrastructure/nodes` (name/environment/zone/status/heartbeat
 health/version) and `/infrastructure/regions` (code/name/country/timezone/
 status) — loaded via `useResource` with honest UNKNOWN heartbeat health. All
 platform-gated. Verified: `tsc` clean · 107/107 Vitest · `next build` clean (all
-four /infrastructure routes). Next: mutating NOC actions (health-check / sync).
+four /infrastructure routes).
+
+NOC — engine mutating actions — EXISTING (Phase 12O-2i, 2026-11-18, ADR-0019):
+the engine detail page gains an Actions panel — Check-health (direct,
+non-destructive, needs `telecom.health.read`) and Sync / Roll back (confirm
+dialog first, need `telecom.manage`). Results are shown plainly, including the
+honest `501 NOT_IMPLEMENTED` under the Null connector; one action in flight
+disables the panel and no mutation is ever auto-retried. Verified: `tsc` clean ·
+115/115 Vitest · `next build` clean. Next: a type-to-confirm guard once a real
+connector is wired.

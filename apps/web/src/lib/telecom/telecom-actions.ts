@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { Engine, EngineStatus, Node, Region } from "@/lib/contracts";
+import type { Engine, EngineHealthReport, EngineStatus, Node, Region, SyncOutcome } from "@/lib/contracts";
 
 /**
  * Read-only telecom (NOC) API calls. Platform-scoped on the server
@@ -30,4 +30,21 @@ export function listRegions(signal?: AbortSignal): Promise<Region[]> {
 /** Platform list of telecom nodes with heartbeat health. */
 export function listNodes(signal?: AbortSignal): Promise<Node[]> {
   return api.get<Node[]>("/v1/telecom/nodes", { signal });
+}
+
+// ---- mutating engine actions (platform; state-changing, never auto-retried) ----
+
+/** Actively probe engine health (telecom.health.read). Non-destructive. */
+export function checkEngineHealth(id: string): Promise<EngineHealthReport> {
+  return api.post<EngineHealthReport>(`/v1/telecom/engines/${id}/health-check`);
+}
+
+/** Sync control-plane config to the engine (telecom.manage). 501 with a stub adapter. */
+export function syncEngine(id: string): Promise<SyncOutcome> {
+  return api.post<SyncOutcome>(`/v1/telecom/engines/${id}/sync`);
+}
+
+/** Roll back to the previous desired config version (telecom.manage). */
+export function rollbackEngine(id: string): Promise<SyncOutcome> {
+  return api.post<SyncOutcome>(`/v1/telecom/engines/${id}/sync/rollback`);
 }

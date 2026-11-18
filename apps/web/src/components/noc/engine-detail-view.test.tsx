@@ -7,7 +7,27 @@ vi.mock("@/lib/telecom/telecom-actions", () => ({ getEngine: vi.fn(), getEngineS
 vi.mock("next/link", () => ({ default: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }));
 
 import { getEngine, getEngineStatus } from "@/lib/telecom/telecom-actions";
+import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { EngineDetailView } from "./engine-detail-view";
+
+// No telecom.* permissions → the mutating EngineActions renders nothing, keeping
+// these tests focused on the read-only detail. Action behavior lives in
+// engine-actions.test.tsx.
+const noPermsLoader: SessionLoader = async () => ({
+  userId: "u",
+  tenantId: "t",
+  tenantType: "PLATFORM",
+  roles: [],
+  permissions: [],
+});
+
+function renderDetail() {
+  return render(
+    <SessionProvider loader={noPermsLoader}>
+      <EngineDetailView engineId="eng-1" />
+    </SessionProvider>,
+  );
+}
 
 function engine(): Engine {
   return {
@@ -51,7 +71,7 @@ describe("EngineDetailView", () => {
   it("renders identity, health, connection, version and desired summary", async () => {
     vi.mocked(getEngine).mockResolvedValue(engine());
     vi.mocked(getEngineStatus).mockResolvedValue(status());
-    render(<EngineDetailView engineId="eng-1" />);
+    renderDetail();
 
     expect(await screen.findByRole("heading", { name: "kamailio-vps" })).toBeInTheDocument();
     // health + connection states render
@@ -65,7 +85,7 @@ describe("EngineDetailView", () => {
   it("surfaces an error from either request", async () => {
     vi.mocked(getEngine).mockResolvedValue(engine());
     vi.mocked(getEngineStatus).mockRejectedValue(new ApiError({ title: "Engine not found", status: 404 }));
-    render(<EngineDetailView engineId="eng-1" />);
+    renderDetail();
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Engine not found"));
   });
 });

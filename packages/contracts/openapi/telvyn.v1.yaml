@@ -384,6 +384,71 @@ paths:
                 items: { $ref: "#/components/schemas/Node" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/engines/{id}/health-check:
+    post:
+      tags: [telecom]
+      summary: Probe engine health (platform)
+      description: >-
+        Actively probe the engine's health (SSRF-guarded; honest UNKNOWN with the
+        Null connector) and record a health event on a transition. Requires
+        PLATFORM + `telecom.health.read`.
+      operationId: checkEngineHealth
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Health report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EngineHealthReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/engines/{id}/sync:
+    post:
+      tags: [telecom]
+      summary: Synchronize control-plane config to the engine (platform)
+      description: >-
+        Versioned, idempotent, concurrency-guarded config sync. With a stub
+        adapter this returns a normalized NOT_IMPLEMENTED (501) — no fake success
+        and no live connectivity. A concurrent sync is refused (409); a lock
+        outage fails closed (503). Requires PLATFORM + `telecom.manage`.
+      operationId: syncEngine
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Sync outcome
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncOutcome" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "501": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+        "504": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/engines/{id}/sync/rollback:
+    post:
+      tags: [telecom]
+      summary: Roll back to the previous desired config version (platform)
+      description: Append-only rollback to the prior desired version. 400 when there is no previous version. Requires PLATFORM + `telecom.manage`.
+      operationId: rollbackEngine
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Sync outcome
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncOutcome" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -612,3 +677,28 @@ components:
         health: { $ref: "#/components/schemas/NodeHealth" }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    EngineHealthReport:
+      type: object
+      required: [engineId, provider, status, reachability, detail, correlationId, checkedAt]
+      properties:
+        engineId: { type: string, format: uuid }
+        provider: { type: string, enum: [KAMAILIO, ASTERISK, FREESWITCH] }
+        status: { type: string, enum: [HEALTHY, DEGRADED, UNHEALTHY, UNKNOWN, DISABLED] }
+        reachability: { type: string, enum: [UNCONFIGURED, DISABLED, BLOCKED, UNVERIFIED, REACHABLE, UNREACHABLE] }
+        latencyMs: { type: integer }
+        detail: { type: string, description: "Safe reason — never secrets or raw provider errors." }
+        correlationId: { type: string }
+        checkedAt: { type: string, format: date-time }
+    SyncOutcome:
+      type: object
+      required: [ok, outcome, syncState, desiredVersion, appliedVersion, changed, correlationId]
+      properties:
+        ok: { type: boolean }
+        outcome: { type: string }
+        code: { type: string, enum: [NOT_IMPLEMENTED, UNAVAILABLE, TIMEOUT, INVALID_CONFIG, UNSUPPORTED, INTERNAL] }
+        syncState: { type: string, enum: [NOOP, APPLIED, PENDING_RECONCILIATION, FAILED] }
+        desiredVersion: { type: string }
+        appliedVersion: { type: string, nullable: true }
+        changed: { type: boolean }
+        correlationId: { type: string }
+        detail: { type: string }

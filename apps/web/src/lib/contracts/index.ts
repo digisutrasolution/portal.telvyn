@@ -40,3 +40,9 @@ export type Region = Schemas["Region"];
 
 /** A telecom node with heartbeat health (platform). */
 export type Node = Schemas["Node"];
+
+/** Result of an active engine health probe. */
+export type EngineHealthReport = Schemas["EngineHealthReport"];
+
+/** Outcome of an engine config sync / rollback attempt. */
+export type SyncOutcome = Schemas["SyncOutcome"];

@@ -489,3 +489,16 @@ Format: Keep a Changelog; SemVer once releases begin.
   +12 unit tests (web 95 → 107). **No backend/API/schema/DI change.** typecheck ✓, lint ✓, `next build`
   ✓ (all four /infrastructure routes). ADR-0018 addendum. Deferred: mutating NOC actions
   (health-check/sync), MFA enroll/manage, `cdr.read`.
+- 2026-11-18 — **Phase 12O-2i — NOC mutating engine actions (health-check / sync / rollback).** The
+  NOC's first write path. **Contract-first:** authored the three POST endpoints
+  (`/v1/telecom/engines/{id}/health-check` → `EngineHealthReport`; `/{id}/sync` and `/{id}/sync/rollback`
+  → `SyncOutcome`, with 409/501/503/504 problems) into `telvyn.v1.yaml` from the real controller/service
+  shapes, regenerated types. New `<EngineActions>` panel on the engine detail page: **permission-gated**
+  buttons (Check-health needs `telecom.health.read`; Sync/Rollback need `telecom.manage`), a **confirm
+  dialog** before the state-changing sync/rollback, **no auto-retry** (the client never replays a
+  mutation), and **honest results** — a successful `SyncOutcome` shown as `outcome — syncState`, the
+  expected `501 NOT_IMPLEMENTED` (Null connector) shown in a neutral tone, 409/5xx/400 as warnings; each
+  action refreshes the engine + status. The server (PlatformGuard + permission) re-checks every call —
+  the gate is UX only. +8 unit tests (web 107 → 115). **No backend/API/schema/DI change** (endpoints
+  already existed). typecheck ✓, lint ✓, `next build` ✓. ADR-0019 Accepted. Deferred: a type-to-confirm
+  guard once a real connector is wired, MFA enroll/manage, email-unverified banner, `cdr.read`.
