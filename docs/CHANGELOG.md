@@ -533,3 +533,15 @@ Format: Keep a Changelog; SemVer once releases begin.
   permission + platform on every call. +2 unit tests (web 129 → 131). **No contract/backend/API/schema/
   DI change.** typecheck ✓, lint ✓, `next build` ✓. Deferred: a QR-code render for MFA enrollment,
   a `cdr.read` permission, the remaining tenant read screens.
+- 2026-11-19 — **Phase 12O-2m — `cdr.read` permission (RBAC catalog).** Introduced a dedicated
+  `cdr.read` permission (resource `cdr`, action `read`, billing group) so CDRs no longer borrow
+  billing's `wallet.read`. Granted to the roles that can see billing today — owner (via `*`), operator,
+  auditor — so CDR visibility is unchanged; admin stays without (it has no `wallet.read` either). The
+  seed is catalog-driven and idempotent, so the key + role links land on the next `prisma db seed` (no
+  migration — permissions are seeded rows, not schema). Frontend: the CDRs nav/route gate re-points from
+  `wallet.read` to `cdr.read`. No contract change (`MeContext.permissions` is a free-form `string[]`;
+  no CDR route exists yet — those land in Phase 14). Tests: API catalog +1 (`cdr.read` catalogued in
+  billing and held by owner/operator/auditor); web nav/nav-list tests updated. **API unit 186 → 187,
+  web 131 (updated). typecheck ✓, lint ✓, `next build` ✓.** API e2e not run here (the test DB on :5433
+  is down; the change is additive, data-only, and unit-covered — no controller/guard/route touched).
+  Deferred: a QR-code render for MFA enrollment, the remaining tenant read screens.

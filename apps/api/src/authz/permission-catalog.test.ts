@@ -33,4 +33,16 @@ describe("permission catalog integrity", () => {
     const auditor = expandGrants(SYSTEM_ROLES.find((r) => r.key === "auditor")!.permissions);
     expect(auditor.some((k) => k.endsWith(".manage") || k.endsWith(".credit") || k.endsWith(".assign") || k.endsWith(".invite"))).toBe(false);
   });
+
+  it("cdr.read is catalogued in billing and granted to the wallet.read holders", () => {
+    const cdr = PERMISSIONS.find((p) => p.key === "cdr.read");
+    expect(cdr).toBeDefined();
+    expect(cdr!.group).toBe("billing");
+    // CDRs are gated on cdr.read (not wallet.read); the roles that can see billing
+    // today (owner via "*", operator, auditor) must also hold cdr.read.
+    for (const key of ["owner", "operator", "auditor"]) {
+      const role = SYSTEM_ROLES.find((r) => r.key === key)!;
+      expect(expandGrants(role.permissions)).toContain("cdr.read");
+    }
+  });
 });

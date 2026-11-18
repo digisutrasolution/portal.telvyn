@@ -23,7 +23,7 @@ function renderNav(permissions: string[], tenantType: "PLATFORM" | "CUSTOMER" = 
 
 describe("NavList", () => {
   it("renders the nav items the session can access", async () => {
-    renderNav(["did.read", "wallet.read", "member.read"]);
+    renderNav(["did.read", "wallet.read", "cdr.read", "member.read"]);
     for (const label of ["Operations", "Numbers", "Porting", "Billing", "CDRs", "Admin"]) {
       expect(await screen.findByRole("link", { name: label })).toHaveAttribute("href");
     }
@@ -40,7 +40,7 @@ describe("NavList", () => {
   });
 
   it("marks the active module with aria-current", async () => {
-    renderNav(["did.read", "wallet.read", "member.read"]);
+    renderNav(["did.read", "wallet.read", "cdr.read", "member.read"]);
     expect(await screen.findByRole("link", { name: "Numbers" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Billing" })).not.toHaveAttribute("aria-current");
   });

@@ -53,6 +53,9 @@ export const PERMISSIONS: PermissionDef[] = [
   // billing (declared for role stability)
   { key: "wallet.read", resource: "wallet", action: "read", description: "View balances", group: "billing" },
   { key: "wallet.credit", resource: "wallet", action: "credit", description: "Post wallet credits", group: "billing" },
+  // CDRs / usage are billing-adjacent; declared now (routes land in Phase 14) so
+  // roles are stable and the frontend gates on cdr.read, not wallet.read.
+  { key: "cdr.read", resource: "cdr", action: "read", description: "View call detail records (CDRs)", group: "billing" },
   // audit
   { key: "audit.read", resource: "audit", action: "read", description: "View the tenant audit log", group: "audit" },
   // telecom control plane (Phase 12). Platform infra = telecom.read/telecom.manage
@@ -93,7 +96,7 @@ export const SYSTEM_ROLES: SystemRoleDef[] = [
     name: "Operator",
     description: "Operate numbers and connectivity, view billing & health",
     permissions: [
-      "tenant.read", "member.read", "did.read", "did.assign", "wallet.read",
+      "tenant.read", "member.read", "did.read", "did.assign", "wallet.read", "cdr.read",
       "carrier.read", "sip_trunk.read", "routing.read", "telecom.read", "telecom.health.read",
     ],
   },
@@ -102,7 +105,7 @@ export const SYSTEM_ROLES: SystemRoleDef[] = [
     name: "Auditor",
     description: "Read-only across the tenant",
     permissions: [
-      "tenant.read", "member.read", "role.read", "did.read", "wallet.read", "audit.read",
+      "tenant.read", "member.read", "role.read", "did.read", "wallet.read", "cdr.read", "audit.read",
       "carrier.read", "sip_trunk.read", "routing.read", "telecom.read", "telecom.health.read",
     ],
   },

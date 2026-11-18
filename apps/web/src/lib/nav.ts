@@ -42,9 +42,9 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Numbers", href: "/numbers", icon: Hash, phase: 9, permission: "did.read" },
   { label: "Porting", href: "/porting", icon: ArrowLeftRight, phase: 9, queueKey: "porting", permission: "did.read" },
   { label: "Billing", href: "/billing", icon: Wallet, phase: 13, permission: "wallet.read" },
-  // CDRs have no dedicated permission in the catalog yet; gated on billing's
-  // wallet.read (usage is billing-adjacent) until a cdr.read key is introduced.
-  { label: "CDRs", href: "/cdrs", icon: ListOrdered, phase: 14, permission: "wallet.read" },
+  // CDRs / usage gate on their own catalog key (billing-adjacent). Granted to the
+  // billing-visible roles (owner, operator, auditor); routes land in Phase 14.
+  { label: "CDRs", href: "/cdrs", icon: ListOrdered, phase: 14, permission: "cdr.read" },
   // NOC / telecom control plane — platform-only (PlatformGuard on the API).
   { label: "Infrastructure", href: "/infrastructure", icon: Server, phase: 12, permission: "telecom.read", platform: true },
   { label: "Admin", href: "/admin", icon: Settings, phase: 6, permission: "member.read" },

@@ -167,9 +167,18 @@ CTA enables — a mis-click guard for when a real connector is wired (both still
 the detail view; Check-health stays direct; the typed value resets on open/close. UX only — the API
 re-checks permission + platform. **web 129 → 131 tests, typecheck ✓, lint ✓, `next build` ✓. No
 contract/backend/API/schema/DI change.**
-Next (await owner go): a QR-code render for MFA enrollment; `cdr.read` permission; carrier/sip-trunk/
-did/routing/lcr read screens (author per-screen); backend read gaps (HealthEvent/config-version
-history) stay separately approval-gated.
+**12O-2m (DONE)** — `cdr.read` permission (RBAC catalog). Added a dedicated `cdr.read` (resource `cdr`,
+action `read`, billing group) so CDRs stop borrowing `wallet.read`. Granted to the billing-visible roles
+— owner (via `*`), operator, auditor — so CDR visibility is unchanged (admin still has neither
+`wallet.read` nor `cdr.read`). The seed is catalog-driven + idempotent: the key and role links land on
+the next `prisma db seed` (no migration — permissions are seeded rows). Frontend: the CDRs nav/route
+gate re-points from `wallet.read` to `cdr.read`. No contract change (`MeContext.permissions` is a
+free-form `string[]`; no CDR route exists yet — Phase 14). **API unit 186 → 187 (catalog +1), web 131,
+typecheck ✓, lint ✓, `next build` ✓.** API e2e NOT run here (test DB :5433 down; change is additive,
+data-only, unit-covered — no controller/guard/route touched); owner re-seeds to apply.
+Next (await owner go): a QR-code render for MFA enrollment; carrier/sip-trunk/did/routing/lcr read
+screens (author per-screen); backend read gaps (HealthEvent/config-version history) stay separately
+approval-gated.
 
 ### (superseded) sub-phase plan
 
