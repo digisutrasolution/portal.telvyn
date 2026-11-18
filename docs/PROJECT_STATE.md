@@ -117,8 +117,16 @@ tenant for such items on top of the permission. New "Infrastructure" nav + `/inf
 (`platform:true` + `telecom.read`) — matches API PlatformGuard. **UX-gated; API re-checks.** **ADR-0018
 Accepted. web 77 → 91 tests, typecheck ✓, lint ✓, `next build` ✓** (unit + build; end-to-end needs API
 up + platform sign-in). **No backend/API/schema/DI change.** Production stays on `NullEngineConnector`
-(health reads UNKNOWN). Next (await owner go): engine detail + live `/status` (connection/version/
-desired); then nodes/regions; then MFA enroll/manage + email-unverified banner + `cdr.read`; backend
+(health reads UNKNOWN). **12O-2g (DONE)** — NOC engine detail + live status. Contract-first: authored
+`GET /v1/telecom/engines/{id}` (→ `Engine`) + `/{id}/status` (→ `EngineStatus` + `EngineConnection`/
+`EngineVersionPosture`/`EngineDesiredPreview`) from the real `EnginesController.status` composition,
+regenerated types. `getEngine`/`getEngineStatus`; `/infrastructure/[id]` → `<EngineDetailView>` (two
+`useResource` calls → Health / Connectivity / Configuration-version / Desired-config cards); engines
+table name links to detail. Honest UNKNOWN health / UNCONFIGURED connection with Null connector.
+**Read-only** (health-check/sync POSTs not wired). **ADR-0018 addendum. web 91 → 95 tests, typecheck ✓,
+lint ✓, `next build` ✓** (both /infrastructure routes). **No backend/API/schema/DI change.** Production
+stays on `NullEngineConnector`. Next (await owner go): nodes/regions NOC views; then mutating NOC
+actions (health-check/sync); then MFA enroll/manage + email-unverified banner + `cdr.read`; backend
 read gaps (HealthEvent history, config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan

@@ -31,3 +31,6 @@ export type Engine = Schemas["Engine"];
 
 /** Engine health result (status + optional latency/detail). */
 export type EngineHealth = Schemas["EngineHealth"];
+
+/** Normalized engine status: health + connection + config-version posture. */
+export type EngineStatus = Schemas["EngineStatus"];

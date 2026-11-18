@@ -333,6 +333,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/engines/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one telecom engine (platform) */
+        get: operations["getEngine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/telecom/engines/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Normalized engine status — health + connection + config version (platform)
+         * @description Read-only, SSRF-guarded status with honest health (UNKNOWN for stubs; no live egress with the Null connector), connection reachability, and the config version posture (desired/applied) plus the live desired-config summary. Requires PLATFORM + `telecom.health.read`.
+         */
+        get: operations["getEngineStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -471,6 +508,45 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        EngineConnection: {
+            /** @enum {string} */
+            state: "UNCONFIGURED" | "DISABLED" | "BLOCKED" | "UNVERIFIED" | "REACHABLE" | "UNREACHABLE";
+            endpointConfigured: boolean;
+            detail?: string;
+        };
+        EngineVersionPosture: {
+            /** @description Short fingerprint of the desired config; null until any assignment. */
+            desiredVersion: string | null;
+            /** @description Short fingerprint last applied; null until a real engine applies. */
+            appliedVersion: string | null;
+            /** @enum {string|null} */
+            syncState: "NOOP" | "APPLIED" | "PENDING_RECONCILIATION" | "FAILED" | null;
+            /** @description Count of desired-config snapshots in history. */
+            versions: number;
+        };
+        EngineDesiredPreview: {
+            /** @description Short fingerprint of the current desired config. */
+            version: string;
+            /** @description Counts per resource kind (carriers, trunks, dids, routes). */
+            summary: {
+                [key: string]: number;
+            };
+        };
+        EngineStatus: {
+            /** Format: uuid */
+            engineId?: string;
+            /** @enum {string} */
+            provider: "KAMAILIO" | "ASTERISK" | "FREESWITCH";
+            implemented: boolean;
+            capabilities: components["schemas"]["EngineCapabilities"];
+            health: components["schemas"]["EngineHealth"];
+            correlationId: string;
+            /** Format: date-time */
+            checkedAt: string;
+            connection: components["schemas"]["EngineConnection"];
+            version: components["schemas"]["EngineVersionPosture"];
+            desired: components["schemas"]["EngineDesiredPreview"];
         };
     };
     responses: {
@@ -925,6 +1001,56 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    getEngine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Engine */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engine"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getEngineStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Engine status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineStatus"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
 }

@@ -313,6 +313,43 @@ paths:
                 items: { $ref: "#/components/schemas/Engine" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/engines/{id}:
+    get:
+      tags: [telecom]
+      summary: Get one telecom engine (platform)
+      operationId: getEngine
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Engine
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Engine" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/engines/{id}/status:
+    get:
+      tags: [telecom]
+      summary: Normalized engine status — health + connection + config version (platform)
+      description: >-
+        Read-only, SSRF-guarded status with honest health (UNKNOWN for stubs; no
+        live egress with the Null connector), connection reachability, and the
+        config version posture (desired/applied) plus the live desired-config
+        summary. Requires PLATFORM + `telecom.health.read`.
+      operationId: getEngineStatus
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Engine status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EngineStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -463,3 +500,41 @@ components:
         health: { $ref: "#/components/schemas/EngineHealth" }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    EngineConnection:
+      type: object
+      required: [state, endpointConfigured]
+      properties:
+        state: { type: string, enum: [UNCONFIGURED, DISABLED, BLOCKED, UNVERIFIED, REACHABLE, UNREACHABLE] }
+        endpointConfigured: { type: boolean }
+        detail: { type: string }
+    EngineVersionPosture:
+      type: object
+      required: [desiredVersion, appliedVersion, syncState, versions]
+      properties:
+        desiredVersion: { type: string, nullable: true, description: "Short fingerprint of the desired config; null until any assignment." }
+        appliedVersion: { type: string, nullable: true, description: "Short fingerprint last applied; null until a real engine applies." }
+        syncState: { type: string, nullable: true, enum: [NOOP, APPLIED, PENDING_RECONCILIATION, FAILED] }
+        versions: { type: integer, description: "Count of desired-config snapshots in history." }
+    EngineDesiredPreview:
+      type: object
+      required: [version, summary]
+      properties:
+        version: { type: string, description: "Short fingerprint of the current desired config." }
+        summary:
+          type: object
+          additionalProperties: { type: integer }
+          description: "Counts per resource kind (carriers, trunks, dids, routes)."
+    EngineStatus:
+      type: object
+      required: [provider, implemented, capabilities, health, correlationId, checkedAt, connection, version, desired]
+      properties:
+        engineId: { type: string, format: uuid }
+        provider: { type: string, enum: [KAMAILIO, ASTERISK, FREESWITCH] }
+        implemented: { type: boolean }
+        capabilities: { $ref: "#/components/schemas/EngineCapabilities" }
+        health: { $ref: "#/components/schemas/EngineHealth" }
+        correlationId: { type: string }
+        checkedAt: { type: string, format: date-time }
+        connection: { $ref: "#/components/schemas/EngineConnection" }
+        version: { $ref: "#/components/schemas/EngineVersionPosture" }
+        desired: { $ref: "#/components/schemas/EngineDesiredPreview" }

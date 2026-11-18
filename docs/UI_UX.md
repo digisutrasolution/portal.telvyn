@@ -297,5 +297,12 @@ engines table (name/type/environment/status badge/health status/version) from
 `GET /v1/telecom/engines` via a new `useResource` hook, with honest
 loading/empty/error states and **UNKNOWN** health for stub adapters (never
 fabricated). Verified: `tsc` clean · 91/91 Vitest · `next build` clean (per-state
-UI unit-tested; end-to-end needs the API up + a platform sign-in). Next: engine
-detail + live `/status`, then nodes/regions.
+UI unit-tested; end-to-end needs the API up + a platform sign-in).
+
+NOC — Engine detail — EXISTING (Phase 12O-2g, 2026-11-18, ADR-0018 addendum):
+`/infrastructure/[id]` (linked from each engine name) renders read-only engine
+detail — identity header + Health / Connectivity / Configuration-version /
+Desired-config cards, loaded from `GET /v1/telecom/engines/:id` and `/:id/status`
+via two `useResource` calls, with honest UNKNOWN/UNCONFIGURED states under the
+Null connector. No mutating actions. Verified: `tsc` clean · 95/95 Vitest ·
+`next build` clean. Next: nodes/regions, then mutating NOC actions.

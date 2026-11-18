@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Server } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Status } from "@/components/ui/status";
@@ -74,7 +75,11 @@ export function EnginesView() {
             <tbody>
               {data.map((engine) => (
                 <tr key={engine.id} className="border-b border-line last:border-0">
-                  <td className="px-3 py-2 font-medium text-ink">{engine.name}</td>
+                  <td className="px-3 py-2 font-medium">
+                    <Link href={`/infrastructure/${engine.id}`} className="text-accent hover:underline">
+                      {engine.name}
+                    </Link>
+                  </td>
                   <td className="px-3 py-2 text-ink-2">{engine.type}</td>
                   <td className="px-3 py-2 text-ink-2">{engine.environment}</td>
                   <td className="px-3 py-2">

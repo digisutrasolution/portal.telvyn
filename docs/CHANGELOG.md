@@ -465,3 +465,15 @@ Format: Keep a Changelog; SemVer once releases begin.
   re-checks telecom.read + platform.** +14 unit tests (web 77 → 91). **No backend/API/schema/DI
   change** (the endpoint already existed). typecheck ✓, lint ✓, `next build` ✓ (route present). ADR-0018
   Accepted. Deferred: engine detail + live `/status`, nodes/regions, MFA enroll/manage, `cdr.read`.
+- 2026-11-18 — **Phase 12O-2g — NOC engine detail + live status.** Read-only engine detail screen.
+  **Contract-first:** authored `GET /v1/telecom/engines/{id}` (→ `Engine`) and `/{id}/status`
+  (→ new `EngineStatus` + `EngineConnection`/`EngineVersionPosture`/`EngineDesiredPreview`) into
+  `telvyn.v1.yaml` from the real `EnginesController.status` composition (connection state enum, sync
+  state enum, desired-config counts), regenerated types. `getEngine`/`getEngineStatus` actions;
+  `/infrastructure/[id]` route → `<EngineDetailView>` loads engine + status via two `useResource`
+  calls and shows Health / Connectivity / Configuration-version / Desired-config cards; the engines
+  table links each name to its detail. Honest UNKNOWN health / UNCONFIGURED connection with the Null
+  connector — never fabricated. **Read-only** — health-check/sync POSTs (mutations) intentionally not
+  wired. Route gated by the existing `/infrastructure` platform guard. +4 unit tests (web 91 → 95).
+  **No backend/API/schema/DI change.** typecheck ✓, lint ✓, `next build` ✓ (both routes). ADR-0018
+  addendum. Deferred: nodes/regions NOC views, mutating NOC actions, MFA enroll/manage, `cdr.read`.

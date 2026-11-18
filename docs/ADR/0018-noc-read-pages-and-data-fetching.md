@@ -68,3 +68,25 @@ with it the patterns the rest of the NOC reuses.
 - No backend/API/schema/DI change — the endpoint already existed; this only
   documents it in the contract and consumes it. Production stays on
   `NullEngineConnector`, so health reads `UNKNOWN`.
+
+## Addendum — engine detail + live status (Phase 12O-2g, 2026-11-18)
+
+Extends the NOC with a read-only engine detail screen, following the same
+per-screen contract-authoring pattern.
+
+- **Contract.** Authored `GET /v1/telecom/engines/{id}` (→ `Engine`) and
+  `GET /v1/telecom/engines/{id}/status` (→ new `EngineStatus`) from the real
+  `EnginesController.status` composition — honest health, `EngineConnection`
+  (state ∈ UNCONFIGURED/DISABLED/BLOCKED/UNVERIFIED/REACHABLE/UNREACHABLE +
+  endpointConfigured + detail), `EngineVersionPosture` (desired/applied short
+  fingerprints, `syncState` ∈ NOOP/APPLIED/PENDING_RECONCILIATION/FAILED,
+  snapshot count), and `EngineDesiredPreview` (version + per-kind counts). All
+  from the real service shapes; `status` requires `telecom.health.read`.
+- **UI.** `/infrastructure/[id]` → `<EngineDetailView>` loads the engine and its
+  status with two `useResource` calls and renders identity + Health /
+  Connectivity / Configuration-version / Desired-config cards. The engines table
+  now links each name to its detail page. Read-only — the health-check and sync
+  POSTs are **not** wired (they are mutations, out of the read-only NOC scope).
+- Covered by unit tests (`getEngine`/`getEngineStatus`; detail view data + error)
+  and a production build. No backend/API/schema/DI change; health stays `UNKNOWN`
+  with the Null connector.

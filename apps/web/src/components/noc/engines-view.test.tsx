@@ -46,6 +46,11 @@ describe("EnginesView", () => {
 
     expect(await screen.findByText("kamailio-vps")).toBeInTheDocument();
     expect(screen.getByText("freeswitch-a")).toBeInTheDocument();
+    // engine name links to its detail page
+    expect(screen.getByRole("link", { name: "kamailio-vps" })).toHaveAttribute(
+      "href",
+      "/infrastructure/11111111-1111-1111-1111-111111111111",
+    );
     // status + health labels render (dot+label / badge text)
     expect(screen.getByText("ACTIVE")).toBeInTheDocument();
     expect(screen.getByText("UNKNOWN")).toBeInTheDocument();
