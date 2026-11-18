@@ -324,3 +324,10 @@ honest `501 NOT_IMPLEMENTED` under the Null connector; one action in flight
 disables the panel and no mutation is ever auto-retried. Verified: `tsc` clean ·
 115/115 Vitest · `next build` clean. Next: a type-to-confirm guard once a real
 connector is wired.
+
+Email-unverified banner — EXISTING (Phase 12O-2j, 2026-11-18): a quiet warn-tone
+strip below the topbar (`<EmailVerificationBanner>`) shown when the signed-in
+user's email is unverified (read from `GET /v1/auth/me`), with a "Resend email"
+action (→ "Verification email sent") and a session dismiss. Renders nothing while
+loading, on error, or once verified. Verified: `tsc` clean · 120/120 Vitest ·
+`next build` clean.

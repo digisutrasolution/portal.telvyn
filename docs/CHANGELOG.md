@@ -502,3 +502,12 @@ Format: Keep a Changelog; SemVer once releases begin.
   the gate is UX only. +8 unit tests (web 107 → 115). **No backend/API/schema/DI change** (endpoints
   already existed). typecheck ✓, lint ✓, `next build` ✓. ADR-0019 Accepted. Deferred: a type-to-confirm
   guard once a real connector is wired, MFA enroll/manage, email-unverified banner, `cdr.read`.
+- 2026-11-18 — **Phase 12O-2j — email-unverified banner.** A quiet nudge in the authenticated shell
+  when the signed-in user's email isn't verified, with a resend action. Reads identity from the
+  already-contracted `GET /v1/auth/me` (new `getMe` action; `emailVerified` is not on `/v1/me/context`)
+  and resends via the existing `requestEmailVerification`. `<EmailVerificationBanner>` renders nothing
+  while loading, on error, or once verified; shows the email + "Resend email" (→ "Verification email
+  sent") otherwise, and is dismissible for the session. Mounted below the topbar in `AppShell` (so it
+  only shows for authenticated sessions). No contract change (endpoint already covered). +5 unit tests
+  (web 115 → 120). **No backend/API/schema/DI change.** typecheck ✓, lint ✓, `next build` ✓. Deferred:
+  MFA enroll/manage, a type-to-confirm guard for engine sync/rollback, a `cdr.read` permission.

@@ -6,6 +6,7 @@ import { api } from "@/lib/api/client";
 import {
   confirmEmailVerification,
   confirmPasswordReset,
+  getMe,
   isMfaRequired,
   login,
   logout,
@@ -36,6 +37,12 @@ describe("auth-actions", () => {
     post.mockResolvedValue({ accessToken: "a", expiresIn: 900 });
     await refresh();
     expect(post).toHaveBeenCalledWith("/v1/auth/refresh", undefined, { auth: false, signal: undefined });
+  });
+
+  it("getMe GETs /v1/auth/me authenticated", async () => {
+    vi.mocked(api.get).mockResolvedValue({ id: "u", email: "a@b.co", mfaEnabled: false, emailVerified: true });
+    await getMe();
+    expect(api.get).toHaveBeenCalledWith("/v1/auth/me", { signal: undefined });
   });
 
   it("logout posts authenticated (default auth)", async () => {

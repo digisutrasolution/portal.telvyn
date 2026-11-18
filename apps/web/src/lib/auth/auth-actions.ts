@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { LoginResult, TokenPair } from "@/lib/contracts";
+import type { LoginResult, Me, TokenPair } from "@/lib/contracts";
 
 /**
  * Typed auth actions over the API client.
@@ -24,6 +24,11 @@ export function verifyMfa(mfaToken: string, code: string, signal?: AbortSignal):
 /** Exchange the refresh cookie for a fresh access token (session bootstrap). */
 export function refresh(signal?: AbortSignal): Promise<TokenPair> {
   return api.post<TokenPair>("/v1/auth/refresh", undefined, { auth: false, signal });
+}
+
+/** The current user's identity (id, email, mfaEnabled, emailVerified). */
+export function getMe(signal?: AbortSignal): Promise<Me> {
+  return api.get<Me>("/v1/auth/me", { signal });
 }
 
 /** Revoke the current server-side session (clears the refresh cookie). */
