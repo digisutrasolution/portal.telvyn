@@ -6,12 +6,12 @@ import { NavList } from "./nav-list";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/numbers" }));
 
-function ctx(permissions: string[]) {
-  return { userId: "u", tenantId: "t", tenantType: "CUSTOMER" as const, roles: [], permissions };
+function ctx(permissions: string[], tenantType: "PLATFORM" | "CUSTOMER" = "CUSTOMER") {
+  return { userId: "u", tenantId: "t", tenantType, roles: [], permissions };
 }
 
-function renderNav(permissions: string[]) {
-  const loader: SessionLoader = async () => ctx(permissions);
+function renderNav(permissions: string[], tenantType: "PLATFORM" | "CUSTOMER" = "CUSTOMER") {
+  const loader: SessionLoader = async () => ctx(permissions, tenantType);
   return render(
     <SessionProvider loader={loader}>
       <TooltipProvider>
@@ -43,5 +43,16 @@ describe("NavList", () => {
     renderNav(["did.read", "wallet.read", "member.read"]);
     expect(await screen.findByRole("link", { name: "Numbers" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Billing" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("hides the platform-only Infrastructure item for a non-platform session", async () => {
+    renderNav(["did.read", "telecom.read"], "CUSTOMER"); // has telecom.read but not platform
+    expect(await screen.findByRole("link", { name: "Numbers" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Infrastructure" })).toBeNull();
+  });
+
+  it("shows Infrastructure for a platform session with telecom.read", async () => {
+    renderNav(["telecom.read"], "PLATFORM");
+    expect(await screen.findByRole("link", { name: "Infrastructure" })).toHaveAttribute("href", "/infrastructure");
   });
 });

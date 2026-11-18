@@ -167,6 +167,13 @@ Response is a safe DTO (config + carrier summary + safe credential metadata +
 honest `health: UNKNOWN`) — never `secretEnc`/passwords. OpenAPI YAML still
 covers `/v1/auth` only (tracked debt) — endpoints documented here.
 
+> **OpenAPI debt — partial closure (Phase 12O-2f, 2026-11-18):** the contract
+> now also covers `GET /v1/me/context` and `GET /v1/telecom/engines` (+ the
+> `Engine`/`EngineHealth`/`EngineCapabilities` schemas), authored from the real
+> service shapes so the NOC frontend can generate its types (ADR-0018). The
+> remaining telecom/authz endpoints are still documented here only; each is added
+> to the contract as a frontend screen consumes it.
+
 ## DID API — EXISTING (Phase 12G, 2026-08-29)
 
 `/v1/telecom/dids` — JWT + tenant + permission gated; strictly tenant-owned

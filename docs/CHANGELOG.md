@@ -450,3 +450,18 @@ Format: Keep a Changelog; SemVer once releases begin.
   RouteGuard allow/deny/unguarded). **No backend/API/schema/DI change.** typecheck ✓, lint ✓,
   `next build` ✓. ADR-0017 Accepted. Deferred: read-only NOC pages, MFA enroll/manage,
   email-unverified banner, a `cdr.read` permission.
+- 2026-11-18 — **Phase 12O-2f — NOC: read-only Engines overview + telecom read contract.** The first
+  NOC (telecom control-plane) screen. **Contract-first:** authored `GET /v1/telecom/engines` + the
+  `Engine`/`EngineHealth`/`EngineCapabilities` schemas into `telvyn.v1.yaml` from the real
+  `EnginesService.view` shape (real enum values; begins closing the "OpenAPI covers /v1/auth only"
+  debt), regenerated types. New thin `useResource(fetcher)` hook (native fetch via the client; load on
+  mount + `reload()`; abort on unmount; RFC 7807 title on error — no react-query). `listEngines()`
+  typed action. `<EnginesView>` renders a read-only table (name/type/environment/status/health
+  badges/version) with honest loading/empty/error states; **health is `UNKNOWN` for stub adapters,
+  never fabricated.** Platform-aware nav: `NavItem` gains a `platform` flag; `useVisibleNavItems` and
+  `RouteGuard` now require the platform tenant for such items on top of the permission. New
+  "Infrastructure" nav item + `/infrastructure` route (`platform: true` + `telecom.read`) — invisible/
+  blocked for non-platform members, matching the API's PlatformGuard. **Read-only, UX-gated; the API
+  re-checks telecom.read + platform.** +14 unit tests (web 77 → 91). **No backend/API/schema/DI
+  change** (the endpoint already existed). typecheck ✓, lint ✓, `next build` ✓ (route present). ADR-0018
+  Accepted. Deferred: engine detail + live `/status`, nodes/regions, MFA enroll/manage, `cdr.read`.

@@ -9,6 +9,12 @@ describe("requiredPermissionForPath", () => {
     expect(requiredPermissionForPath("/billing")).toBe("wallet.read");
     expect(requiredPermissionForPath("/cdrs")).toBe("wallet.read");
     expect(requiredPermissionForPath("/admin")).toBe("member.read");
+    expect(requiredPermissionForPath("/infrastructure")).toBe("telecom.read");
+  });
+
+  it("marks the NOC infrastructure route platform-only", () => {
+    expect(navItemForPath("/infrastructure")?.platform).toBe(true);
+    expect(navItemForPath("/numbers")?.platform).toBeUndefined();
   });
 
   it("is undefined for the unguarded landing and for unknown routes", () => {

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { ShieldOff } from "lucide-react";
-import { requiredPermissionForPath } from "@/lib/nav";
+import { navItemForPath } from "@/lib/nav";
 import { useSession } from "@/lib/session/session-context";
 
 /** Shown when the session lacks the permission a route requires. */
@@ -30,10 +30,12 @@ function RouteDenied() {
  */
 export function RouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { hasPermission } = useSession();
-  const required = requiredPermissionForPath(pathname);
+  const { hasPermission, isPlatform } = useSession();
+  const item = navItemForPath(pathname);
 
-  if (required && !hasPermission(required)) {
+  const platformBlocked = item?.platform && !isPlatform;
+  const permissionBlocked = item?.permission && !hasPermission(item.permission);
+  if (platformBlocked || permissionBlocked) {
     return <RouteDenied />;
   }
   return <>{children}</>;

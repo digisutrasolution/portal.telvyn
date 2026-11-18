@@ -106,9 +106,20 @@ command palette from one source; a central `<RouteGuard>` wraps the shell `<main
 module route by `requiredPermissionForPath` (page when allowed, else "Access restricted"). **UX gating
 only** — API re-checks every request. **ADR-0017 Accepted. web 69 → 77 tests, typecheck ✓, lint ✓,
 `next build` ✓** (nav/guard behavior is unit-tested + build-verified; end-to-end per-role needs the API
-up + a signed-in member). Production stays on `NullEngineConnector`. Next (await owner go): read-only
-NOC pages; then MFA enroll/manage + the email-unverified banner + a `cdr.read` permission; backend read
-gaps (HealthEvent history, config-version history) stay separately approval-gated.
+up + a signed-in member). **12O-2f (DONE)** — first NOC screen: read-only **Engines overview** +
+telecom read contract. Contract-first: authored `GET /v1/telecom/engines` + `Engine`/`EngineHealth`/
+`EngineCapabilities` into `telvyn.v1.yaml` from the real `EnginesService.view` (begins closing the
+OpenAPI /v1/auth-only debt), regenerated types. New `useResource(fetcher)` hook (native fetch, load +
+`reload()`, abort, RFC 7807 error — no react-query), `listEngines()` action, `<EnginesView>` table
+(status/health badges, honest loading/empty/error; health `UNKNOWN` for stubs, never fabricated).
+Platform-aware nav: `NavItem.platform` flag; `useVisibleNavItems` + `RouteGuard` require the platform
+tenant for such items on top of the permission. New "Infrastructure" nav + `/infrastructure` route
+(`platform:true` + `telecom.read`) — matches API PlatformGuard. **UX-gated; API re-checks.** **ADR-0018
+Accepted. web 77 → 91 tests, typecheck ✓, lint ✓, `next build` ✓** (unit + build; end-to-end needs API
+up + platform sign-in). **No backend/API/schema/DI change.** Production stays on `NullEngineConnector`
+(health reads UNKNOWN). Next (await owner go): engine detail + live `/status` (connection/version/
+desired); then nodes/regions; then MFA enroll/manage + email-unverified banner + `cdr.read`; backend
+read gaps (HealthEvent history, config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

@@ -23,3 +23,4 @@ ADR that references the old one. Template: `template.md`.
 | 0015 | Frontend typed API client + contract type generation | Accepted |
 | 0016 | Auth frontend: sign-in gate + login/MFA flow | Accepted |
 | 0017 | Permission-aware navigation + route gating | Accepted |
+| 0018 | NOC read pages: telecom read contract + data-fetching | Accepted |

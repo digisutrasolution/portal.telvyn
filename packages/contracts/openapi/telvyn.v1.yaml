@@ -13,6 +13,7 @@ servers:
     description: local development
 tags:
   - name: auth
+  - name: telecom
 security:
   - bearerAuth: []
 paths:
@@ -293,6 +294,25 @@ paths:
       responses:
         "204": { description: MFA disabled }
         "400": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/engines:
+    get:
+      tags: [telecom]
+      summary: List telecom engines (platform)
+      description: >-
+        Platform-scoped list of configured telecom engines with their honest
+        health (UNKNOWN for stub adapters — never fabricated). Requires an active
+        PLATFORM tenant and `telecom.read`. Read-only.
+      operationId: listEngines
+      responses:
+        "200":
+          description: Engines
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Engine" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -401,3 +421,45 @@ components:
         metadata: { type: object, nullable: true }
         ipAddress: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
+    EngineHealth:
+      type: object
+      required: [status]
+      description: Honest engine health; UNKNOWN until a real adapter + probe exist.
+      properties:
+        status: { type: string, enum: [HEALTHY, DEGRADED, UNHEALTHY, UNKNOWN, DISABLED] }
+        latencyMs: { type: number }
+        detail: { type: string }
+    EngineCapabilities:
+      type: object
+      description: Explicit per-operation capability flags (never inferred from type).
+      required: [health, routing, registration, activeCalls, originate, configuration]
+      properties:
+        health: { type: boolean }
+        routing: { type: boolean }
+        registration: { type: boolean }
+        activeCalls: { type: boolean }
+        originate: { type: boolean }
+        configuration: { type: boolean }
+    Engine:
+      type: object
+      required: [id, name, type, environment, status, capabilities, softwareCapabilities, implemented, health, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string, enum: [KAMAILIO, ASTERISK, FREESWITCH] }
+        provider: { type: string, nullable: true }
+        version: { type: string, nullable: true }
+        endpoint: { type: string, nullable: true, description: "Management/API host reference — never a secret." }
+        credentialId: { type: string, format: uuid, nullable: true, description: "Vault reference only — never the secret." }
+        environment: { type: string, enum: [DEVELOPMENT, STAGING, PRODUCTION] }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED] }
+        regionId: { type: string, format: uuid, nullable: true }
+        capabilities:
+          type: array
+          description: Admin-enabled capability keys configured for this engine instance.
+          items: { type: string }
+        softwareCapabilities: { $ref: "#/components/schemas/EngineCapabilities" }
+        implemented: { type: boolean, description: "Whether the provider adapter is implemented (vs an honest stub)." }
+        health: { $ref: "#/components/schemas/EngineHealth" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }

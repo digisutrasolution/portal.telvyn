@@ -25,3 +25,9 @@ export type TokenPair = Schemas["TokenPair"];
 
 /** Login step-1 result: either a token pair or an MFA challenge. */
 export type LoginResult = Schemas["LoginResult"];
+
+/** A telecom engine (platform), with honest health. */
+export type Engine = Schemas["Engine"];
+
+/** Engine health result (status + optional latency/detail). */
+export type EngineHealth = Schemas["EngineHealth"];

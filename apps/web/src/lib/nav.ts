@@ -5,6 +5,7 @@ import {
   Wallet,
   ListOrdered,
   Settings,
+  Server,
   type LucideIcon,
 } from "lucide-react";
 
@@ -28,6 +29,12 @@ export interface NavItem {
    * the gate is UX only — every API route re-checks server-side.
    */
   permission?: string;
+  /**
+   * Platform-only module (the NOC / telecom control plane, PlatformGuard on the
+   * API). Shows and opens only for a PLATFORM-tenant session, combined with
+   * `permission` (ADR-0018).
+   */
+  platform?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -38,6 +45,8 @@ export const NAV_ITEMS: NavItem[] = [
   // CDRs have no dedicated permission in the catalog yet; gated on billing's
   // wallet.read (usage is billing-adjacent) until a cdr.read key is introduced.
   { label: "CDRs", href: "/cdrs", icon: ListOrdered, phase: 14, permission: "wallet.read" },
+  // NOC / telecom control plane — platform-only (PlatformGuard on the API).
+  { label: "Infrastructure", href: "/infrastructure", icon: Server, phase: 12, permission: "telecom.read", platform: true },
   { label: "Admin", href: "/admin", icon: Settings, phase: 6, permission: "member.read" },
 ];
 

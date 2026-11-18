@@ -289,3 +289,13 @@ Operations stays the one unguarded landing. UX gating only (the API is the
 authority). Verified: `tsc` clean · 77/77 Vitest · `next build` clean (per-role
 nav/guard behavior is unit-tested; end-to-end needs the API up + sign-in). Still
 to come: read-only NOC pages, MFA enroll/manage, an email-unverified banner.
+
+NOC — Engines overview — EXISTING (Phase 12O-2f, 2026-11-18, ADR-0018): the
+first NOC screen. A platform-only "Infrastructure" nav item + `/infrastructure`
+route (gated on the platform tenant + `telecom.read`) renders a read-only
+engines table (name/type/environment/status badge/health status/version) from
+`GET /v1/telecom/engines` via a new `useResource` hook, with honest
+loading/empty/error states and **UNKNOWN** health for stub adapters (never
+fabricated). Verified: `tsc` clean · 91/91 Vitest · `next build` clean (per-state
+UI unit-tested; end-to-end needs the API up + a platform sign-in). Next: engine
+detail + live `/status`, then nodes/regions.

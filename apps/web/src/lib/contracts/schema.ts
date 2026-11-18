@@ -313,6 +313,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/engines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List telecom engines (platform)
+         * @description Platform-scoped list of configured telecom engines with their honest health (UNKNOWN for stub adapters — never fabricated). Requires an active PLATFORM tenant and `telecom.read`. Read-only.
+         */
+        get: operations["listEngines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -403,6 +423,54 @@ export interface components {
             ipAddress?: string | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        /** @description Honest engine health; UNKNOWN until a real adapter + probe exist. */
+        EngineHealth: {
+            /** @enum {string} */
+            status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN" | "DISABLED";
+            latencyMs?: number;
+            detail?: string;
+        };
+        /** @description Explicit per-operation capability flags (never inferred from type). */
+        EngineCapabilities: {
+            health: boolean;
+            routing: boolean;
+            registration: boolean;
+            activeCalls: boolean;
+            originate: boolean;
+            configuration: boolean;
+        };
+        Engine: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            type: "KAMAILIO" | "ASTERISK" | "FREESWITCH";
+            provider?: string | null;
+            version?: string | null;
+            /** @description Management/API host reference — never a secret. */
+            endpoint?: string | null;
+            /**
+             * Format: uuid
+             * @description Vault reference only — never the secret.
+             */
+            credentialId?: string | null;
+            /** @enum {string} */
+            environment: "DEVELOPMENT" | "STAGING" | "PRODUCTION";
+            /** @enum {string} */
+            status: "ACTIVE" | "SUSPENDED" | "DISABLED";
+            /** Format: uuid */
+            regionId?: string | null;
+            /** @description Admin-enabled capability keys configured for this engine instance. */
+            capabilities: string[];
+            softwareCapabilities: components["schemas"]["EngineCapabilities"];
+            /** @description Whether the provider adapter is implemented (vs an honest stub). */
+            implemented: boolean;
+            health: components["schemas"]["EngineHealth"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
         };
     };
     responses: {
@@ -835,6 +903,28 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["Problem"];
+        };
+    };
+    listEngines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Engines */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engine"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
 }

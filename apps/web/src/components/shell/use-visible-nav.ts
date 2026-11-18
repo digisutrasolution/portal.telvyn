@@ -5,11 +5,14 @@ import { useSession } from "@/lib/session/session-context";
 
 /**
  * Nav items the current session may see — the shared source for the sidebar,
- * the mobile sheet, and the command palette. An item with no `permission` is
- * always visible; otherwise it shows only when the session holds that key.
- * UX gating only (ADR-0017); the server re-checks every request.
+ * the mobile sheet, and the command palette. An item shows only when the
+ * session holds its `permission` (undefined = always visible) AND, for a
+ * `platform` item (the NOC), the active tenant is the platform tenant.
+ * UX gating only (ADR-0017/0018); the server re-checks every request.
  */
 export function useVisibleNavItems(): NavItem[] {
-  const { hasPermission } = useSession();
-  return NAV_ITEMS.filter((item) => !item.permission || hasPermission(item.permission));
+  const { hasPermission, isPlatform } = useSession();
+  return NAV_ITEMS.filter(
+    (item) => (!item.permission || hasPermission(item.permission)) && (!item.platform || isPlatform),
+  );
 }

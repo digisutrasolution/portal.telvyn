@@ -630,3 +630,15 @@ browser side only.
 - **No secret in the gate.** The gate compares plain permission keys already
   expanded server-side; it never sees roles' internals or any secret. No
   backend/API/schema/DI change.
+
+### NOC read pages — platform gating + safe DTOs (Phase 12O-2f, ADR-0018)
+
+- **Platform-only, UX + server.** The NOC ("Infrastructure") nav item and route
+  require the platform tenant (`platform` flag) on top of `telecom.read`; the API
+  enforces the same with PlatformGuard on every telecom controller. The frontend
+  gate only hides/blocks the view — a non-platform member who hand-types the URL
+  gets the API's 403, not data.
+- **No secrets in the engine DTO.** The contracted `Engine` shape exposes
+  `credentialId` as a vault reference only (never the secret) and `endpoint` as a
+  management host reference (never a credential). Health is honest `UNKNOWN` for
+  stub adapters — never fabricated. Read-only; no mutating NOC actions shipped.

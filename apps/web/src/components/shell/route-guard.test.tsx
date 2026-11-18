@@ -6,13 +6,13 @@ import { RouteGuard } from "./route-guard";
 const pathname = vi.hoisted(() => ({ current: "/" }));
 vi.mock("next/navigation", () => ({ usePathname: () => pathname.current }));
 
-function ctx(permissions: string[]) {
-  return { userId: "u", tenantId: "t", tenantType: "CUSTOMER" as const, roles: [], permissions };
+function ctx(permissions: string[], tenantType: "PLATFORM" | "CUSTOMER" = "CUSTOMER") {
+  return { userId: "u", tenantId: "t", tenantType, roles: [], permissions };
 }
 
-function renderGuard(path: string, permissions: string[]) {
+function renderGuard(path: string, permissions: string[], tenantType: "PLATFORM" | "CUSTOMER" = "CUSTOMER") {
   pathname.current = path;
-  const loader: SessionLoader = async () => ctx(permissions);
+  const loader: SessionLoader = async () => ctx(permissions, tenantType);
   return render(
     <SessionProvider loader={loader}>
       <RouteGuard>
@@ -37,5 +37,16 @@ describe("RouteGuard", () => {
     renderGuard("/billing", ["did.read"]); // /billing needs wallet.read
     expect(await screen.findByText("Access restricted")).toBeInTheDocument();
     expect(screen.queryByText("MODULE CONTENT")).toBeNull();
+  });
+
+  it("blocks a platform-only route for a non-platform session even with the permission", async () => {
+    renderGuard("/infrastructure", ["telecom.read"], "CUSTOMER");
+    expect(await screen.findByText("Access restricted")).toBeInTheDocument();
+    expect(screen.queryByText("MODULE CONTENT")).toBeNull();
+  });
+
+  it("allows a platform-only route for a platform session with the permission", async () => {
+    renderGuard("/infrastructure", ["telecom.read"], "PLATFORM");
+    expect(await screen.findByText("MODULE CONTENT")).toBeInTheDocument();
   });
 });
