@@ -384,3 +384,15 @@ only). Cursor-paginated with "Load more"; loading / empty / error (RFC 7807 titl
 states. Contract-first: `GET /v1/telecom/dids` + `Did`/`DidPage` authored into the
 contract and the client type generated. Verified: `tsc` clean · 143/143 Vitest ·
 `next build` clean. To come: a DID detail drawer and list filters.
+
+Routing — profiles read list — EXISTING (Phase 12O-2r, 2026-11-19): a read-only
+`/routing` table of the tenant's own routing profiles, reached from a new
+**Routing** nav item (gated on `routing.read`; tenant-scoped). Declarative config
+only — nothing is executed. The list shows a per-profile summary: name, direction,
+status, selection strategy, failover on/off, rule count, and version; the full
+rules (carried in the response) belong in a detail drawer (deferred). Cursor-
+paginated with "Load more"; loading / empty / error (RFC 7807 title) states.
+Contract-first: `GET /v1/telecom/routing-profiles` + `RoutingProfile`/`RoutingPolicy`/
+`RoutingRule`/`RoutingProfilePage` authored into the contract and the client type
+generated. Verified: `tsc` clean · 147/147 Vitest · `next build` clean. To come:
+a routing detail drawer and list filters.

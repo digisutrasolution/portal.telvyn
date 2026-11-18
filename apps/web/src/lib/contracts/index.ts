@@ -76,3 +76,9 @@ export type Did = Schemas["Did"];
 
 /** Cursor-paginated page of DIDs. */
 export type DidPage = Schemas["DidPage"];
+
+/** A routing profile (tenant) with its declarative policy and ordered rules. */
+export type RoutingProfile = Schemas["RoutingProfile"];
+
+/** Cursor-paginated page of routing profiles. */
+export type RoutingProfilePage = Schemas["RoutingProfilePage"];

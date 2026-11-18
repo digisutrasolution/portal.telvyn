@@ -8,6 +8,7 @@ describe("requiredPermissionForPath", () => {
     expect(requiredPermissionForPath("/porting")).toBe("did.read");
     expect(requiredPermissionForPath("/carriers")).toBe("carrier.read");
     expect(requiredPermissionForPath("/sip-trunks")).toBe("sip_trunk.read");
+    expect(requiredPermissionForPath("/routing")).toBe("routing.read");
     expect(requiredPermissionForPath("/billing")).toBe("wallet.read");
     expect(requiredPermissionForPath("/cdrs")).toBe("cdr.read");
     expect(requiredPermissionForPath("/admin")).toBe("member.read");

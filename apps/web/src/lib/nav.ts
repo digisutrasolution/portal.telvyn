@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   Waypoints,
   Cable,
+  Route,
   Wallet,
   ListOrdered,
   Settings,
@@ -47,6 +48,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Carriers", href: "/carriers", icon: Waypoints, phase: 10, permission: "carrier.read" },
   // SIP trunks — strictly tenant-owned connectivity config (no live connectivity).
   { label: "SIP trunks", href: "/sip-trunks", icon: Cable, phase: 11, permission: "sip_trunk.read" },
+  // Routing — tenant-owned declarative routing profiles (config only, not executed).
+  { label: "Routing", href: "/routing", icon: Route, phase: 12, permission: "routing.read" },
   { label: "Billing", href: "/billing", icon: Wallet, phase: 13, permission: "wallet.read" },
   // CDRs / usage gate on their own catalog key (billing-adjacent). Granted to the
   // billing-visible roles (owner, operator, auditor); routes land in Phase 14.

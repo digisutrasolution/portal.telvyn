@@ -212,7 +212,18 @@ ids only, so carrier/trunk render as short refs. `dids-actions.ts` (`listDids`),
 page + Load more; loading/empty/error), `/numbers` page swapped from `ModuleGate`. Only the list
 endpoint was contracted (per-screen as consumed); `…/{id}` + mutations stay for later. **web 139 → 143,
 typecheck ✓, lint ✓, `next build` ✓. No backend/API change** (DID API already existed + documented).
-Next (await owner go): carrier/trunk/DID detail drawers + list filters; routing/lcr read screens
+**12O-2r (DONE)** — routing profiles read screen (contract-first). Read-only `/routing` list of the
+tenant's own routing profiles, gated on `routing.read` (tenant-scoped). Contract-first (ADR-0002):
+authored `GET /v1/telecom/routing-profiles` (cursor pagination + `status`/`direction`/`strategy`/`q`) and
+`RoutingProfile`/`RoutingPolicy`/`RoutingRule`/`RoutingProfilePage` into `telvyn.v1.yaml` from the real
+backend view (list returns full policy + ordered rules), regenerated `schema.ts`. Declarative config
+only — nothing executed. `routing-actions.ts` (`listRoutingProfiles`), `<RoutingView>` (per-profile
+summary: direction/status/strategy/failover/rule-count/version; first page + Load more; loading/empty/
+error), `/routing` page, and a **Routing** nav item (phase 12). Full rules → detail drawer (deferred).
+Only the list endpoint was contracted (per-screen as consumed); `…/{id}` + mutations stay for later.
+**web 143 → 147, typecheck ✓, lint ✓, `next build` ✓. No backend change** (routing API already existed;
+API.md gained the `strategy` filter it had omitted).
+Next (await owner go): carrier/trunk/DID/routing detail drawers + list filters; the LCR read screen
 (author per-screen); backend read gaps (HealthEvent/config-version history) stay separately
 approval-gated.
 

@@ -206,7 +206,7 @@ Audit records counts/status only (never webhook payloads/secrets).
 
 | Method & path | Permission |
 |---|---|
-| `GET /v1/telecom/routing-profiles` (cursor pagination; filters `status`, `direction`, `q`) | `routing.read` |
+| `GET /v1/telecom/routing-profiles` (cursor pagination; filters `status`, `direction`, `strategy`, `q`) | `routing.read` |
 | `GET /v1/telecom/routing-profiles/:id` | `routing.read` |
 | `POST /v1/telecom/routing-profiles` (with `rules[]`) | `routing.manage` |
 | `PATCH /v1/telecom/routing-profiles/:id` (present `rules` replaces the set) | `routing.manage` |

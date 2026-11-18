@@ -594,3 +594,16 @@ Format: Keep a Changelog; SemVer once releases begin.
   consumed); `…/{id}` + mutations stay for later. +4 web unit tests (139 → 143). **No backend/API change**
   (the DID API already existed + was documented). typecheck ✓, lint ✓, `next build` ✓. Deferred: DID
   detail drawer, list filters (status/country/search), and the routing/lcr read screens.
+- 2026-11-19 — **Phase 12O-2r — routing profiles read screen (contract-first).** A read-only `/routing`
+  list of the tenant's own routing profiles, gated on `routing.read`. Contract-first (ADR-0002): authored
+  `GET /v1/telecom/routing-profiles` (cursor pagination; `status`/`direction`/`strategy`/`q`) and schemas
+  `RoutingProfile`/`RoutingPolicy`/`RoutingRule`/`RoutingProfilePage` into `telvyn.v1.yaml` from the real
+  backend view (the list returns each profile's full policy + ordered rules), then regenerated
+  `schema.ts`. Declarative config only — nothing is executed. New `routing-actions.ts`
+  (`listRoutingProfiles`), a `<RoutingView>` (per-profile summary — direction, status, selection
+  strategy, failover on/off, rule count, version; first page + Load more; loading/empty/error states),
+  `/routing` route + page, and a **Routing** nav item (phase 12, `routing.read`, tenant-scoped). The full
+  rules belong in a detail drawer (deferred). Only the list endpoint was contracted (per-screen as
+  consumed); `…/{id}` + mutations stay for later. +4 web unit tests (143 → 147). **No backend change**;
+  docs-only API.md touch-up (added the `strategy` filter to the documented list query). typecheck ✓,
+  lint ✓, `next build` ✓. Deferred: routing detail drawer + filters, and the LCR read screen.

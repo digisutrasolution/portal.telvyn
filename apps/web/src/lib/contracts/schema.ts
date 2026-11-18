@@ -530,6 +530,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/routing-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List routing profiles (tenant)
+         * @description The tenant's own routing profiles (strictly tenant-owned). Declarative configuration only — nothing is executed (no SIP, webhooks, failover or LCR). Each profile carries its policy and its ordered rules (priority ASC). Cursor-paginated. Requires `routing.read`.
+         */
+        get: operations["listRoutingProfiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -952,6 +972,71 @@ export interface components {
         };
         DidPage: {
             items: components["schemas"]["Did"][];
+            /**
+             * Format: uuid
+             * @description Pass as `cursor` to fetch the next page; null when exhausted.
+             */
+            nextCursor: string | null;
+        };
+        /** @description Declarative selection + failover policy for a profile's rules (never executed). */
+        RoutingPolicy: {
+            /** @enum {string} */
+            selectionStrategy: "PRIORITY" | "WEIGHTED" | "ROUND_ROBIN" | "SIMULTANEOUS";
+            failoverEnabled: boolean;
+            failoverConditions: ("NO_ANSWER" | "BUSY" | "FAILED" | "UNREACHABLE" | "TIMEOUT")[];
+            /** @description Bounded attempt cap (loop protection). */
+            maxAttempts: number | null;
+            overallTimeoutSeconds: number | null;
+        };
+        /** @description A single declarative routing rule. Config only — nothing is dialled. */
+        RoutingRule: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            destinationType: "SIP_TRUNK" | "PHONE_NUMBER" | "EXTENSION" | "VOICEMAIL" | "WEBHOOK";
+            /** @description Canonical value validated per destinationType (E.164, trunk id, etc.). */
+            destination: string;
+            /** @description Deterministic order, ascending. */
+            priority: number;
+            /** @description For the WEIGHTED strategy. */
+            weight: number | null;
+            enabled: boolean;
+            timeoutSeconds: number | null;
+            retryCount: number | null;
+            /** Format: uuid */
+            carrierId: string | null;
+            failoverDestination: string | null;
+            /** @enum {string|null} */
+            failoverDestinationType: "SIP_TRUNK" | "PHONE_NUMBER" | "EXTENSION" | "VOICEMAIL" | "WEBHOOK" | null;
+            failoverAfterSeconds: number | null;
+            /** @description Optional declarative schedule { timezone, daysOfWeek[], startMinute, endMinute }. */
+            schedule: {
+                [key: string]: unknown;
+            } | null;
+        };
+        RoutingProfile: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            direction: "INBOUND" | "OUTBOUND";
+            description: string | null;
+            /**
+             * @description Administrative status.
+             * @enum {string}
+             */
+            status: "ACTIVE" | "SUSPENDED" | "DISABLED";
+            /** @description Optimistic-concurrency version. */
+            version: number;
+            policy: components["schemas"]["RoutingPolicy"];
+            rules: components["schemas"]["RoutingRule"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        RoutingProfilePage: {
+            items: components["schemas"]["RoutingProfile"][];
             /**
              * Format: uuid
              * @description Pass as `cursor` to fetch the next page; null when exhausted.
@@ -1681,6 +1766,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DidPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listRoutingProfiles: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+                status?: "ACTIVE" | "SUSPENDED" | "DISABLED";
+                direction?: "INBOUND" | "OUTBOUND";
+                strategy?: "PRIORITY" | "WEIGHTED" | "ROUND_ROBIN" | "SIMULTANEOUS";
+                /** @description Case-insensitive name search. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Routing profiles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingProfilePage"];
                 };
             };
             401: components["responses"]["Problem"];
