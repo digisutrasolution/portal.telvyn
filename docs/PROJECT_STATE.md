@@ -176,9 +176,14 @@ gate re-points from `wallet.read` to `cdr.read`. No contract change (`MeContext.
 free-form `string[]`; no CDR route exists yet — Phase 14). **API unit 186 → 187 (catalog +1), web 131,
 typecheck ✓, lint ✓, `next build` ✓.** API e2e NOT run here (test DB :5433 down; change is additive,
 data-only, unit-covered — no controller/guard/route touched); owner re-seeds to apply.
-Next (await owner go): a QR-code render for MFA enrollment; carrier/sip-trunk/did/routing/lcr read
-screens (author per-screen); backend read gaps (HealthEvent/config-version history) stay separately
-approval-gated.
+**12O-2n (DONE)** — QR-code render for MFA enrollment. The setup step now shows a scannable QR of the
+`otpauth://` URI above the manual setup key (relabelled the "can't scan?" fallback). New dependency
+`qrcode.react@4.2.0` (pinned exact; zero transitive deps; React 19 peer; SVG output). QR drawn
+dark-on-white with a quiet zone regardless of theme so it always scans, with an accessible `<title>`.
+Frontend-only; no contract/backend change. **web 131 (enroll test asserts the QR gets the full otpauth
+URI; manual key remains the fallback), typecheck ✓, lint ✓, `next build` ✓ (`/account` 5.2 → 11.3 kB).**
+Next (await owner go): carrier/sip-trunk/did/routing/lcr read screens (author per-screen); backend read
+gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

@@ -9,6 +9,11 @@ vi.mock("@/lib/auth/auth-actions", () => ({
   disableMfa: vi.fn(),
 }));
 
+// Stub the QR renderer: assert it receives the otpauth URI, without the SVG internals.
+vi.mock("qrcode.react", () => ({
+  QRCodeSVG: ({ value }: { value: string }) => <div data-testid="qr" data-value={value} />,
+}));
+
 import { disableMfa, enableMfa, enrollMfa, getMe } from "@/lib/auth/auth-actions";
 import { MfaSettings } from "./mfa-settings";
 
@@ -41,7 +46,12 @@ describe("MfaSettings", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Set up two-factor" }));
 
-    const keyField = (await screen.findByLabelText("Setup key")) as HTMLInputElement;
+    // QR encodes the full otpauth URI; the manual key is the scan fallback.
+    expect(await screen.findByTestId("qr")).toHaveAttribute(
+      "data-value",
+      "otpauth://totp/Telvyn:a@b.co?secret=JBSWY3DPEHPK3PXP&issuer=Telvyn",
+    );
+    const keyField = screen.getByLabelText(/enter this key manually/i) as HTMLInputElement;
     expect(keyField.value).toBe("JBSWY3DPEHPK3PXP");
 
     fireEvent.change(screen.getByLabelText("6-digit code"), { target: { value: "123456" } });

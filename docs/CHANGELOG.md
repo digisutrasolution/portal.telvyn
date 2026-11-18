@@ -545,3 +545,12 @@ Format: Keep a Changelog; SemVer once releases begin.
   web 131 (updated). typecheck ✓, lint ✓, `next build` ✓.** API e2e not run here (the test DB on :5433
   is down; the change is additive, data-only, and unit-covered — no controller/guard/route touched).
   Deferred: a QR-code render for MFA enrollment, the remaining tenant read screens.
+- 2026-11-19 — **Phase 12O-2n — QR-code render for MFA enrollment.** The MFA setup step now shows a
+  scannable QR code of the `otpauth://` provisioning URI above the manual setup key (relabelled the
+  scan fallback — "Can't scan? Enter this key manually"). Rendered with a new dependency,
+  **`qrcode.react@4.2.0`** (pinned exact; zero transitive deps; React 19 peer support; SVG output —
+  SSR-safe, crisp, themeable). The QR is drawn dark-on-white with a quiet zone regardless of app theme
+  so it always scans, and carries an accessible `<title>`. Frontend-only; no contract/backend change.
+  Tests: the enroll test asserts the QR is fed the full otpauth URI (qrcode.react stubbed) and the
+  manual key remains the fallback (web still 131). typecheck ✓, lint ✓, `next build` ✓ (`/account`
+  5.2 → 11.3 kB). Deferred: the remaining tenant read screens.

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { ShieldCheck, ShieldOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -88,10 +89,29 @@ export function MfaSettings() {
       <Section>
         <h2 className="text-[14px] font-semibold text-ink">Set up two-factor authentication</h2>
         <p className="mt-1 text-[13px] text-ink-2">
-          Add this key to an authenticator app (Google Authenticator, 1Password, Authy), then enter the 6-digit code it
-          shows to finish. Two-factor isn&apos;t on until you confirm a code.
+          Scan this QR code with an authenticator app (Google Authenticator, 1Password, Authy), then enter the 6-digit
+          code it shows to finish. Two-factor isn&apos;t on until you confirm a code.
         </p>
-        <Field id="mfa-secret" label="Setup key" className="mt-4" hint="Enter this key manually in your authenticator app.">
+        <figure className="mt-4 flex flex-col items-center gap-2">
+          {/* Dark-on-white with a quiet zone, regardless of theme, so it always scans. */}
+          <div className="rounded-lg border border-line bg-white p-3">
+            <QRCodeSVG
+              value={flow.enroll.otpauthUri}
+              size={168}
+              level="M"
+              marginSize={2}
+              bgColor="#ffffff"
+              fgColor="#0a0a0a"
+              title="Two-factor authentication setup QR code"
+            />
+          </div>
+        </figure>
+        <Field
+          id="mfa-secret"
+          label="Can't scan? Enter this key manually"
+          className="mt-4"
+          hint="Type this setup key into your authenticator app instead of scanning."
+        >
           <Input id="mfa-secret" readOnly value={secret ?? flow.enroll.otpauthUri} className="font-mono tracking-wide" />
         </Field>
         <form onSubmit={onEnable} noValidate className="mt-4 space-y-4">
