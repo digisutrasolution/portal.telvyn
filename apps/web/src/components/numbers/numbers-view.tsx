@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { Did } from "@/lib/contracts";
 import { listDids } from "@/lib/telecom/dids-actions";
 import { isApiError } from "@/lib/api/problem";
+import { NumberDetailDrawer } from "./number-detail-drawer";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<Did["status"], Tone> = {
@@ -55,6 +56,7 @@ export function NumbersView() {
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
+  const [detailId, setDetailId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const ac = new AbortController();
@@ -132,6 +134,7 @@ export function NumbersView() {
                   <th scope="col" className="px-3 py-2 font-semibold">Trunk</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Assigned</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Health</th>
+                  <th scope="col" className="px-3 py-2 font-semibold"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -144,6 +147,9 @@ export function NumbersView() {
                     <td className="px-3 py-2"><Ref id={d.sipTrunkId} /></td>
                     <td className="px-3 py-2 text-ink-2">{d.assignedAt ? d.assignedAt.slice(0, 10) : "—"}</td>
                     <td className="px-3 py-2"><Status tone={HEALTH_TONE[d.health.status]} label={d.health.status} /></td>
+                    <td className="px-3 py-2 text-right">
+                      <Button variant="ghost" size="sm" onClick={() => setDetailId(d.id)} aria-label={`View ${d.e164}`}>View</Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -163,6 +169,8 @@ export function NumbersView() {
           )}
         </>
       )}
+
+      {detailId && <NumberDetailDrawer key={detailId} didId={detailId} onClose={() => setDetailId(null)} />}
     </section>
   );
 }

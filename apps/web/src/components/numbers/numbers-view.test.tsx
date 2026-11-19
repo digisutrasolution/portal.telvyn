@@ -3,9 +3,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiError } from "@/lib/api/problem";
 import type { Did } from "@/lib/contracts";
 
-vi.mock("@/lib/telecom/dids-actions", () => ({ listDids: vi.fn() }));
+vi.mock("@/lib/telecom/dids-actions", () => ({ listDids: vi.fn(), getDid: vi.fn() }));
 
-import { listDids } from "@/lib/telecom/dids-actions";
+import { getDid, listDids } from "@/lib/telecom/dids-actions";
 import { NumbersView } from "./numbers-view";
 
 function did(overrides: Partial<Did> = {}): Did {
@@ -47,6 +47,21 @@ describe("NumbersView", () => {
     expect(screen.getByText("c0ffee00")).toBeInTheDocument(); // carrier short ref
     expect(screen.getAllByText("UNKNOWN").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+
+  it("opens the detail drawer and shows the number fetched by id", async () => {
+    const routingProfileId = "11111111-2222-3333-4444-555555555555";
+    const row = did({ e164: "+14155550100" });
+    vi.mocked(listDids).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getDid).mockResolvedValue(did({ id: row.id, e164: "+14155550100", routingProfileId }));
+    render(<NumbersView />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "View +14155550100" }));
+
+    await waitFor(() => expect(getDid).toHaveBeenCalledWith(row.id, expect.anything()));
+    // Detail-only fields appear in the drawer (full related-resource id, not the list's short ref).
+    expect(await screen.findByText("Routing profile")).toBeInTheDocument();
+    expect(screen.getByText(routingProfileId)).toBeInTheDocument();
   });
 
   it("shows the empty state when there are no numbers", async () => {

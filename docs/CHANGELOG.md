@@ -643,3 +643,16 @@ Format: Keep a Changelog; SemVer once releases begin.
   server-side; secrets never rendered. +1 web unit test (152 → 153; full web suite 153 ✓). **No
   backend/API change** (the endpoint already existed + was documented in `API.md`). `next build` ✓.
   Deferred: detail drawers for DIDs/routing/LCR + list filters across the read screens.
+- 2026-11-19 — **Phase 12O-2v — DID (number) detail drawer (contract-first).** Applies the 2t/2u
+  detail-view pattern to the Numbers inventory: a "View" action on each `/numbers` row opens a drawer
+  with the full DID, fetched fresh by id. Contract-first (ADR-0002): authored `GET /v1/telecom/dids/{id}`
+  into `telvyn.v1.yaml` (reusing the existing `Did` schema; 404 for foreign/pool/removed — IDOR-safe),
+  then regenerated `schema.ts` (additive). New `getDid(id)` action; `<NumberDetailDrawer>` (keyed by id →
+  refetch per open; loading/error/404 states) shows country, lifecycle status, health (honest UNKNOWN —
+  no live SIP-path check), and the related-resource **reference ids** (carrier / SIP trunk / routing
+  profile / region) in full mono (the DID API returns ids only, never embedded objects — the list shows
+  8-char refs, the drawer the full ids), plus assigned/created/updated. Read-only; `did.read` re-checked
+  server-side. +1 web unit test (153 → 154; full web suite 154 ✓). **No backend/API change** (the endpoint
+  already existed + was documented in `API.md`). `next build` ✓ (first run hit the known transient
+  `next/font` Google-Fonts fetch failure in `layout.tsx`; a clean retry with no code change succeeded).
+  Deferred: detail drawers for routing/LCR + list filters across the read screens.

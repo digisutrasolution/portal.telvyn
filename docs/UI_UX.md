@@ -431,3 +431,14 @@ open refetches; loading / error / 404 states; secrets never rendered. Read-only
 (`sip_trunk.read`, re-checked server-side). Contract-first: `getSipTrunk` authored
 into the contract, client type generated. Verified: 153/153 Vitest · `next build`
 clean. Remaining detail drawers (DIDs, routing, LCR) + list filters — to come.
+
+Numbers — DID detail drawer — EXISTING (Phase 12O-2v, 2026-11-19): each `/numbers`
+row gains a "View" action that opens a modal detail drawer showing the full DID,
+fetched fresh by id (`GET /v1/telecom/dids/{id}`): country, lifecycle status, honest
+UNKNOWN health (no live SIP-path check), the related-resource reference ids — carrier,
+SIP trunk, routing profile, region — shown in full mono (the DID API returns reference
+ids only, never embedded objects; the list shows 8-char refs, the drawer the full ids),
+and assigned / created / updated dates. Keyed by id so each open refetches; loading /
+error / 404 states. Read-only (`did.read`, re-checked server-side). Contract-first:
+`getDid` authored into the contract, client type generated. Verified: 154/154 Vitest ·
+`next build` clean. Remaining detail drawers (routing, LCR) + list filters — to come.

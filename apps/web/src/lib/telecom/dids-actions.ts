@@ -19,6 +19,11 @@ export interface ListDidsParams {
   q?: string;
 }
 
+/** One DID owned by the session's tenant; 404 if not found / foreign / pool (IDOR-safe). */
+export function getDid(id: string, signal?: AbortSignal): Promise<Did> {
+  return api.get<Did>(`/v1/telecom/dids/${id}`, { signal });
+}
+
 /** The tenant's DIDs, cursor-paginated. */
 export function listDids(params: ListDidsParams = {}, signal?: AbortSignal): Promise<DidPage> {
   const qs = new URLSearchParams();

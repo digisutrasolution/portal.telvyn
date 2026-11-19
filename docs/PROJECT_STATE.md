@@ -253,8 +253,18 @@ direction/endpoint/port/transport+TLS/auth-mode/allowed-IPs/codecs/SRTP/DTMF/cap
 UNKNOWN)/credential-ref/timestamps. Read-only; `sip_trunk.read` re-checked server-side; secrets never
 rendered. **web 152 → 153 (full suite ✓), `next build` ✓. No backend/API change** (endpoint already
 existed + documented in `API.md`).
-Next (await owner go): remaining detail drawers (DIDs/routing/LCR) + list filters across the read
-screens; backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
+
+**12O-2v (DONE)** — DID (number) detail drawer (contract-first). Applies the 2t/2u pattern to the Numbers
+inventory: a "View" action per `/numbers` row opens a drawer with the full DID fetched fresh by id.
+Contract-first (ADR-0002): authored `GET /v1/telecom/dids/{id}` (reusing the existing `Did` schema; 404
+for foreign/pool/removed, IDOR-safe), regenerated `schema.ts` (additive). `getDid(id)` action;
+`<NumberDetailDrawer>` (keyed by id → refetch per open; loading/error/404) shows country/status/health
+(honest UNKNOWN)/carrier/trunk/routing-profile/region as full reference ids (the DID API returns ids only,
+never embedded objects)/assigned/timestamps. Read-only; `did.read` re-checked server-side. **web 153 →
+154 (full suite ✓), `next build` ✓ (clean retry after the known transient `next/font` fetch failure). No
+backend/API change** (endpoint already existed + documented in `API.md`).
+Next (await owner go): remaining detail drawers (routing/LCR) + list filters across the read screens;
+backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

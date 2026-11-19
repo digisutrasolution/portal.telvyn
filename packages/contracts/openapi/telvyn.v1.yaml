@@ -574,6 +574,28 @@ paths:
               schema: { $ref: "#/components/schemas/DidPage" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/dids/{id}:
+    get:
+      tags: [telecom]
+      summary: Get one DID (tenant)
+      description: >-
+        A single DID owned by the session's tenant. A number in the platform
+        inventory pool or owned by another tenant is reported as 404 (IDOR-safe).
+        Control-plane only; honest UNKNOWN health (no live SIP-path check).
+        Related resources are carried as reference ids only — never embedded
+        objects. Requires `did.read`.
+      operationId: getDid
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: DID
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Did" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /v1/telecom/routing-profiles:
     get:
       tags: [telecom]
