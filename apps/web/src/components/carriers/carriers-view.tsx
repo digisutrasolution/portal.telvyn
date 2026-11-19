@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { Carrier } from "@/lib/contracts";
 import { listCarriers } from "@/lib/telecom/carriers-actions";
 import { isApiError } from "@/lib/api/problem";
+import { CarrierDetailDrawer } from "./carrier-detail-drawer";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<Carrier["status"], Tone> = { ACTIVE: "ok", SUSPENDED: "warn", DISABLED: "neutral" };
@@ -37,6 +38,7 @@ export function CarriersView() {
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
+  const [detailId, setDetailId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const ac = new AbortController();
@@ -114,6 +116,7 @@ export function CarriersView() {
                   <th scope="col" className="px-3 py-2 font-semibold">Status</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Codecs</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Health</th>
+                  <th scope="col" className="px-3 py-2 font-semibold"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -126,6 +129,9 @@ export function CarriersView() {
                     <td className="px-3 py-2"><Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge></td>
                     <td className="px-3 py-2 text-ink-2">{c.codecs.length > 0 ? c.codecs.join(", ") : "—"}</td>
                     <td className="px-3 py-2"><Status tone={HEALTH_TONE[c.health.status]} label={c.health.status} /></td>
+                    <td className="px-3 py-2 text-right">
+                      <Button variant="ghost" size="sm" onClick={() => setDetailId(c.id)} aria-label={`View ${c.name}`}>View</Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -145,6 +151,8 @@ export function CarriersView() {
           )}
         </>
       )}
+
+      {detailId && <CarrierDetailDrawer key={detailId} carrierId={detailId} onClose={() => setDetailId(null)} />}
     </section>
   );
 }

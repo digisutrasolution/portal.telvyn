@@ -235,8 +235,16 @@ candidates → detail drawer (deferred). Only the list endpoint was contracted (
 `…/{id}` + mutations stay for later. **web 147 → 151, typecheck ✓, lint ✓, `next build` ✓. No
 backend/API change** (LCR API already existed + documented). **This completes the telecom read-screen
 set: carriers, SIP trunks, numbers (DIDs), routing, LCR.**
-Next (await owner go): detail drawers + list filters across the telecom read screens; backend read gaps
-(HealthEvent/config-version history) stay separately approval-gated.
+**12O-2t (DONE)** — carrier detail drawer (contract-first). First read-screen detail view: a "View"
+action per carriers row opens a drawer with the full carrier fetched fresh by id. Contract-first
+(ADR-0002): authored `GET /v1/telecom/carriers/{id}` (reusing the existing `Carrier` schema; 404 for
+foreign/removed, IDOR-safe), regenerated `schema.ts`. `getCarrier(id)` action; `<CarrierDetailDrawer>`
+(keyed by id → refetch per open; loading/error/404) shows scope/type/country/status/health/priority/
+codecs/caps/credential-ref/timestamps. Read-only; `carrier.read` re-checked server-side. **web 151 →
+152, typecheck ✓, lint ✓, `next build` ✓. No backend/API change** (endpoint already existed +
+documented). Sets the detail-view pattern for trunks/DIDs/routing/LCR.
+Next (await owner go): remaining detail drawers (trunks/DIDs/routing/LCR) + list filters across the read
+screens; backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

@@ -16,6 +16,11 @@ export interface ListCarriersParams {
   q?: string;
 }
 
+/** One carrier the session may see (own or system); 404 if not found / foreign. */
+export function getCarrier(id: string, signal?: AbortSignal): Promise<Carrier> {
+  return api.get<Carrier>(`/v1/telecom/carriers/${id}`, { signal });
+}
+
 /** Carriers visible to the session (own + system), cursor-paginated. */
 export function listCarriers(params: ListCarriersParams = {}, signal?: AbortSignal): Promise<CarrierPage> {
   const qs = new URLSearchParams();

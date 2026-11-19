@@ -3,9 +3,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiError } from "@/lib/api/problem";
 import type { Carrier } from "@/lib/contracts";
 
-vi.mock("@/lib/telecom/carriers-actions", () => ({ listCarriers: vi.fn() }));
+vi.mock("@/lib/telecom/carriers-actions", () => ({ listCarriers: vi.fn(), getCarrier: vi.fn() }));
 
-import { listCarriers } from "@/lib/telecom/carriers-actions";
+import { getCarrier, listCarriers } from "@/lib/telecom/carriers-actions";
 import { CarriersView } from "./carriers-view";
 
 function carrier(overrides: Partial<Carrier> = {}): Carrier {
@@ -45,6 +45,20 @@ describe("CarriersView", () => {
     expect(screen.getAllByText("UNKNOWN").length).toBeGreaterThan(0);
     // No next page → no Load more.
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+
+  it("opens the detail drawer and shows the carrier fetched by id", async () => {
+    const row = carrier({ name: "Acme SIP", maxConcurrentCalls: 500 });
+    vi.mocked(listCarriers).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getCarrier).mockResolvedValue(carrier({ id: row.id, name: "Acme SIP", maxConcurrentCalls: 500, priority: 10 }));
+    render(<CarriersView />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Acme SIP" }));
+
+    await waitFor(() => expect(getCarrier).toHaveBeenCalledWith(row.id, expect.anything()));
+    // Detail-only fields appear in the drawer.
+    expect(await screen.findByText("Max concurrent calls")).toBeInTheDocument();
+    expect(screen.getByText("500")).toBeInTheDocument();
   });
 
   it("shows the empty state when there are no carriers", async () => {

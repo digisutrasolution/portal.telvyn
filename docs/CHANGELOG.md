@@ -621,3 +621,13 @@ Format: Keep a Changelog; SemVer once releases begin.
   tests (147 → 151). **No backend/API change** (the LCR API already existed + was documented). typecheck
   ✓, lint ✓, `next build` ✓. This completes the telecom read-screen set (carriers, SIP trunks, numbers,
   routing, LCR). Deferred: detail drawers + list filters across all telecom read screens.
+- 2026-11-19 — **Phase 12O-2t — carrier detail drawer (contract-first).** The first read-screen detail
+  view: a "View" action on each carriers row opens a drawer with the full carrier, fetched fresh by id.
+  Contract-first (ADR-0002): authored `GET /v1/telecom/carriers/{id}` into `telvyn.v1.yaml` (reusing the
+  existing `Carrier` schema; 404 for foreign/removed — IDOR-safe), then regenerated `schema.ts`. New
+  `getCarrier(id)` action; `<CarrierDetailDrawer>` (keyed by id → refetch per open; loading/error/404
+  states) shows scope, type, country, status, health (honest UNKNOWN), priority, codecs, CPS/concurrency
+  caps, the non-secret credential reference, and created/updated. Read-only; `carrier.read` re-checked
+  server-side. +1 web unit test (151 → 152). **No backend/API change** (the endpoint already existed +
+  was documented). typecheck ✓, lint ✓, `next build` ✓. Sets the detail-view pattern for trunks/DIDs/
+  routing/LCR. Deferred: the remaining detail drawers + list filters.

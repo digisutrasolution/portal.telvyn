@@ -408,3 +408,14 @@ error (RFC 7807 title) states. Contract-first: `GET /v1/telecom/lcr-policies` +
 `LcrPolicy`/`LcrRoute`/`LcrPolicyPage` authored into the contract and the client
 type generated. Verified: `tsc` clean · 151/151 Vitest · `next build` clean. This
 completes the telecom read-screen set (carriers, SIP trunks, numbers, routing, LCR).
+
+Carriers — detail drawer — EXISTING (Phase 12O-2t, 2026-11-19): each carriers row
+gains a "View" action that opens a modal detail drawer showing the full carrier,
+fetched fresh by id (`GET /v1/telecom/carriers/{id}`): scope, type, country,
+status, honest UNKNOWN health, priority, codecs, CPS/concurrency caps, the
+non-secret credential reference (label · type · scope, or "None"), and created/
+updated dates. Keyed by id so each open refetches; loading / error / 404 states.
+Read-only (`carrier.read`, re-checked server-side). Contract-first: `getCarrier`
+authored into the contract, client type generated. Verified: `tsc` clean · 152/152
+Vitest · `next build` clean. This is the detail-view pattern for the other read
+screens (trunks, DIDs, routing, LCR) — to come.
