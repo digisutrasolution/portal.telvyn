@@ -17,6 +17,11 @@ export interface ListSipTrunksParams {
   q?: string;
 }
 
+/** One SIP trunk owned by the session's tenant; 404 if not found / foreign (IDOR-safe). */
+export function getSipTrunk(id: string, signal?: AbortSignal): Promise<SipTrunk> {
+  return api.get<SipTrunk>(`/v1/telecom/sip-trunks/${id}`, { signal });
+}
+
 /** The tenant's SIP trunks, cursor-paginated. */
 export function listSipTrunks(params: ListSipTrunksParams = {}, signal?: AbortSignal): Promise<SipTrunkPage> {
   const qs = new URLSearchParams();

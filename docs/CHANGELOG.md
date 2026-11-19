@@ -631,3 +631,15 @@ Format: Keep a Changelog; SemVer once releases begin.
   server-side. +1 web unit test (151 → 152). **No backend/API change** (the endpoint already existed +
   was documented). typecheck ✓, lint ✓, `next build` ✓. Sets the detail-view pattern for trunks/DIDs/
   routing/LCR. Deferred: the remaining detail drawers + list filters.
+- 2026-11-19 — **Phase 12O-2u — SIP trunk detail drawer (contract-first).** Applies the 2t detail-view
+  pattern to SIP trunks: a "View" action on each `/sip-trunks` row opens a drawer with the full trunk,
+  fetched fresh by id. Contract-first (ADR-0002): authored `GET /v1/telecom/sip-trunks/{id}` into
+  `telvyn.v1.yaml` (reusing the existing `SipTrunk` schema; 404 for foreign/removed — IDOR-safe), then
+  regenerated `schema.ts` (additive). New `getSipTrunk(id)` action; `<SipTrunkDetailDrawer>` (keyed by
+  id → refetch per open; loading/error/404 states) shows the carrier summary (name + scope), direction,
+  endpoint (host/SIP URI), port, transport (+ TLS), auth mode, allowed-IP ACL, codecs, SRTP, DTMF mode,
+  CPS/concurrency caps, administrative status, health (honest UNKNOWN — no live connectivity), the
+  non-secret credential reference, and created/updated. Read-only; `sip_trunk.read` re-checked
+  server-side; secrets never rendered. +1 web unit test (152 → 153; full web suite 153 ✓). **No
+  backend/API change** (the endpoint already existed + was documented in `API.md`). `next build` ✓.
+  Deferred: detail drawers for DIDs/routing/LCR + list filters across the read screens.

@@ -523,6 +523,28 @@ paths:
               schema: { $ref: "#/components/schemas/SipTrunkPage" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/sip-trunks/{id}:
+    get:
+      tags: [telecom]
+      summary: Get one SIP trunk (tenant)
+      description: >-
+        A single SIP trunk owned by the session's tenant. A foreign tenant's
+        trunk is reported as 404 (IDOR-safe). Control-plane configuration only;
+        honest UNKNOWN health (no live connectivity). Secrets never appear —
+        a non-secret credential reference and a carrier summary only. Requires
+        `sip_trunk.read`.
+      operationId: getSipTrunk
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: SIP trunk
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SipTrunk" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /v1/telecom/dids:
     get:
       tags: [telecom]

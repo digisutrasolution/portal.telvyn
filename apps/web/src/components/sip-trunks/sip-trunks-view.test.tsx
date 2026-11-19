@@ -3,9 +3,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiError } from "@/lib/api/problem";
 import type { SipTrunk } from "@/lib/contracts";
 
-vi.mock("@/lib/telecom/sip-trunks-actions", () => ({ listSipTrunks: vi.fn() }));
+vi.mock("@/lib/telecom/sip-trunks-actions", () => ({ listSipTrunks: vi.fn(), getSipTrunk: vi.fn() }));
 
-import { listSipTrunks } from "@/lib/telecom/sip-trunks-actions";
+import { getSipTrunk, listSipTrunks } from "@/lib/telecom/sip-trunks-actions";
 import { SipTrunksView } from "./sip-trunks-view";
 
 function trunk(overrides: Partial<SipTrunk> = {}): SipTrunk {
@@ -51,6 +51,20 @@ describe("SipTrunksView", () => {
     expect(screen.getByText("TLS · TLS")).toBeInTheDocument(); // transport TLS + tls flag
     expect(screen.getByText("UNKNOWN")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+
+  it("opens the detail drawer and shows the trunk fetched by id", async () => {
+    const row = trunk({ name: "Primary trunk", authMode: "IP", allowedIps: ["203.0.113.10"] });
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getSipTrunk).mockResolvedValue(trunk({ id: row.id, name: "Primary trunk", authMode: "IP", allowedIps: ["203.0.113.10"] }));
+    render(<SipTrunksView />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Primary trunk" }));
+
+    await waitFor(() => expect(getSipTrunk).toHaveBeenCalledWith(row.id, expect.anything()));
+    // Detail-only fields appear in the drawer.
+    expect(await screen.findByText("Auth mode")).toBeInTheDocument();
+    expect(screen.getByText("203.0.113.10")).toBeInTheDocument();
   });
 
   it("shows the empty state when there are no trunks", async () => {

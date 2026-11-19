@@ -530,6 +530,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/sip-trunks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one SIP trunk (tenant)
+         * @description A single SIP trunk owned by the session's tenant. A foreign tenant's trunk is reported as 404 (IDOR-safe). Control-plane configuration only; honest UNKNOWN health (no live connectivity). Secrets never appear — a non-secret credential reference and a carrier summary only. Requires `sip_trunk.read`.
+         */
+        get: operations["getSipTrunk"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/telecom/dids": {
         parameters: {
             query?: never;
@@ -1851,6 +1871,31 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    getSipTrunk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SIP trunk */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SipTrunk"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     listDids: {

@@ -243,7 +243,17 @@ foreign/removed, IDOR-safe), regenerated `schema.ts`. `getCarrier(id)` action; `
 codecs/caps/credential-ref/timestamps. Read-only; `carrier.read` re-checked server-side. **web 151 →
 152, typecheck ✓, lint ✓, `next build` ✓. No backend/API change** (endpoint already existed +
 documented). Sets the detail-view pattern for trunks/DIDs/routing/LCR.
-Next (await owner go): remaining detail drawers (trunks/DIDs/routing/LCR) + list filters across the read
+
+**12O-2u (DONE)** — SIP trunk detail drawer (contract-first). Applies the 2t pattern to SIP trunks: a
+"View" action per `/sip-trunks` row opens a drawer with the full trunk fetched fresh by id. Contract-first
+(ADR-0002): authored `GET /v1/telecom/sip-trunks/{id}` (reusing the existing `SipTrunk` schema; 404 for
+foreign/removed, IDOR-safe), regenerated `schema.ts` (additive). `getSipTrunk(id)` action;
+`<SipTrunkDetailDrawer>` (keyed by id → refetch per open; loading/error/404) shows carrier summary/
+direction/endpoint/port/transport+TLS/auth-mode/allowed-IPs/codecs/SRTP/DTMF/caps/status/health (honest
+UNKNOWN)/credential-ref/timestamps. Read-only; `sip_trunk.read` re-checked server-side; secrets never
+rendered. **web 152 → 153 (full suite ✓), `next build` ✓. No backend/API change** (endpoint already
+existed + documented in `API.md`).
+Next (await owner go): remaining detail drawers (DIDs/routing/LCR) + list filters across the read
 screens; backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan

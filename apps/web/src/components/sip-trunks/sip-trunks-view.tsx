@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { SipTrunk } from "@/lib/contracts";
 import { listSipTrunks } from "@/lib/telecom/sip-trunks-actions";
 import { isApiError } from "@/lib/api/problem";
+import { SipTrunkDetailDrawer } from "./sip-trunk-detail-drawer";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<SipTrunk["status"], Tone> = { ACTIVE: "ok", SUSPENDED: "warn", DISABLED: "neutral" };
@@ -36,6 +37,7 @@ export function SipTrunksView() {
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
+  const [detailId, setDetailId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const ac = new AbortController();
@@ -113,6 +115,7 @@ export function SipTrunksView() {
                   <th scope="col" className="px-3 py-2 font-semibold">Endpoint</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Status</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Health</th>
+                  <th scope="col" className="px-3 py-2 font-semibold"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -125,6 +128,9 @@ export function SipTrunksView() {
                     <td className="px-3 py-2 text-ink-2">{t.host ?? t.sipUri ?? "—"}</td>
                     <td className="px-3 py-2"><Badge tone={STATUS_TONE[t.status]}>{t.status}</Badge></td>
                     <td className="px-3 py-2"><Status tone={HEALTH_TONE[t.health.status]} label={t.health.status} /></td>
+                    <td className="px-3 py-2 text-right">
+                      <Button variant="ghost" size="sm" onClick={() => setDetailId(t.id)} aria-label={`View ${t.name}`}>View</Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -144,6 +150,8 @@ export function SipTrunksView() {
           )}
         </>
       )}
+
+      {detailId && <SipTrunkDetailDrawer key={detailId} trunkId={detailId} onClose={() => setDetailId(null)} />}
     </section>
   );
 }

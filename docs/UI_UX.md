@@ -419,3 +419,15 @@ Read-only (`carrier.read`, re-checked server-side). Contract-first: `getCarrier`
 authored into the contract, client type generated. Verified: `tsc` clean · 152/152
 Vitest · `next build` clean. This is the detail-view pattern for the other read
 screens (trunks, DIDs, routing, LCR) — to come.
+
+SIP trunks — detail drawer — EXISTING (Phase 12O-2u, 2026-11-19): each `/sip-trunks`
+row gains a "View" action that opens a modal detail drawer showing the full trunk,
+fetched fresh by id (`GET /v1/telecom/sip-trunks/{id}`): carrier summary (name +
+scope badge), direction, endpoint (host / SIP URI), port, transport (+ TLS), auth
+mode, allowed-IP ACL, codecs, SRTP, DTMF mode, CPS/concurrency caps, administrative
+status, honest UNKNOWN health (no live connectivity), the non-secret credential
+reference (label · type, or "None"), and created/updated dates. Keyed by id so each
+open refetches; loading / error / 404 states; secrets never rendered. Read-only
+(`sip_trunk.read`, re-checked server-side). Contract-first: `getSipTrunk` authored
+into the contract, client type generated. Verified: 153/153 Vitest · `next build`
+clean. Remaining detail drawers (DIDs, routing, LCR) + list filters — to come.
