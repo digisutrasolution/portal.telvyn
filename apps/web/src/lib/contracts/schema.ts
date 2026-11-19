@@ -650,6 +650,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/lcr-policies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one LCR policy (tenant)
+         * @description A single least-cost-routing policy owned by the session's tenant, with its complete set of route candidates in deterministic selection order for the policy's strategy. A foreign tenant's policy is reported as 404 (IDOR-safe). Declarative route SELECTION only — nothing is executed, rated or billed. `costMicros` is millionths of a currency unit (integer). Requires `routing.read` (LCR is part of the routing domain).
+         */
+        get: operations["getLcrPolicy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2082,6 +2102,31 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    getLcrPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description LCR policy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LcrPolicy"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
 }

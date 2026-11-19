@@ -3,9 +3,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiError } from "@/lib/api/problem";
 import type { LcrPolicy } from "@/lib/contracts";
 
-vi.mock("@/lib/telecom/lcr-actions", () => ({ listLcrPolicies: vi.fn() }));
+vi.mock("@/lib/telecom/lcr-actions", () => ({ listLcrPolicies: vi.fn(), getLcrPolicy: vi.fn() }));
 
-import { listLcrPolicies } from "@/lib/telecom/lcr-actions";
+import { getLcrPolicy, listLcrPolicies } from "@/lib/telecom/lcr-actions";
 import { LcrView } from "./lcr-view";
 
 function route(overrides: Partial<LcrPolicy["candidates"][number]> = {}): LcrPolicy["candidates"][number] {
@@ -57,6 +57,23 @@ describe("LcrView", () => {
     expect(screen.getByText("2")).toBeInTheDocument(); // candidate count
     expect(screen.getByText("7")).toBeInTheDocument(); // version
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+
+  it("opens the detail drawer and shows the candidates (ordered, cost from micros) fetched by id", async () => {
+    const row = policy({ name: "UK least cost" });
+    vi.mocked(listLcrPolicies).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getLcrPolicy).mockResolvedValue(
+      policy({ id: row.id, name: "UK least cost", candidates: [route({ prefix: "44", costMicros: 1200, currency: "GBP" })] }),
+    );
+    render(<LcrView />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "View UK least cost" }));
+
+    await waitFor(() => expect(getLcrPolicy).toHaveBeenCalledWith(row.id, expect.anything()));
+    // Detail-only content: the candidate prefix + cost formatted from integer micros (list shows only a count).
+    expect(await screen.findByText("Candidates (1)")).toBeInTheDocument();
+    expect(screen.getByText("44")).toBeInTheDocument();
+    expect(screen.getByText("0.0012 GBP")).toBeInTheDocument(); // 1200 micros → 0.0012
   });
 
   it("shows the empty state when there are no policies", async () => {

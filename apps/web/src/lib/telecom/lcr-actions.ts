@@ -15,6 +15,11 @@ export interface ListLcrPoliciesParams {
   q?: string;
 }
 
+/** One LCR policy owned by the session's tenant (ordered route candidates); 404 if not found / foreign (IDOR-safe). */
+export function getLcrPolicy(id: string, signal?: AbortSignal): Promise<LcrPolicy> {
+  return api.get<LcrPolicy>(`/v1/telecom/lcr-policies/${id}`, { signal });
+}
+
 /** The tenant's LCR policies (each with its ordered route candidates), paginated. */
 export function listLcrPolicies(params: ListLcrPoliciesParams = {}, signal?: AbortSignal): Promise<LcrPolicyPage> {
   const qs = new URLSearchParams();

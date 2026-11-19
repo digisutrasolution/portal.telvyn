@@ -669,6 +669,29 @@ paths:
               schema: { $ref: "#/components/schemas/LcrPolicyPage" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/lcr-policies/{id}:
+    get:
+      tags: [telecom]
+      summary: Get one LCR policy (tenant)
+      description: >-
+        A single least-cost-routing policy owned by the session's tenant, with its
+        complete set of route candidates in deterministic selection order for the
+        policy's strategy. A foreign tenant's policy is reported as 404 (IDOR-safe).
+        Declarative route SELECTION only — nothing is executed, rated or billed.
+        `costMicros` is millionths of a currency unit (integer). Requires
+        `routing.read` (LCR is part of the routing domain).
+      operationId: getLcrPolicy
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: LCR policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LcrPolicy" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

@@ -671,3 +671,17 @@ Format: Keep a Changelog; SemVer once releases begin.
   suite 155 ✓). **No backend/API change** (the endpoint already existed + was documented in `API.md`).
   `next build` ✓ (a first run surfaced a missing `RoutingRule` export, fixed by the index alias, then
   clean). Deferred: the LCR detail drawer + list filters across the read screens.
+- 2026-11-19 — **Phase 12O-2x — LCR policy detail drawer (contract-first).** Completes the read-screen
+  detail-drawer set (carriers, SIP trunks, DIDs, routing, LCR). A "View" action on each `/lcr` row opens a
+  drawer with the full least-cost-routing policy and its **route candidates in the server's deterministic
+  selection order** (NOT re-sorted — order is strategy-dependent, e.g. LOWEST_COST), fetched fresh by id.
+  Contract-first (ADR-0002): authored `GET /v1/telecom/lcr-policies/{id}` into `telvyn.v1.yaml` (reusing
+  the existing `LcrPolicy` schema; 404 for foreign/removed — IDOR-safe), then regenerated `schema.ts`
+  (additive). Added the `LcrRoute` ergonomic alias to `contracts/index.ts`. New `getLcrPolicy(id)` action;
+  `<LcrDetailDrawer>` (keyed by id → refetch per open; loading/error/404 states) shows selection strategy,
+  enabled state, description, version, timestamps, and each candidate (priority, prefix + country, cost
+  formatted from integer `costMicros` millionths + currency — never float money, raw micros in the title,
+  enabled state, optional weight + effective window). Declarative selection only — nothing executed, rated
+  or billed. Read-only; `routing.read` re-checked server-side. +1 web unit test (155 → 156; full web suite
+  156 ✓). **No backend/API change** (the endpoint already existed + was documented in `API.md`). `next
+  build` ✓. Deferred: list filters across the read screens; the Admin/members read screen.

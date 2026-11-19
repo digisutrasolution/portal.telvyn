@@ -456,3 +456,19 @@ the drawer when long. Keyed by id so each open refetches; loading / error / 404 
 Read-only (`routing.read`, re-checked server-side). Contract-first: `getRoutingProfile`
 authored into the contract, client type generated. Verified: 155/155 Vitest · `next
 build` clean. Remaining detail drawer (LCR) + list filters — to come.
+
+LCR — policy detail drawer — EXISTING (Phase 12O-2x, 2026-11-19): each `/lcr` row
+gains a "View" action that opens a modal detail drawer showing the full least-cost-
+routing policy, fetched fresh by id (`GET /v1/telecom/lcr-policies/{id}`) — the content
+the list deliberately summarized. The drawer shows the policy meta (selection strategy,
+enabled state, description, version, created/updated) and the full set of route
+candidates kept in the server's deterministic selection order (NOT re-sorted — order is
+strategy-dependent, e.g. LOWEST_COST): each candidate as a compact card with priority,
+prefix + country, cost formatted from integer `costMicros` millionths + currency (never
+float money; raw micros in the element title), enabled state, and optional weight /
+effective window. Declarative selection only — nothing is executed, rated or billed.
+The candidates list scrolls within the drawer when long. Keyed by id so each open
+refetches; loading / error / 404 states. Read-only (`routing.read`, re-checked
+server-side). Contract-first: `getLcrPolicy` authored into the contract, client type
+generated. Verified: 156/156 Vitest · `next build` clean. This COMPLETES the read-screen
+detail-drawer set (carriers, SIP trunks, DIDs, routing, LCR). List filters — to come.

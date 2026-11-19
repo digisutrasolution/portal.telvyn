@@ -276,8 +276,21 @@ destination type+value/enabled/optional weight+timeout+failover) in priority ord
 only — nothing executed. Read-only; `routing.read` re-checked server-side. **web 154 → 155 (full suite ✓),
 `next build` ✓ (fixed a missing `RoutingRule` export via the index alias, then clean). No backend/API
 change** (endpoint already existed + documented in `API.md`).
-Next (await owner go): the remaining detail drawer (LCR) + list filters across the read screens; backend
-read gaps (HealthEvent/config-version history) stay separately approval-gated.
+
+**12O-2x (DONE)** — LCR policy detail drawer (contract-first). Completes the read-screen detail-drawer set
+(carriers, SIP trunks, DIDs, routing, LCR). A "View" action per `/lcr` row opens a drawer with the full
+policy + its route candidates in the server's deterministic selection order (NOT re-sorted —
+strategy-dependent), fetched fresh by id. Contract-first (ADR-0002): authored `GET
+/v1/telecom/lcr-policies/{id}` (reusing the existing `LcrPolicy` schema; 404 foreign/removed, IDOR-safe),
+regenerated `schema.ts` (additive), added the `LcrRoute` alias to `contracts/index.ts`. `getLcrPolicy(id)`
+action; `<LcrDetailDrawer>` (keyed by id → refetch per open; loading/error/404) shows strategy/state/
+description/version/timestamps and each candidate (priority/prefix+country/cost-from-micros+currency/
+enabled/optional weight+effective-window). Declarative selection only — nothing executed, rated or billed.
+Read-only; `routing.read` re-checked server-side. **web 155 → 156 (full suite ✓), `next build` ✓. No
+backend/API change** (endpoint already existed + documented in `API.md`).
+Next (await owner go): list filters across the read screens; the Admin/members read screen (`/admin` still
+a ModuleGate placeholder, `member.read`); landing the stack. Backend read gaps (HealthEvent/config-version
+history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

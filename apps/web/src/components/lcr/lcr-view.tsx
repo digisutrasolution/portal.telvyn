@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import type { LcrPolicy } from "@/lib/contracts";
 import { listLcrPolicies } from "@/lib/telecom/lcr-actions";
 import { isApiError } from "@/lib/api/problem";
+import { LcrDetailDrawer } from "./lcr-detail-drawer";
 
 function messageFrom(err: unknown, fallback: string): string {
   return isApiError(err) ? err.problem.title : fallback;
@@ -27,6 +28,7 @@ export function LcrView() {
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
+  const [detailId, setDetailId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const ac = new AbortController();
@@ -102,6 +104,7 @@ export function LcrView() {
                   <th scope="col" className="px-3 py-2 font-semibold">State</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Candidates</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Version</th>
+                  <th scope="col" className="px-3 py-2 font-semibold"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -112,6 +115,9 @@ export function LcrView() {
                     <td className="px-3 py-2"><Badge tone={p.enabled ? "ok" : "neutral"}>{p.enabled ? "Enabled" : "Disabled"}</Badge></td>
                     <td className="font-num px-3 py-2 text-ink-2">{p.candidates.length}</td>
                     <td className="font-num px-3 py-2 text-ink-2">{p.version}</td>
+                    <td className="px-3 py-2 text-right">
+                      <Button variant="ghost" size="sm" onClick={() => setDetailId(p.id)} aria-label={`View ${p.name}`}>View</Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -131,6 +137,8 @@ export function LcrView() {
           )}
         </>
       )}
+
+      {detailId && <LcrDetailDrawer key={detailId} policyId={detailId} onClose={() => setDetailId(null)} />}
     </section>
   );
 }
