@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import type { RoutingProfile } from "@/lib/contracts";
 import { listRoutingProfiles } from "@/lib/telecom/routing-actions";
 import { isApiError } from "@/lib/api/problem";
+import { RoutingDetailDrawer } from "./routing-detail-drawer";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<RoutingProfile["status"], Tone> = { ACTIVE: "ok", SUSPENDED: "warn", DISABLED: "neutral" };
@@ -29,6 +30,7 @@ export function RoutingView() {
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
+  const [detailId, setDetailId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const ac = new AbortController();
@@ -106,6 +108,7 @@ export function RoutingView() {
                   <th scope="col" className="px-3 py-2 font-semibold">Failover</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Rules</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Version</th>
+                  <th scope="col" className="px-3 py-2 font-semibold"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -118,6 +121,9 @@ export function RoutingView() {
                     <td className="px-3 py-2 text-ink-2">{p.policy.failoverEnabled ? "On" : "Off"}</td>
                     <td className="font-num px-3 py-2 text-ink-2">{p.rules.length}</td>
                     <td className="font-num px-3 py-2 text-ink-2">{p.version}</td>
+                    <td className="px-3 py-2 text-right">
+                      <Button variant="ghost" size="sm" onClick={() => setDetailId(p.id)} aria-label={`View ${p.name}`}>View</Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -137,6 +143,8 @@ export function RoutingView() {
           )}
         </>
       )}
+
+      {detailId && <RoutingDetailDrawer key={detailId} profileId={detailId} onClose={() => setDetailId(null)} />}
     </section>
   );
 }

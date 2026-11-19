@@ -442,3 +442,17 @@ and assigned / created / updated dates. Keyed by id so each open refetches; load
 error / 404 states. Read-only (`did.read`, re-checked server-side). Contract-first:
 `getDid` authored into the contract, client type generated. Verified: 154/154 Vitest ·
 `next build` clean. Remaining detail drawers (routing, LCR) + list filters — to come.
+
+Routing — profile detail drawer — EXISTING (Phase 12O-2w, 2026-11-19): each `/routing`
+row gains a "View" action that opens a modal detail drawer showing the full profile,
+fetched fresh by id (`GET /v1/telecom/routing-profiles/{id}`) — the content the list
+deliberately summarized. The drawer shows the profile meta (direction, status,
+description, version, created/updated), the complete selection/failover policy
+(strategy, failover on/off, failover conditions, max-attempts and overall-timeout
+caps), and the full ordered rule set (priority ASC): each rule as a compact card with
+priority, destination type + value, enabled state, and optional weight / timeout /
+failover. Declarative config only — nothing is executed. The rules list scrolls within
+the drawer when long. Keyed by id so each open refetches; loading / error / 404 states.
+Read-only (`routing.read`, re-checked server-side). Contract-first: `getRoutingProfile`
+authored into the contract, client type generated. Verified: 155/155 Vitest · `next
+build` clean. Remaining detail drawer (LCR) + list filters — to come.

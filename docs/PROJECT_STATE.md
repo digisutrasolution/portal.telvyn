@@ -263,8 +263,21 @@ for foreign/pool/removed, IDOR-safe), regenerated `schema.ts` (additive). `getDi
 never embedded objects)/assigned/timestamps. Read-only; `did.read` re-checked server-side. **web 153 →
 154 (full suite ✓), `next build` ✓ (clean retry after the known transient `next/font` fetch failure). No
 backend/API change** (endpoint already existed + documented in `API.md`).
-Next (await owner go): remaining detail drawers (routing/LCR) + list filters across the read screens;
-backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
+
+**12O-2w (DONE)** — routing profile detail drawer (contract-first). Applies the pattern to Routing and
+surfaces what the 2r list summarized: a "View" action per `/routing` row opens a drawer with the full
+profile — complete selection/failover **policy** + **ordered rule set** (priority ASC) — fetched fresh by
+id. Contract-first (ADR-0002): authored `GET /v1/telecom/routing-profiles/{id}` (reusing the existing
+`RoutingProfile` schema; 404 foreign/removed, IDOR-safe), regenerated `schema.ts` (additive), added
+`RoutingRule`/`RoutingPolicy` aliases to `contracts/index.ts`. `getRoutingProfile(id)` action;
+`<RoutingDetailDrawer>` (keyed by id → refetch per open; loading/error/404) shows direction/status/
+description/strategy/failover+conditions/attempt+timeout caps/version/timestamps and each rule (priority/
+destination type+value/enabled/optional weight+timeout+failover) in priority order. Declarative config
+only — nothing executed. Read-only; `routing.read` re-checked server-side. **web 154 → 155 (full suite ✓),
+`next build` ✓ (fixed a missing `RoutingRule` export via the index alias, then clean). No backend/API
+change** (endpoint already existed + documented in `API.md`).
+Next (await owner go): the remaining detail drawer (LCR) + list filters across the read screens; backend
+read gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

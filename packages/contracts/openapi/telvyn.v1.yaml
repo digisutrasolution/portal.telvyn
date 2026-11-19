@@ -621,6 +621,28 @@ paths:
               schema: { $ref: "#/components/schemas/RoutingProfilePage" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/routing-profiles/{id}:
+    get:
+      tags: [telecom]
+      summary: Get one routing profile (tenant)
+      description: >-
+        A single routing profile owned by the session's tenant, with its full
+        policy and its complete ordered rule set (priority ASC). A foreign
+        tenant's profile is reported as 404 (IDOR-safe). Declarative configuration
+        only — nothing is executed (no SIP, webhooks, failover or LCR). Requires
+        `routing.read`.
+      operationId: getRoutingProfile
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Routing profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoutingProfile" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /v1/telecom/lcr-policies:
     get:
       tags: [telecom]

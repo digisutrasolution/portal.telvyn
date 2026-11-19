@@ -15,6 +15,11 @@ export interface ListRoutingProfilesParams {
   q?: string;
 }
 
+/** One routing profile owned by the session's tenant (full policy + ordered rules); 404 if not found / foreign (IDOR-safe). */
+export function getRoutingProfile(id: string, signal?: AbortSignal): Promise<RoutingProfile> {
+  return api.get<RoutingProfile>(`/v1/telecom/routing-profiles/${id}`, { signal });
+}
+
 /** The tenant's routing profiles (each with its policy + ordered rules), paginated. */
 export function listRoutingProfiles(params: ListRoutingProfilesParams = {}, signal?: AbortSignal): Promise<RoutingProfilePage> {
   const qs = new URLSearchParams();

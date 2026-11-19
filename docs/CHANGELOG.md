@@ -656,3 +656,18 @@ Format: Keep a Changelog; SemVer once releases begin.
   already existed + was documented in `API.md`). `next build` ✓ (first run hit the known transient
   `next/font` Google-Fonts fetch failure in `layout.tsx`; a clean retry with no code change succeeded).
   Deferred: detail drawers for routing/LCR + list filters across the read screens.
+- 2026-11-19 — **Phase 12O-2w — routing profile detail drawer (contract-first).** Applies the detail-view
+  pattern to Routing, and surfaces what the 2r list deliberately summarized: a "View" action on each
+  `/routing` row opens a drawer with the full profile — its complete selection/failover **policy** and
+  its **ordered rule set** (priority ASC) — fetched fresh by id. Contract-first (ADR-0002): authored
+  `GET /v1/telecom/routing-profiles/{id}` into `telvyn.v1.yaml` (reusing the existing `RoutingProfile`
+  schema; 404 for foreign/removed — IDOR-safe), then regenerated `schema.ts` (additive). Added
+  `RoutingRule`/`RoutingPolicy` ergonomic aliases to `contracts/index.ts`. New `getRoutingProfile(id)`
+  action; `<RoutingDetailDrawer>` (keyed by id → refetch per open; loading/error/404 states) shows
+  direction, status, description, selection strategy, failover on/off + conditions, max-attempts and
+  overall-timeout caps, version, timestamps, and each rule (priority, destination type + value, enabled
+  state, optional weight/timeout/failover) rendered in priority order. Declarative config only — nothing
+  is executed. Read-only; `routing.read` re-checked server-side. +1 web unit test (154 → 155; full web
+  suite 155 ✓). **No backend/API change** (the endpoint already existed + was documented in `API.md`).
+  `next build` ✓ (a first run surfaced a missing `RoutingRule` export, fixed by the index alias, then
+  clean). Deferred: the LCR detail drawer + list filters across the read screens.

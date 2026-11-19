@@ -80,6 +80,12 @@ export type DidPage = Schemas["DidPage"];
 /** A routing profile (tenant) with its declarative policy and ordered rules. */
 export type RoutingProfile = Schemas["RoutingProfile"];
 
+/** The declarative selection + failover policy of a routing profile. */
+export type RoutingPolicy = Schemas["RoutingPolicy"];
+
+/** A single declarative routing rule (config only — never dialled). */
+export type RoutingRule = Schemas["RoutingRule"];
+
 /** Cursor-paginated page of routing profiles. */
 export type RoutingProfilePage = Schemas["RoutingProfilePage"];
 
