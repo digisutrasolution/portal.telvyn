@@ -72,6 +72,45 @@ describe("RoutingView", () => {
     expect(await screen.findByText(/No routing profiles are configured yet/i)).toBeInTheDocument();
   });
 
+  it("filters by status, refetching with the status query param", async () => {
+    vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [profile({ name: "Inbound default" })], nextCursor: null });
+    render(<RoutingView />);
+    expect(await screen.findByText("Inbound default")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by status" }), { target: { value: "ACTIVE" } });
+    await waitFor(() => expect(listRoutingProfiles).toHaveBeenLastCalledWith({ status: "ACTIVE" }, expect.anything()));
+  });
+
+  it("filters by strategy, refetching with the strategy query param", async () => {
+    vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [profile({ name: "Inbound default" })], nextCursor: null });
+    render(<RoutingView />);
+    expect(await screen.findByText("Inbound default")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by strategy" }), { target: { value: "WEIGHTED" } });
+    await waitFor(() => expect(listRoutingProfiles).toHaveBeenLastCalledWith({ strategy: "WEIGHTED" }, expect.anything()));
+  });
+
+  it("debounces the search box, then refetches with the q param", async () => {
+    vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [profile({ name: "Inbound default" })], nextCursor: null });
+    render(<RoutingView />);
+    const box = await screen.findByRole("searchbox", { name: "Search routing profiles" });
+
+    fireEvent.change(box, { target: { value: "inbound" } });
+    await waitFor(() => expect(listRoutingProfiles).toHaveBeenLastCalledWith({ q: "inbound" }, expect.anything()));
+  });
+
+  it("shows a no-matches state with a Clear action when a filter yields nothing", async () => {
+    vi.mocked(listRoutingProfiles)
+      .mockResolvedValueOnce({ items: [profile({ name: "Inbound default" })], nextCursor: null })
+      .mockResolvedValue({ items: [], nextCursor: null });
+    render(<RoutingView />);
+    expect(await screen.findByText("Inbound default")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by direction" }), { target: { value: "OUTBOUND" } });
+    expect(await screen.findByText(/No routing profiles match your filters/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument();
+  });
+
   it("shows an error state (RFC 7807 title) when the load fails", async () => {
     vi.mocked(listRoutingProfiles).mockRejectedValue(new ApiError({ title: "Forbidden", status: 403 }));
     render(<RoutingView />);

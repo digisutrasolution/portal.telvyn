@@ -728,3 +728,17 @@ Format: Keep a Changelog; SemVer once releases begin.
   tenants' numbers are never returned). +3 web unit tests (169 → 172; full web suite 172 ✓, 33 files):
   status refetch, debounced search refetch, no-matches + Clear. `next build` ✓ (/numbers 5.36 kB). No new
   reusable code — reuses the 2y primitive. Next: routing, LCR.
+- 2026-11-20 — **Phase 12O-2ab — list filters: routing profiles screen.** Applies the 12O-2y filter
+  pattern (the `<ListFilters>` primitive + `useDebouncedValue` hook) to the **Routing** read screen:
+  search (`q`, 300 ms debounced — case-insensitive name), status, direction (inbound/outbound), and
+  strategy (priority / weighted / round-robin / simultaneous), each mapped to the list endpoint's
+  **already-contracted** query params (`status`/`direction`/`strategy`/`q`). No contract/schema change —
+  pure UI→existing-param wiring; verified the backend service genuinely applies all four
+  (`routing.service.ts` `where.status`/`direction`/`selectionStrategy` + case-insensitive `name contains`),
+  so no filter is a dishonest no-op. Filter changes reset pagination and refetch (memoized params;
+  Load-more carries the active filters); an active filter that returns nothing shows an honest **"No
+  routing profiles match your filters."** state (distinct from the "none configured yet" empty state) with
+  Clear. Declarative config only — nothing is executed. Read-only; server still authoritative +
+  tenant-auto-scoped. +4 web unit tests (172 → 176; full web suite 176 ✓, 33 files): status refetch,
+  strategy refetch, debounced search refetch, no-matches + Clear. `next build` ✓ (/routing 5.74 kB). No new
+  reusable code — reuses the 2y primitive. Next: LCR.

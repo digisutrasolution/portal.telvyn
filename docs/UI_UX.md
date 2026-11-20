@@ -518,3 +518,16 @@ endpoint) and its DTO requires exactly two uppercase chars, so a free-text box w
 400-prone, and the E.164 search already covers finding a specific number. Read-only; server
 authoritative + tenant-auto-scoped. Verified: 172/172 Vitest · `next build` clean (/numbers
 5.36 kB). To come: routing and LCR.
+
+List filters — Routing profiles — EXISTING (Phase 12O-2ab, 2026-11-20): the 12O-2y
+pattern applied to the Routing read screen, reusing `<ListFilters>` and `useDebouncedValue`
+unchanged. Exposes four filters mapped to the list endpoint's already-contracted params:
+search (`q`, 300 ms debounce — case-insensitive name), status, direction (inbound/outbound)
+and strategy (priority / weighted / round-robin / simultaneous). The backend
+`routing.service.ts` genuinely applies each (`where.status`/`direction`/`selectionStrategy`
+and a case-insensitive `name contains` for `q`), so no filter is a dishonest no-op. Changing
+a filter resets pagination and refetches; "Load more" carries the active filters; a filter
+that matches nothing shows an honest "No routing profiles match your filters." state
+(distinct from the "none configured yet" empty state) with Clear. Declarative config only —
+nothing is executed. Read-only; server authoritative + tenant-auto-scoped. Verified: 176/176
+Vitest · `next build` clean (/routing 5.74 kB). To come: LCR.

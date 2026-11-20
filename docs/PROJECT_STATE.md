@@ -316,9 +316,19 @@ id-based filters + `country` are omitted (no pickers; `country` has no canonical
 400-prone 2-char DTO — `q` covers it). Read-only; server authoritative + tenant-auto-scoped. **web 169 →
 172 (full suite ✓, 33 files): +3 (status / debounced search / no-matches + Clear). `next build` ✓
 (/numbers 5.36 kB).** No new reusable code — reuses the 2y primitive.
-Next (await owner go): apply the filter pattern to the remaining read screens (routing / LCR), one per
-sub-phase; the Admin/members read screen (`/admin` still a ModuleGate placeholder, `member.read`); landing
-the stack. Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
+**12O-2ab (DONE)** — list filters: routing profiles screen. Applies the 2y pattern (`<ListFilters>` +
+`useDebouncedValue`) to the Routing read screen: search (`q`, 300 ms debounce — case-insensitive name) +
+status + direction (inbound/outbound) + strategy (priority/weighted/round-robin/simultaneous) → the list
+endpoint's already-contracted params. **No contract/schema change** (pure UI→existing-param wiring;
+verified `routing.service.ts` genuinely applies all four `where.status`/`direction`/`selectionStrategy` +
+`name contains`, so none is a dishonest no-op). Filter changes reset pagination + refetch; a filter
+returning nothing shows an honest "No routing profiles match your filters." state with Clear. Declarative
+config only — nothing executed. Read-only; server authoritative + tenant-auto-scoped. **web 172 → 176
+(full suite ✓, 33 files): +4 (status / strategy / debounced search / no-matches + Clear). `next build` ✓
+(/routing 5.74 kB).** No new reusable code — reuses the 2y primitive.
+Next (await owner go): apply the filter pattern to the last read screen (LCR), one sub-phase; the
+Admin/members read screen (`/admin` still a ModuleGate placeholder, `member.read`); landing the stack.
+Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

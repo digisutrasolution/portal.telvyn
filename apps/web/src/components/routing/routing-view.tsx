@@ -5,12 +5,31 @@ import { Route } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { RoutingProfile } from "@/lib/contracts";
-import { listRoutingProfiles } from "@/lib/telecom/routing-actions";
+import { listRoutingProfiles, type ListRoutingProfilesParams } from "@/lib/telecom/routing-actions";
 import { isApiError } from "@/lib/api/problem";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { ListFilters } from "@/components/telecom/list-filters";
 import { RoutingDetailDrawer } from "./routing-detail-drawer";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<RoutingProfile["status"], Tone> = { ACTIVE: "ok", SUSPENDED: "warn", DISABLED: "neutral" };
+
+type Strategy = RoutingProfile["policy"]["selectionStrategy"];
+const STATUS_OPTIONS = [
+  { value: "ACTIVE", label: "Active" },
+  { value: "SUSPENDED", label: "Suspended" },
+  { value: "DISABLED", label: "Disabled" },
+] as const;
+const DIRECTION_OPTIONS = [
+  { value: "INBOUND", label: "Inbound" },
+  { value: "OUTBOUND", label: "Outbound" },
+] as const;
+const STRATEGY_OPTIONS = [
+  { value: "PRIORITY", label: "Priority" },
+  { value: "WEIGHTED", label: "Weighted" },
+  { value: "ROUND_ROBIN", label: "Round robin" },
+  { value: "SIMULTANEOUS", label: "Simultaneous" },
+] as const;
 
 function messageFrom(err: unknown, fallback: string): string {
   return isApiError(err) ? err.problem.title : fallback;
@@ -32,12 +51,37 @@ export function RoutingView() {
   const [reloadKey, setReloadKey] = React.useState(0);
   const [detailId, setDetailId] = React.useState<string | null>(null);
 
+  // Filters (mapped to the already-contracted list query params; "" = no filter).
+  const [search, setSearch] = React.useState("");
+  const [status, setStatus] = React.useState<"" | RoutingProfile["status"]>("");
+  const [direction, setDirection] = React.useState<"" | RoutingProfile["direction"]>("");
+  const [strategy, setStrategy] = React.useState<"" | Strategy>("");
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+
+  const params = React.useMemo<ListRoutingProfilesParams>(() => {
+    const p: ListRoutingProfilesParams = {};
+    if (debouncedSearch) p.q = debouncedSearch;
+    if (status) p.status = status;
+    if (direction) p.direction = direction;
+    if (strategy) p.strategy = strategy;
+    return p;
+  }, [debouncedSearch, status, direction, strategy]);
+
+  const hasActiveFilters = Boolean(debouncedSearch || status || direction || strategy);
+
+  function clearFilters() {
+    setSearch("");
+    setStatus("");
+    setDirection("");
+    setStrategy("");
+  }
+
   React.useEffect(() => {
     const ac = new AbortController();
     let active = true;
     setLoading(true);
     setError(null);
-    listRoutingProfiles({}, ac.signal)
+    listRoutingProfiles(params, ac.signal)
       .then((page) => {
         if (!active) return;
         setItems(page.items);
@@ -53,14 +97,14 @@ export function RoutingView() {
       active = false;
       ac.abort();
     };
-  }, [reloadKey]);
+  }, [params, reloadKey]);
 
   async function loadMore() {
     if (!cursor) return;
     setLoadingMore(true);
     setError(null);
     try {
-      const page = await listRoutingProfiles({ cursor });
+      const page = await listRoutingProfiles({ ...params, cursor });
       setItems((prev) => [...prev, ...page.items]);
       setCursor(page.nextCursor);
     } catch (err) {
@@ -86,6 +130,19 @@ export function RoutingView() {
         <Button variant="secondary" size="sm" onClick={refresh} disabled={loading}>Refresh</Button>
       </header>
 
+      {(items.length > 0 || hasActiveFilters) && (
+        <ListFilters
+          search={{ value: search, onChange: setSearch, label: "Search routing profiles", placeholder: "Search routing profiles…" }}
+          selects={[
+            { name: "status", label: "Filter by status", value: status, options: STATUS_OPTIONS, allLabel: "All statuses", onChange: (v) => setStatus(v as "" | RoutingProfile["status"]) },
+            { name: "direction", label: "Filter by direction", value: direction, options: DIRECTION_OPTIONS, allLabel: "All directions", onChange: (v) => setDirection(v as "" | RoutingProfile["direction"]) },
+            { name: "strategy", label: "Filter by strategy", value: strategy, options: STRATEGY_OPTIONS, allLabel: "All strategies", onChange: (v) => setStrategy(v as "" | Strategy) },
+          ]}
+          canClear={hasActiveFilters}
+          onClear={clearFilters}
+        />
+      )}
+
       {loading ? (
         <p className="text-[13px] text-muted">Loading routing profiles…</p>
       ) : error && items.length === 0 ? (
@@ -93,7 +150,9 @@ export function RoutingView() {
       ) : items.length === 0 ? (
         <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-lg bg-surface px-8 py-14 text-center shadow-elev-1">
           <Route aria-hidden className="size-7 text-muted" strokeWidth={1.5} />
-          <p className="text-[13px] text-ink-2">No routing profiles are configured yet.</p>
+          <p className="text-[13px] text-ink-2">
+            {hasActiveFilters ? "No routing profiles match your filters." : "No routing profiles are configured yet."}
+          </p>
         </div>
       ) : (
         <>
