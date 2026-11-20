@@ -70,6 +70,36 @@ describe("NumbersView", () => {
     expect(await screen.findByText(/No numbers in your inventory yet/i)).toBeInTheDocument();
   });
 
+  it("filters by status, refetching with the status query param", async () => {
+    vi.mocked(listDids).mockResolvedValue({ items: [did({ e164: "+14155550100" })], nextCursor: null });
+    render(<NumbersView />);
+    expect(await screen.findByText("+14155550100")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by status" }), { target: { value: "AVAILABLE" } });
+    await waitFor(() => expect(listDids).toHaveBeenLastCalledWith({ status: "AVAILABLE" }, expect.anything()));
+  });
+
+  it("debounces the search box, then refetches with the q param", async () => {
+    vi.mocked(listDids).mockResolvedValue({ items: [did({ e164: "+14155550100" })], nextCursor: null });
+    render(<NumbersView />);
+    const box = await screen.findByRole("searchbox", { name: "Search numbers" });
+
+    fireEvent.change(box, { target: { value: "+1415" } });
+    await waitFor(() => expect(listDids).toHaveBeenLastCalledWith({ q: "+1415" }, expect.anything()));
+  });
+
+  it("shows a no-matches state with a Clear action when a filter yields nothing", async () => {
+    vi.mocked(listDids)
+      .mockResolvedValueOnce({ items: [did({ e164: "+14155550100" })], nextCursor: null })
+      .mockResolvedValue({ items: [], nextCursor: null });
+    render(<NumbersView />);
+    expect(await screen.findByText("+14155550100")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by status" }), { target: { value: "RELEASED" } });
+    expect(await screen.findByText(/No numbers match your filters/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument();
+  });
+
   it("shows an error state (RFC 7807 title) when the load fails", async () => {
     vi.mocked(listDids).mockRejectedValue(new ApiError({ title: "Forbidden", status: 403 }));
     render(<NumbersView />);

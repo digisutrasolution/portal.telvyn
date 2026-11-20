@@ -306,9 +306,19 @@ honest "No SIP trunks match your filters." state with Clear. `carrierId` omitted
 Read-only; server authoritative + tenant-auto-scoped. **web 165 → 169 (full suite ✓, 33 files): +4
 (status / direction / debounced search / no-matches + Clear). `next build` ✓ (/sip-trunks 5.79 kB).** No
 new reusable code — reuses the 2y primitive.
-Next (await owner go): apply the filter pattern to the remaining read screens (numbers / routing / LCR),
-one per sub-phase; the Admin/members read screen (`/admin` still a ModuleGate placeholder, `member.read`);
-landing the stack. Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
+**12O-2aa (DONE)** — list filters: numbers (DIDs) screen. Applies the 2y pattern (`<ListFilters>` +
+`useDebouncedValue`) to the Numbers read screen: search (`q`, 300 ms debounce — substring on canonical
+E.164) + status (7-value DID lifecycle enum) → the list endpoint's already-contracted params. **No
+contract/schema change** (pure UI→existing-param wiring; verified `dids.service.ts` genuinely applies both
+`where.status` + `where.e164 contains`, so neither is a dishonest no-op). Filter changes reset pagination +
+refetch; a filter returning nothing shows an honest "No numbers match your filters." state with Clear. The
+id-based filters + `country` are omitted (no pickers; `country` has no canonical option source and a
+400-prone 2-char DTO — `q` covers it). Read-only; server authoritative + tenant-auto-scoped. **web 169 →
+172 (full suite ✓, 33 files): +3 (status / debounced search / no-matches + Clear). `next build` ✓
+(/numbers 5.36 kB).** No new reusable code — reuses the 2y primitive.
+Next (await owner go): apply the filter pattern to the remaining read screens (routing / LCR), one per
+sub-phase; the Admin/members read screen (`/admin` still a ModuleGate placeholder, `member.read`); landing
+the stack. Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

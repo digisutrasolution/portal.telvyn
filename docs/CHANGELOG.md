@@ -712,3 +712,19 @@ Format: Keep a Changelog; SemVer once releases begin.
   unit tests (165 → 169; full web suite 169 ✓, 33 files): status refetch, direction refetch, debounced
   search refetch, no-matches + Clear. `next build` ✓ (/sip-trunks 5.79 kB). No new reusable code — reuses
   the 2y primitive. Next: numbers, routing, LCR.
+- 2026-11-20 — **Phase 12O-2aa — list filters: numbers (DIDs) screen.** Applies the 12O-2y filter
+  pattern (the `<ListFilters>` primitive + `useDebouncedValue` hook) to the **Numbers** read screen:
+  search (`q`, 300 ms debounced — a substring match against the canonical E.164) and status (the 7-value
+  DID lifecycle enum), each mapped to the list endpoint's **already-contracted** query params. No
+  contract/schema change — pure UI→existing-param wiring; verified the backend service genuinely applies
+  both (`dids.service.ts` `where.status` + `where.e164 contains`), so neither is a dishonest no-op. Filter
+  changes reset pagination and refetch (memoized params; Load-more carries the active filters); an active
+  filter that returns nothing shows an honest **"No numbers match your filters."** state (distinct from the
+  "none in inventory yet" empty state) with Clear. The id-based filters (`carrierId`/`sipTrunkId`/
+  `routingProfileId`/`regionId`) are left out — no picker exists yet (mirrors prior screens); `country` is
+  also left out — it has no canonical option source (no countries endpoint) and its zod DTO demands exactly
+  two uppercase chars, so a free-text box would be 400-prone, and `q` already covers finding a number.
+  Read-only; server still authoritative + tenant-auto-scoped (the platform inventory pool and other
+  tenants' numbers are never returned). +3 web unit tests (169 → 172; full web suite 172 ✓, 33 files):
+  status refetch, debounced search refetch, no-matches + Clear. `next build` ✓ (/numbers 5.36 kB). No new
+  reusable code — reuses the 2y primitive. Next: routing, LCR.

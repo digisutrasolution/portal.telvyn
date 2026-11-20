@@ -502,3 +502,19 @@ state) with Clear. `carrierId` is deliberately not exposed (no carrier picker ex
 mirroring `regionId` on carriers). Read-only; server authoritative + tenant-auto-scoped.
 Verified: 169/169 Vitest · `next build` clean (/sip-trunks 5.79 kB). To come: numbers,
 routing and LCR.
+
+List filters — Numbers (DIDs) — EXISTING (Phase 12O-2aa, 2026-11-20): the 12O-2y
+pattern applied to the Numbers read screen, reusing `<ListFilters>` and `useDebouncedValue`
+unchanged. Exposes two filters mapped to the list endpoint's already-contracted params:
+search (`q`, 300 ms debounce — a substring match against the canonical E.164) and status
+(the 7-value DID lifecycle enum). The backend `dids.service.ts` genuinely applies both
+(`where.status` and `where.e164 contains`), so neither is a dishonest no-op. Changing a
+filter resets pagination and refetches; "Load more" carries the active filters; a filter
+that matches nothing shows an honest "No numbers match your filters." state (distinct from
+the "none in inventory yet" empty state) with Clear. The id-based filters (carrier / trunk
+/ routing profile / region) are deliberately not exposed (no pickers yet, as on prior
+screens); `country` is also not exposed — it has no canonical option source (no countries
+endpoint) and its DTO requires exactly two uppercase chars, so a free-text box would be
+400-prone, and the E.164 search already covers finding a specific number. Read-only; server
+authoritative + tenant-auto-scoped. Verified: 172/172 Vitest · `next build` clean (/numbers
+5.36 kB). To come: routing and LCR.

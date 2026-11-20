@@ -6,8 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Status } from "@/components/ui/status";
 import { Button } from "@/components/ui/button";
 import type { Did } from "@/lib/contracts";
-import { listDids } from "@/lib/telecom/dids-actions";
+import { listDids, type ListDidsParams } from "@/lib/telecom/dids-actions";
 import { isApiError } from "@/lib/api/problem";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { ListFilters } from "@/components/telecom/list-filters";
 import { NumberDetailDrawer } from "./number-detail-drawer";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
@@ -20,6 +22,16 @@ const STATUS_TONE: Record<Did["status"], Tone> = {
   PORTING: "warn",
   RELEASED: "neutral",
 };
+
+const STATUS_OPTIONS = [
+  { value: "AVAILABLE", label: "Available" },
+  { value: "RESERVED", label: "Reserved" },
+  { value: "ASSIGNED", label: "Assigned" },
+  { value: "ACTIVE", label: "Active" },
+  { value: "SUSPENDED", label: "Suspended" },
+  { value: "PORTING", label: "Porting" },
+  { value: "RELEASED", label: "Released" },
+] as const;
 const HEALTH_TONE: Record<Did["health"]["status"], Tone> = {
   HEALTHY: "ok",
   DEGRADED: "warn",
@@ -58,12 +70,31 @@ export function NumbersView() {
   const [reloadKey, setReloadKey] = React.useState(0);
   const [detailId, setDetailId] = React.useState<string | null>(null);
 
+  // Filters (mapped to the already-contracted list query params; "" = no filter).
+  const [search, setSearch] = React.useState("");
+  const [status, setStatus] = React.useState<"" | Did["status"]>("");
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+
+  const params = React.useMemo<ListDidsParams>(() => {
+    const p: ListDidsParams = {};
+    if (debouncedSearch) p.q = debouncedSearch;
+    if (status) p.status = status;
+    return p;
+  }, [debouncedSearch, status]);
+
+  const hasActiveFilters = Boolean(debouncedSearch || status);
+
+  function clearFilters() {
+    setSearch("");
+    setStatus("");
+  }
+
   React.useEffect(() => {
     const ac = new AbortController();
     let active = true;
     setLoading(true);
     setError(null);
-    listDids({}, ac.signal)
+    listDids(params, ac.signal)
       .then((page) => {
         if (!active) return;
         setItems(page.items);
@@ -79,14 +110,14 @@ export function NumbersView() {
       active = false;
       ac.abort();
     };
-  }, [reloadKey]);
+  }, [params, reloadKey]);
 
   async function loadMore() {
     if (!cursor) return;
     setLoadingMore(true);
     setError(null);
     try {
-      const page = await listDids({ cursor });
+      const page = await listDids({ ...params, cursor });
       setItems((prev) => [...prev, ...page.items]);
       setCursor(page.nextCursor);
     } catch (err) {
@@ -112,6 +143,17 @@ export function NumbersView() {
         <Button variant="secondary" size="sm" onClick={refresh} disabled={loading}>Refresh</Button>
       </header>
 
+      {(items.length > 0 || hasActiveFilters) && (
+        <ListFilters
+          search={{ value: search, onChange: setSearch, label: "Search numbers", placeholder: "Search by number…" }}
+          selects={[
+            { name: "status", label: "Filter by status", value: status, options: STATUS_OPTIONS, allLabel: "All statuses", onChange: (v) => setStatus(v as "" | Did["status"]) },
+          ]}
+          canClear={hasActiveFilters}
+          onClear={clearFilters}
+        />
+      )}
+
       {loading ? (
         <p className="text-[13px] text-muted">Loading numbers…</p>
       ) : error && items.length === 0 ? (
@@ -119,7 +161,9 @@ export function NumbersView() {
       ) : items.length === 0 ? (
         <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-lg bg-surface px-8 py-14 text-center shadow-elev-1">
           <Hash aria-hidden className="size-7 text-muted" strokeWidth={1.5} />
-          <p className="text-[13px] text-ink-2">No numbers in your inventory yet.</p>
+          <p className="text-[13px] text-ink-2">
+            {hasActiveFilters ? "No numbers match your filters." : "No numbers in your inventory yet."}
+          </p>
         </div>
       ) : (
         <>
