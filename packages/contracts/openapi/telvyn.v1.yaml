@@ -123,6 +123,28 @@ paths:
               schema: { $ref: "#/components/schemas/MeContext" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/members:
+    get:
+      tags: [authz]
+      summary: List members of the current tenant
+      description: >-
+        The members of the session's own tenant (strictly tenant-scoped — a
+        foreign tenant's members are never returned; the tenant id comes from
+        the server-derived context, never the client). Each member carries the
+        user's identity, the membership status, and the roles assigned to the
+        membership in this tenant. Ordered by join time (createdAt ASC). No
+        secrets appear. Requires `member.read`.
+      operationId: listMembers
+      responses:
+        "200":
+          description: Members of the current tenant
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Member" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
   /v1/auth/sessions:
     get:
       tags: [auth]
@@ -770,6 +792,30 @@ components:
           type: array
           items: { type: string }
           description: Expanded concrete permission keys (wildcards resolved), sorted.
+    Member:
+      type: object
+      required: [membershipId, status, user, roles]
+      properties:
+        membershipId: { type: string, format: uuid }
+        status: { type: string, enum: [ACTIVE, SUSPENDED], description: Membership status in this tenant. }
+        user:
+          type: object
+          required: [id, email, fullName, status]
+          properties:
+            id: { type: string, format: uuid }
+            email: { type: string, format: email }
+            fullName: { type: string, nullable: true }
+            status: { type: string, enum: [ACTIVE, INVITED, DISABLED], description: User account status. }
+        roles:
+          type: array
+          description: Roles assigned to this membership in this tenant.
+          items:
+            type: object
+            required: [id, key, name]
+            properties:
+              id: { type: string, format: uuid }
+              key: { type: string }
+              name: { type: string }
     Session:
       type: object
       required: [id, createdAt, lastSeenAt, current]

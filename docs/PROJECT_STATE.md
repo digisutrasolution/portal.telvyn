@@ -339,9 +339,20 @@ pagination + refetch; honest "No LCR policies match your filters." empty state. 
 `costMicros` stays integer. Read-only; server authoritative + tenant-auto-scoped. **web 176 → 180 (full
 suite ✓, 33 files): +4. API unit 187 → 192 (20 files): +5 (DTO coercion). `next build` ✓ (/lcr 5.48 kB);
 API tsc/eslint ✓.** No `API.md` change (contract already declared `enabled: boolean`; impl now honours it).
-Next (await owner go): the Admin/members read screen (`/admin` still a ModuleGate placeholder,
-`member.read`); landing the stack. Backend read gaps (HealthEvent/config-version history) stay separately
-approval-gated.
+**12O-2ad (DONE)** — Admin / Members read screen (contract-first). Replaces the `/admin` ModuleGate
+placeholder with a real read-only members list — the last NOC/admin read surface. The endpoint already
+existed (`GET /v1/members`, `member.read`, `authz.controller.ts` → `tenancy.listMembers()`); this phase
+**authored it into the contract** (new `Member` schema + path, regenerated `schema.ts` additively, `Member`
+alias) and built the screen. The endpoint returns a plain **array** (small team — no pagination/query
+params), so `<MembersView>` loads via `useResource` (no Load-more). Columns: name / email / membership
+status (ACTIVE·SUSPENDED) / account status (ACTIVE·INVITED·DISABLED) / role-name badges; honest
+loading/empty/error; no secrets. Route already gated: nav `member.read` + `RouteGuard` (not platform-only).
+Read-only — member management (invite / role changes) is a later phase. **web 180 → 183 (full suite ✓, 34
+files): +3. `next build` ✓ (/admin now a real 3.73 kB route). No backend change** (endpoint +
+tenant-scoping already existed + e2e-covered). `API.md` updated.
+Next (await owner go): landing the stack (owner provides GitHub remote → push `integration/phase-12o-
+complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps (HealthEvent/config-version
+history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

@@ -549,3 +549,20 @@ a filter that matches nothing shows an honest "No LCR policies match your filter
 only — nothing is executed, rated or billed; `costMicros` stays an integer. Read-only;
 server authoritative + tenant-auto-scoped. Verified: 180/180 web Vitest + 192 API unit ·
 `next build` clean (/lcr 5.48 kB). The read-screen filter set is now complete.
+
+Admin — Members — EXISTING (Phase 12O-2ad, 2026-11-20): the `/admin` route, until
+now a ModuleGate placeholder, is a real read-only members list — the last NOC/admin
+read surface. It shows every member of the session's own tenant in a table: name
+(null → "—"), email (mono), membership status (ACTIVE / SUSPENDED badge), account
+status (ACTIVE / INVITED / DISABLED badge — surfacing pending invites honestly) and
+the member's role names as neutral badges. The backend `GET /v1/members` endpoint
+already existed (`member.read`); this phase authored it into the contract (`Member`
+schema) and built the screen. The endpoint returns a plain array (a team is small —
+no pagination), so the view loads the full list once via `useResource` with a
+Refresh action; there is no Load-more and no filter bar (members have no contracted
+query params — a filter sub-phase would need backend work first). Honest
+loading/empty/error states; no secrets. The route is gated by nav `member.read` +
+RouteGuard (not platform-only, so any tenant member with `member.read` sees it); the
+server auto-scopes to the session's tenant. Read-only — member management (invite /
+role changes) is a later phase. Verified: 183/183 web Vitest · `next build` clean
+(/admin 3.73 kB).

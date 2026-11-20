@@ -126,6 +126,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List members of the current tenant
+         * @description The members of the session's own tenant (strictly tenant-scoped — a foreign tenant's members are never returned; the tenant id comes from the server-derived context, never the client). Each member carries the user's identity, the membership status, and the roles assigned to the membership in this tenant. Ordered by join time (createdAt ASC). No secrets appear. Requires `member.read`.
+         */
+        get: operations["listMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/sessions": {
         parameters: {
             query?: never;
@@ -729,6 +749,34 @@ export interface components {
             }[];
             /** @description Expanded concrete permission keys (wildcards resolved), sorted. */
             permissions: string[];
+        };
+        Member: {
+            /** Format: uuid */
+            membershipId: string;
+            /**
+             * @description Membership status in this tenant.
+             * @enum {string}
+             */
+            status: "ACTIVE" | "SUSPENDED";
+            user: {
+                /** Format: uuid */
+                id: string;
+                /** Format: email */
+                email: string;
+                fullName: string | null;
+                /**
+                 * @description User account status.
+                 * @enum {string}
+                 */
+                status: "ACTIVE" | "INVITED" | "DISABLED";
+            };
+            /** @description Roles assigned to this membership in this tenant. */
+            roles: {
+                /** Format: uuid */
+                id: string;
+                key: string;
+                name: string;
+            }[];
         };
         Session: {
             /** Format: uuid */
@@ -1387,6 +1435,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeContext"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Members of the current tenant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"][];
                 };
             };
             401: components["responses"]["Problem"];

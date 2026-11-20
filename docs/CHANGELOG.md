@@ -763,3 +763,20 @@ Format: Keep a Changelog; SemVer once releases begin.
   and +5 API unit (187 → 192 unit, 20 files). `next build` ✓ (/lcr 5.48 kB); API `tsc`/eslint ✓. No
   `API.md` change — the contract already declared `enabled: boolean`; this made the implementation honour
   it. Next: the Admin/members read screen; landing the stack.
+- 2026-11-20 — **Phase 12O-2ad — Admin / Members read screen (contract-first).** Replaces the `/admin`
+  `ModuleGate` placeholder with a real read-only members list — the last NOC/admin read surface. The
+  backend endpoint already existed (`GET /v1/members`, `member.read`, `authz.controller.ts` →
+  `tenancy.listMembers()`); this phase **authored it into the contract** (new `Member` schema + path in
+  `telvyn.v1.yaml`, from the real service shape) and regenerated `schema.ts` (additive — 0 removed lines) +
+  added a `Member` alias in `contracts/index.ts`. The endpoint returns a JSON **array** (a team is small —
+  no pagination, no query params), so the screen loads the full list via `useResource` (load-on-mount +
+  Refresh + abort-on-unmount) — no Load-more. New `lib/admin/members-actions.ts` `listMembers()`; new
+  `components/admin/members-view.tsx` `<MembersView>` (table: name / email / membership status ACTIVE·
+  SUSPENDED / account status ACTIVE·INVITED·DISABLED / role-name badges; honest loading / empty / error;
+  null full name → "—"; no secrets). `app/admin/page.tsx` now renders `<MembersView>` directly. The route
+  is already gated — nav `member.read` + `RouteGuard` (not platform-only, so visible to any tenant member
+  with `member.read`); the server auto-scopes to the session's tenant and re-checks every request.
+  Read-only — member management (invite / role changes) is a later phase. +3 web unit tests (180 → 183;
+  full web suite 183 ✓, 34 files — list render, empty, error). `next build` ✓ (/admin now a real 3.73 kB
+  route). **No backend change** (the endpoint and its tenant-scoping already existed + were e2e-covered).
+  `API.md` updated. Next: landing the stack.

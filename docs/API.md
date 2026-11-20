@@ -272,3 +272,20 @@ resolved), sorted — never the raw wildcard. `401` unauthenticated; `403` when
 the session has no active tenant/membership. Read-only; the server guards remain
 the authority — the frontend uses this only for UX gating. Contract: `MeContext`
 in `telvyn.v1.yaml`.
+
+`GET /v1/members` — the members of the session's **own** tenant, powering the
+Admin → Members screen (Phase 12O-2ad). Strictly tenant-scoped: the tenant id
+comes from the server-derived context, never the client, and the scoped Prisma
+client never returns a foreign tenant's members (IDOR-safe; an e2e proves a
+cross-tenant membership id never appears). Returns a JSON **array** (a team is
+small — no pagination), ordered by join time (createdAt ASC).
+
+| Method & path | Auth |
+|---|---|
+| `GET /v1/members` | `member.read` |
+
+Response: `Member[]`, each `{ membershipId, status (ACTIVE\|SUSPENDED), user{id, email, fullName, status (ACTIVE\|INVITED\|DISABLED)}, roles[{id,key,name}] }`.
+No secrets appear. `401` unauthenticated; `403` without `member.read`. Read-only;
+member management (invite / role changes) is a later phase. This endpoint already
+existed in `authz.controller.ts`; 12O-2ad authored it into the contract (`Member`
+in `telvyn.v1.yaml`) and built the screen — no backend change.

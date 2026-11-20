@@ -29,6 +29,9 @@ export type LoginResult = Schemas["LoginResult"];
 /** The authenticated user's identity (GET /v1/auth/me). */
 export type Me = Schemas["Me"];
 
+/** A member of the current tenant: identity + membership status + assigned roles (GET /v1/members). */
+export type Member = Schemas["Member"];
+
 /** Begin-TOTP-enrollment result (POST /v1/auth/mfa/enroll): an otpauth:// URI. */
 export type MfaEnrollResult = operations["mfaEnroll"]["responses"]["200"]["content"]["application/json"];
 
