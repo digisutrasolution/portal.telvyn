@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { Carrier, CarrierPage } from "@/lib/contracts";
+import type { Carrier, CarrierPage, CreateCarrier, UpdateCarrier } from "@/lib/contracts";
 
 /**
  * Read-only carrier API calls (tenant-scoped; `carrier.read`). The server scopes
@@ -32,4 +32,19 @@ export function listCarriers(params: ListCarriersParams = {}, signal?: AbortSign
   if (params.q) qs.set("q", params.q);
   const query = qs.toString();
   return api.get<CarrierPage>(`/v1/telecom/carriers${query ? `?${query}` : ""}`, { signal });
+}
+
+/** Create a carrier (`carrier.create`); scope/ownership are server-derived. Returns the created carrier. */
+export function createCarrier(body: CreateCarrier): Promise<Carrier> {
+  return api.post<Carrier>("/v1/telecom/carriers", body);
+}
+
+/** Partially update a carrier (`carrier.update`). Returns the updated carrier; 404 if foreign/removed. */
+export function updateCarrier(id: string, body: UpdateCarrier): Promise<Carrier> {
+  return api.patch<Carrier>(`/v1/telecom/carriers/${id}`, body);
+}
+
+/** Soft-delete a carrier (`carrier.delete`); 204 No Content. 404 if foreign/removed. */
+export function deleteCarrier(id: string): Promise<void> {
+  return api.delete<void>(`/v1/telecom/carriers/${id}`);
 }

@@ -3,10 +3,34 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiError } from "@/lib/api/problem";
 import type { Carrier } from "@/lib/contracts";
 
-vi.mock("@/lib/telecom/carriers-actions", () => ({ listCarriers: vi.fn(), getCarrier: vi.fn() }));
+vi.mock("@/lib/telecom/carriers-actions", () => ({
+  listCarriers: vi.fn(),
+  getCarrier: vi.fn(),
+  createCarrier: vi.fn(),
+  updateCarrier: vi.fn(),
+  deleteCarrier: vi.fn(),
+}));
 
-import { getCarrier, listCarriers } from "@/lib/telecom/carriers-actions";
+import { createCarrier, deleteCarrier, getCarrier, listCarriers } from "@/lib/telecom/carriers-actions";
+import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { CarriersView } from "./carriers-view";
+
+// Full carrier permissions so the create/edit/delete affordances render.
+const allPermsLoader: SessionLoader = async () => ({
+  userId: "u",
+  tenantId: "t",
+  tenantType: "RESELLER",
+  roles: [],
+  permissions: ["carrier.read", "carrier.create", "carrier.update", "carrier.delete"],
+});
+
+function renderView(loader: SessionLoader = allPermsLoader) {
+  return render(
+    <SessionProvider loader={loader}>
+      <CarriersView />
+    </SessionProvider>,
+  );
+}
 
 function carrier(overrides: Partial<Carrier> = {}): Carrier {
   return {
@@ -37,7 +61,7 @@ describe("CarriersView", () => {
       items: [carrier({ name: "Acme SIP", scope: "TENANT" }), carrier({ name: "Globe Telecom", scope: "SYSTEM" })],
       nextCursor: null,
     });
-    render(<CarriersView />);
+    renderView();
 
     expect(await screen.findByText("Acme SIP")).toBeInTheDocument();
     expect(screen.getByText("Globe Telecom")).toBeInTheDocument();
@@ -51,7 +75,7 @@ describe("CarriersView", () => {
     const row = carrier({ name: "Acme SIP", maxConcurrentCalls: 500 });
     vi.mocked(listCarriers).mockResolvedValue({ items: [row], nextCursor: null });
     vi.mocked(getCarrier).mockResolvedValue(carrier({ id: row.id, name: "Acme SIP", maxConcurrentCalls: 500, priority: 10 }));
-    render(<CarriersView />);
+    renderView();
 
     fireEvent.click(await screen.findByRole("button", { name: "View Acme SIP" }));
 
@@ -63,13 +87,13 @@ describe("CarriersView", () => {
 
   it("shows the empty state when there are no carriers", async () => {
     vi.mocked(listCarriers).mockResolvedValue({ items: [], nextCursor: null });
-    render(<CarriersView />);
+    renderView();
     expect(await screen.findByText(/No carriers are configured yet/i)).toBeInTheDocument();
   });
 
   it("filters by status, refetching with the status query param", async () => {
     vi.mocked(listCarriers).mockResolvedValue({ items: [carrier({ name: "Acme SIP" })], nextCursor: null });
-    render(<CarriersView />);
+    renderView();
     expect(await screen.findByText("Acme SIP")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Filter by status" }), { target: { value: "ACTIVE" } });
@@ -78,7 +102,7 @@ describe("CarriersView", () => {
 
   it("debounces the search box, then refetches with the q param", async () => {
     vi.mocked(listCarriers).mockResolvedValue({ items: [carrier({ name: "Acme SIP" })], nextCursor: null });
-    render(<CarriersView />);
+    renderView();
     const box = await screen.findByRole("searchbox", { name: "Search carriers" });
 
     fireEvent.change(box, { target: { value: "globe" } });
@@ -89,7 +113,7 @@ describe("CarriersView", () => {
     vi.mocked(listCarriers)
       .mockResolvedValueOnce({ items: [carrier({ name: "Acme SIP" })], nextCursor: null })
       .mockResolvedValue({ items: [], nextCursor: null });
-    render(<CarriersView />);
+    renderView();
     expect(await screen.findByText("Acme SIP")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Filter by status" }), { target: { value: "DISABLED" } });
@@ -99,7 +123,7 @@ describe("CarriersView", () => {
 
   it("shows an error state (RFC 7807 title) when the load fails", async () => {
     vi.mocked(listCarriers).mockRejectedValue(new ApiError({ title: "Forbidden", status: 403 }));
-    render(<CarriersView />);
+    renderView();
     expect(await screen.findByRole("alert")).toHaveTextContent("Forbidden");
   });
 
@@ -107,7 +131,7 @@ describe("CarriersView", () => {
     vi.mocked(listCarriers)
       .mockResolvedValueOnce({ items: [carrier({ name: "Page One" })], nextCursor: "cur-2" })
       .mockResolvedValueOnce({ items: [carrier({ name: "Page Two" })], nextCursor: null });
-    render(<CarriersView />);
+    renderView();
 
     expect(await screen.findByText("Page One")).toBeInTheDocument();
     const more = screen.getByRole("button", { name: "Load more" });
@@ -117,5 +141,43 @@ describe("CarriersView", () => {
     expect(await screen.findByText("Page Two")).toBeInTheDocument();
     expect(screen.getByText("Page One")).toBeInTheDocument(); // still there (appended)
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull(); // exhausted
+  });
+
+  it("creates a carrier from the New-carrier form and reloads the list", async () => {
+    vi.mocked(listCarriers).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(createCarrier).mockResolvedValue(carrier({ name: "New Co" }));
+    renderView();
+    await screen.findByText(/No carriers are configured yet/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "New carrier" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "New Co" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create carrier" }));
+
+    await waitFor(() => expect(createCarrier).toHaveBeenCalledWith(expect.objectContaining({ name: "New Co" })));
+    // list refetched (first-page call on mount + after the save)
+    await waitFor(() => expect(vi.mocked(listCarriers).mock.calls.length).toBeGreaterThanOrEqual(2));
+  });
+
+  it("hides New carrier without carrier.create permission", async () => {
+    vi.mocked(listCarriers).mockResolvedValue({ items: [], nextCursor: null });
+    renderView(async () => ({ userId: "u", tenantId: "t", tenantType: "RESELLER", roles: [], permissions: ["carrier.read"] }));
+    await screen.findByText(/No carriers are configured yet/i);
+    expect(screen.queryByRole("button", { name: "New carrier" })).toBeNull();
+  });
+
+  it("deletes a carrier via the detail drawer after confirmation", async () => {
+    const row = carrier({ name: "Acme SIP" });
+    vi.mocked(listCarriers).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getCarrier).mockResolvedValue(row);
+    vi.mocked(deleteCarrier).mockResolvedValue(undefined);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Acme SIP" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" })); // drawer footer → opens confirm
+    // Confirm dialog's Delete button.
+    const confirm = await screen.findByRole("button", { name: "Delete" });
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(deleteCarrier).toHaveBeenCalledWith(row.id));
   });
 });

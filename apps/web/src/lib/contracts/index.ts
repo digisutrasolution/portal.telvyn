@@ -68,6 +68,12 @@ export type CarrierPage = Schemas["CarrierPage"];
 /** Non-secret vault credential reference attached to a carrier. */
 export type CarrierCredentialRef = Schemas["CarrierCredentialRef"];
 
+/** Create-carrier request body (POST /v1/telecom/carriers). */
+export type CreateCarrier = Schemas["CreateCarrier"];
+
+/** Partial update-carrier request body (PATCH /v1/telecom/carriers/{id}). */
+export type UpdateCarrier = Schemas["UpdateCarrier"];
+
 /** A SIP trunk (tenant-owned), with honest health and a non-secret credential ref. */
 export type SipTrunk = Schemas["SipTrunk"];
 

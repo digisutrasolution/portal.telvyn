@@ -497,6 +497,31 @@ paths:
               schema: { $ref: "#/components/schemas/CarrierPage" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [telecom]
+      summary: Create a carrier
+      description: >-
+        Create a carrier. Scope (system vs tenant) and ownership are derived
+        server-side from the session (never a client field — mass-assignment
+        protection). A credential may be attached by referencing an existing
+        vault credential (`credentialId`) OR created inline (`credential`, whose
+        secret goes straight to the vault), never both; the secret is never
+        stored on or returned from the carrier. Requires `carrier.create`.
+      operationId: createCarrier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCarrier" }
+      responses:
+        "201":
+          description: Carrier created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Carrier" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
   /v1/telecom/carriers/{id}:
     get:
       tags: [telecom]
@@ -515,6 +540,48 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Carrier" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [telecom]
+      summary: Update a carrier
+      description: >-
+        Partially update a carrier (only the supplied fields change). Scope and
+        ownership are never changed from the client. Credential rules match
+        create: `credentialId` or inline `credential`, never both; secrets are
+        vaulted and never returned. A foreign tenant's carrier is 404 (IDOR-safe).
+        Requires `carrier.update`.
+      operationId: updateCarrier
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateCarrier" }
+      responses:
+        "200":
+          description: Carrier updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Carrier" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [telecom]
+      summary: Delete a carrier (soft delete)
+      description: >-
+        Soft-delete a carrier (sets deletedAt; the row is retained for audit and
+        history). A foreign tenant's carrier is 404 (IDOR-safe). Requires
+        `carrier.delete`.
+      operationId: deleteCarrier
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Carrier deleted }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -1040,6 +1107,61 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Carrier" }
         nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next page; null when exhausted." }
+    InlineCredentialInput:
+      type: object
+      required: [type, label, secret]
+      description: >-
+        A vault credential to create and attach in the same request. The secret
+        is written straight to the encrypted vault; it is never stored on or
+        returned from the carrier. Write-only.
+      properties:
+        type: { type: string, enum: [SIP_PASSWORD, CARRIER_API, ENGINE_API] }
+        label: { type: string, minLength: 1, maxLength: 120 }
+        hint: { type: string, maxLength: 120 }
+        secret: { type: string, minLength: 1, maxLength: 4096, description: "Write-only secret material (vaulted immediately)." }
+    CreateCarrier:
+      type: object
+      required: [name]
+      description: >-
+        Create-carrier body. Scope/ownership are server-derived (no tenantId or
+        scope field). Attach a credential by `credentialId` OR inline
+        `credential`, never both.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        type: { type: string, enum: [ORIGINATION, TERMINATION, BIDIRECTIONAL] }
+        country: { type: string, minLength: 2, maxLength: 2, description: "ISO-3166-1 alpha-2, uppercase." }
+        regionId: { type: string, format: uuid }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED] }
+        priority: { type: integer, minimum: 0, maximum: 100000 }
+        codecs:
+          type: array
+          maxItems: 32
+          items: { type: string, enum: [PCMU, PCMA, G722, G729, OPUS, AMR, AMR_WB] }
+        maxCps: { type: integer, minimum: 0, maximum: 1000000 }
+        maxConcurrentCalls: { type: integer, minimum: 0, maximum: 10000000 }
+        credentialId: { type: string, format: uuid, description: "Attach an existing vault credential." }
+        credential: { $ref: "#/components/schemas/InlineCredentialInput" }
+    UpdateCarrier:
+      type: object
+      description: >-
+        Partial carrier update — only supplied fields change. Same credential
+        rules as create (`credentialId` or inline `credential`, never both).
+        Scope/ownership are never changed from the client.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        type: { type: string, enum: [ORIGINATION, TERMINATION, BIDIRECTIONAL] }
+        country: { type: string, minLength: 2, maxLength: 2, description: "ISO-3166-1 alpha-2, uppercase." }
+        regionId: { type: string, format: uuid }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED] }
+        priority: { type: integer, minimum: 0, maximum: 100000 }
+        codecs:
+          type: array
+          maxItems: 32
+          items: { type: string, enum: [PCMU, PCMA, G722, G729, OPUS, AMR, AMR_WB] }
+        maxCps: { type: integer, minimum: 0, maximum: 1000000 }
+        maxConcurrentCalls: { type: integer, minimum: 0, maximum: 10000000 }
+        credentialId: { type: string, format: uuid }
+        credential: { $ref: "#/components/schemas/InlineCredentialInput" }
     CarrierSummary:
       type: object
       required: [id, name, scope]

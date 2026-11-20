@@ -350,9 +350,22 @@ loading/empty/error; no secrets. Route already gated: nav `member.read` + `Route
 Read-only — member management (invite / role changes) is a later phase. **web 180 → 183 (full suite ✓, 34
 files): +3. `next build` ✓ (/admin now a real 3.73 kB route). No backend change** (endpoint +
 tenant-scoping already existed + e2e-covered). `API.md` updated.
-Next (await owner go): landing the stack (owner provides GitHub remote → push `integration/phase-12o-
-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps (HealthEvent/config-version
-history) stay separately approval-gated.
+**12O-2ae (DONE)** — carrier create / edit / delete (FIRST WRITE SLICE, contract-first). The carrier
+POST/PATCH/DELETE endpoints already existed (`carrier.create`/`update`/`delete`, scope server-derived,
+audited with a credential reference only); this phase **authored them into the contract** (`CreateCarrier`
+/ `UpdateCarrier` / `InlineCredentialInput` + POST/PATCH/DELETE paths), regenerated `schema.ts` (additive),
+added aliases + `createCarrier`/`updateCarrier`/`deleteCarrier`. New `<CarrierForm>` modal (create+edit:
+name/type/status/country/priority/maxCps/maxConcurrent/codecs with client validation); detail drawer got
+Edit/Delete (gated `carrier.update`/`delete`); carriers-view got a New-carrier button (gated
+`carrier.create`) + soft-delete confirm; mutations reload the list. **Deferred (optional, still on the
+API):** `regionId` (no picker) + credential attachment (secret handling). UX-only gating; server
+re-validates + re-checks every call. **web 183 → 186 (full suite ✓, 34 files): +3. `next build` ✓
+(/carriers 5.69 kB); eslint ✓. No backend change** (endpoints + audit + tenant-scoping pre-existed,
+e2e-covered). `API.md` updated. Sets the write pattern for the other resources.
+Next (await owner go): roll the write pattern to the other resources (SIP trunks / numbers / routing /
+LCR / member mgmt), one per sub-phase; or land the stack (owner provides GitHub remote → push
+`integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps
+(HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

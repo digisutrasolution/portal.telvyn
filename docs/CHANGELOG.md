@@ -780,3 +780,26 @@ Format: Keep a Changelog; SemVer once releases begin.
   full web suite 183 ✓, 34 files — list render, empty, error). `next build` ✓ (/admin now a real 3.73 kB
   route). **No backend change** (the endpoint and its tenant-scoping already existed + were e2e-covered).
   `API.md` updated. Next: landing the stack.
+- 2026-11-20 — **Phase 12O-2ae — carrier create / edit / delete (first write slice, contract-first).**
+  The first mutating resource screen. The carrier POST/PATCH/DELETE endpoints already existed
+  (`carriers.controller.ts`, perms `carrier.create` / `carrier.update` / `carrier.delete`, scope/ownership
+  server-derived, mutations audited with a credential **reference** only); this phase **authored them into
+  the contract** (new `CreateCarrier`, `UpdateCarrier`, `InlineCredentialInput` schemas + POST on the
+  collection and PATCH/DELETE on the item path in `telvyn.v1.yaml`), regenerated `schema.ts` (additive —
+  the only change was `post/patch/delete: never` placeholders becoming real operations) and added
+  `CreateCarrier` / `UpdateCarrier` aliases. New `createCarrier` / `updateCarrier` / `deleteCarrier`
+  actions. New `<CarrierForm>` modal (create + edit): name, type, status, country (ISO-2, uppercased +
+  client-validated), priority, max CPS, max concurrent calls, and codec checkboxes — client-side
+  range/format validation with per-field errors, server-side re-validation authoritative. The detail
+  drawer gained **Edit** / **Delete** footer actions (gated on `carrier.update` / `carrier.delete` via
+  `useSession`); carriers-view gained a **New carrier** button (gated on `carrier.create`) and a
+  soft-delete confirm dialog; every mutation reloads the list. **Scope deliberately bounded:** `regionId`
+  (no picker yet) and credential attachment (secret handling) are **deferred** to a later slice — both stay
+  optional + fully available on the API; editing here never touches them. In edit mode, clearing an
+  optional numeric leaves it unchanged (the DTO has no "unset" for those). All gating is UX-only; the API
+  re-checks `carrier.*` and re-validates every call, and stays tenant/scope-authoritative. +3 web unit
+  tests (183 → 186; full web suite 186 ✓, 34 files — create-and-reload, New-carrier hidden without
+  `carrier.create`, delete-via-drawer-after-confirm; existing carrier tests now wrap `SessionProvider`).
+  `next build` ✓ (/carriers 5.69 kB); eslint ✓. **No backend change** (endpoints + audit + tenant-scoping
+  pre-existed, e2e-covered). `API.md` updated. Next: roll the write pattern to the other resources (one per
+  sub-phase), or land the stack.

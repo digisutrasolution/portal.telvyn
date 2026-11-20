@@ -147,7 +147,14 @@ Response is a safe DTO: `scope` (SYSTEM/TENANT, computed), config fields, a safe
 `credential` summary (`id`, type, label, hint, scope — never the secret), and
 honest `health` (UNKNOWN). Routing note: telecom resources live under
 `/v1/telecom/*` (12D convention) rather than the prompt's `/v1/carriers` example.
-OpenAPI YAML still covers `/v1/auth` only (tracked debt) — endpoints documented here.
+
+As of **Phase 12O-2ae** the full carrier surface — list, get, **create, update,
+delete** — is authored into the OpenAPI contract (`CreateCarrier` / `UpdateCarrier`
+/ `InlineCredentialInput` schemas in `telvyn.v1.yaml`) and the frontend carrier
+management screen (create / edit / soft-delete) consumes the generated types. The
+UI defers two optional, API-supported inputs for a later slice: `regionId` (no
+region picker yet) and credential attachment (`credentialId` / inline `credential`
+secret) — both remain fully available on the API.
 
 ## SIP trunk API — EXISTING (Phase 12F, 2026-08-29)
 

@@ -2,11 +2,13 @@
 
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Status } from "@/components/ui/status";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { Carrier } from "@/lib/contracts";
 import { getCarrier } from "@/lib/telecom/carriers-actions";
 import { useResource } from "@/lib/use-resource";
+import { useSession } from "@/lib/session/session-context";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<Carrier["status"], Tone> = { ACTIVE: "ok", SUSPENDED: "warn", DISABLED: "neutral" };
@@ -35,9 +37,25 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
  * Mounted keyed by id so each open refetches; a foreign/removed carrier surfaces
  * the API's 404 as an inline message.
  */
-export function CarrierDetailDrawer({ carrierId, onClose }: { carrierId: string; onClose: () => void }) {
+export function CarrierDetailDrawer({
+  carrierId,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  carrierId: string;
+  onClose: () => void;
+  /** Open the edit form for this carrier (shown only with `carrier.update`). */
+  onEdit?: (carrier: Carrier) => void;
+  /** Request deletion of this carrier (shown only with `carrier.delete`). */
+  onDelete?: (carrier: Carrier) => void;
+}) {
+  const { hasPermission } = useSession();
   const fetchCarrier = React.useCallback((s: AbortSignal) => getCarrier(carrierId, s), [carrierId]);
   const { data, loading, error } = useResource<Carrier>(fetchCarrier);
+
+  const canEdit = Boolean(onEdit) && hasPermission("carrier.update");
+  const canDelete = Boolean(onDelete) && hasPermission("carrier.delete");
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -73,6 +91,17 @@ export function CarrierDetailDrawer({ carrierId, onClose }: { carrierId: string;
             <Row label="Created">{data.createdAt.slice(0, 10)}</Row>
             <Row label="Updated">{data.updatedAt.slice(0, 10)}</Row>
           </dl>
+        )}
+
+        {data && (canEdit || canDelete) && (
+          <div className="mt-4 flex justify-end gap-2">
+            {canDelete && (
+              <Button variant="danger" size="sm" onClick={() => onDelete!(data)}>Delete</Button>
+            )}
+            {canEdit && (
+              <Button variant="primary" size="sm" onClick={() => onEdit!(data)}>Edit</Button>
+            )}
+          </div>
         )}
       </DialogContent>
     </Dialog>

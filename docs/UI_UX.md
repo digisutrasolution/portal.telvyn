@@ -566,3 +566,21 @@ RouteGuard (not platform-only, so any tenant member with `member.read` sees it);
 server auto-scopes to the session's tenant. Read-only — member management (invite /
 role changes) is a later phase. Verified: 183/183 web Vitest · `next build` clean
 (/admin 3.73 kB).
+
+Carrier management — create / edit / delete — EXISTING (Phase 12O-2ae, 2026-11-20):
+the first mutating resource screen, setting the write pattern for the other telecom
+resources. The Carriers screen gains a "New carrier" button (shown only with
+`carrier.create`); the carrier detail drawer gains Edit and Delete footer actions
+(shown only with `carrier.update` / `carrier.delete`). `<CarrierForm>` is a modal
+for both create and edit, covering the declarative fields: name (required), type,
+status, country (ISO 2-letter, uppercased and validated), priority, max CPS, max
+concurrent calls, and codec checkboxes. Validation is client-side with per-field
+error messages, but the server re-validates and re-checks permission on every call —
+the UI gating is convenience only. Delete is a soft delete behind a confirm dialog
+that names the carrier and explains trunks/numbers referencing it are untouched.
+Every successful mutation reloads the list. Two optional, API-supported inputs are
+deliberately deferred to a later slice: region selection (no region picker exists yet)
+and credential attachment (entering or linking a vault secret) — editing a carrier
+here never changes them. In edit mode, clearing an optional numeric field leaves it
+unchanged (the API has no "unset" for those). Verified: 186/186 web Vitest · `next
+build` clean (/carriers 5.69 kB).

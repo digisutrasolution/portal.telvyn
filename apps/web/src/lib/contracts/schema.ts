@@ -503,7 +503,11 @@ export interface paths {
          */
         get: operations["listCarriers"];
         put?: never;
-        post?: never;
+        /**
+         * Create a carrier
+         * @description Create a carrier. Scope (system vs tenant) and ownership are derived server-side from the session (never a client field — mass-assignment protection). A credential may be attached by referencing an existing vault credential (`credentialId`) OR created inline (`credential`, whose secret goes straight to the vault), never both; the secret is never stored on or returned from the carrier. Requires `carrier.create`.
+         */
+        post: operations["createCarrier"];
         delete?: never;
         options?: never;
         head?: never;
@@ -524,10 +528,18 @@ export interface paths {
         get: operations["getCarrier"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a carrier (soft delete)
+         * @description Soft-delete a carrier (sets deletedAt; the row is retained for audit and history). A foreign tenant's carrier is 404 (IDOR-safe). Requires `carrier.delete`.
+         */
+        delete: operations["deleteCarrier"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a carrier
+         * @description Partially update a carrier (only the supplied fields change). Scope and ownership are never changed from the client. Credential rules match create: `credentialId` or inline `credential`, never both; secrets are vaulted and never returned. A foreign tenant's carrier is 404 (IDOR-safe). Requires `carrier.update`.
+         */
+        patch: operations["updateCarrier"];
         trace?: never;
     };
     "/v1/telecom/sip-trunks": {
@@ -1033,6 +1045,56 @@ export interface components {
              * @description Pass as `cursor` to fetch the next page; null when exhausted.
              */
             nextCursor: string | null;
+        };
+        /** @description A vault credential to create and attach in the same request. The secret is written straight to the encrypted vault; it is never stored on or returned from the carrier. Write-only. */
+        InlineCredentialInput: {
+            /** @enum {string} */
+            type: "SIP_PASSWORD" | "CARRIER_API" | "ENGINE_API";
+            label: string;
+            hint?: string;
+            /** @description Write-only secret material (vaulted immediately). */
+            secret: string;
+        };
+        /** @description Create-carrier body. Scope/ownership are server-derived (no tenantId or scope field). Attach a credential by `credentialId` OR inline `credential`, never both. */
+        CreateCarrier: {
+            name: string;
+            /** @enum {string} */
+            type?: "ORIGINATION" | "TERMINATION" | "BIDIRECTIONAL";
+            /** @description ISO-3166-1 alpha-2, uppercase. */
+            country?: string;
+            /** Format: uuid */
+            regionId?: string;
+            /** @enum {string} */
+            status?: "ACTIVE" | "SUSPENDED" | "DISABLED";
+            priority?: number;
+            codecs?: ("PCMU" | "PCMA" | "G722" | "G729" | "OPUS" | "AMR" | "AMR_WB")[];
+            maxCps?: number;
+            maxConcurrentCalls?: number;
+            /**
+             * Format: uuid
+             * @description Attach an existing vault credential.
+             */
+            credentialId?: string;
+            credential?: components["schemas"]["InlineCredentialInput"];
+        };
+        /** @description Partial carrier update — only supplied fields change. Same credential rules as create (`credentialId` or inline `credential`, never both). Scope/ownership are never changed from the client. */
+        UpdateCarrier: {
+            name?: string;
+            /** @enum {string} */
+            type?: "ORIGINATION" | "TERMINATION" | "BIDIRECTIONAL";
+            /** @description ISO-3166-1 alpha-2, uppercase. */
+            country?: string;
+            /** Format: uuid */
+            regionId?: string;
+            /** @enum {string} */
+            status?: "ACTIVE" | "SUSPENDED" | "DISABLED";
+            priority?: number;
+            codecs?: ("PCMU" | "PCMA" | "G722" | "G729" | "OPUS" | "AMR" | "AMR_WB")[];
+            maxCps?: number;
+            maxConcurrentCalls?: number;
+            /** Format: uuid */
+            credentialId?: string;
+            credential?: components["schemas"]["InlineCredentialInput"];
         };
         /** @description Compact carrier reference carried on a SIP trunk. */
         CarrierSummary: {
@@ -1946,6 +2008,33 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    createCarrier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCarrier"];
+            };
+        };
+        responses: {
+            /** @description Carrier created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Carrier"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
     getCarrier: {
         parameters: {
             query?: never;
@@ -1966,6 +2055,59 @@ export interface operations {
                     "application/json": components["schemas"]["Carrier"];
                 };
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteCarrier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Carrier deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateCarrier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCarrier"];
+            };
+        };
+        responses: {
+            /** @description Carrier updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Carrier"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
