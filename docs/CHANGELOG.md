@@ -699,3 +699,16 @@ Format: Keep a Changelog; SemVer once releases begin.
   33 files): 3 for the hook (fake timers), 3 for the primitive, 3 for the carriers screen (status refetch,
   debounced search refetch, no-matches + Clear). `next build` ✓. Sets the filter pattern for the other
   read screens (SIP trunks, numbers, routing, LCR), each a following sub-phase.
+- 2026-11-20 — **Phase 12O-2z — list filters: SIP trunks screen.** Applies the 12O-2y filter pattern
+  (the `<ListFilters>` primitive + `useDebouncedValue` hook) to the **SIP trunks** read screen: search
+  (`q`, 300 ms debounced), status, direction, and transport, each mapped to the list endpoint's
+  **already-contracted** query params (`status`/`direction`/`transport`/`carrierId`/`q`). No
+  contract/schema change — pure UI→existing-param wiring; verified the backend service genuinely applies
+  all four filters (`sip-trunks.service.ts` `where`), so no filter is a dishonest no-op. Filter changes
+  reset pagination and refetch (memoized params; Load-more carries the active filters); an active filter
+  that returns nothing shows an honest **"No SIP trunks match your filters."** state (distinct from the
+  "none configured yet" empty state) with Clear. `carrierId` is left out of the UI (no carrier picker yet,
+  mirroring `regionId` on carriers). Read-only; server still authoritative + tenant-auto-scoped. +4 web
+  unit tests (165 → 169; full web suite 169 ✓, 33 files): status refetch, direction refetch, debounced
+  search refetch, no-matches + Clear. `next build` ✓ (/sip-trunks 5.79 kB). No new reusable code — reuses
+  the 2y primitive. Next: numbers, routing, LCR.

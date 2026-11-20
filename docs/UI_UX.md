@@ -488,3 +488,17 @@ empty state) with Clear. `regionId` is deliberately not exposed (no region picke
 yet). Server stays authoritative and tenant-auto-scoped; the filters are a query
 convenience, not an authorization surface. Verified: 165/165 Vitest · `next build` clean.
 To come: the same pattern on SIP trunks, numbers, routing and LCR.
+
+List filters — SIP trunks — EXISTING (Phase 12O-2z, 2026-11-20): the 12O-2y pattern
+applied to the SIP trunks read screen, reusing `<ListFilters>` and `useDebouncedValue`
+unchanged. Exposes four filters mapped to the list endpoint's already-contracted params:
+search (`q`, 300 ms debounce), status, direction (inbound/outbound/bidirectional) and
+transport (UDP/TCP/TLS). The backend `sip-trunks.service.ts` genuinely applies each
+(`where.status`/`direction`/`transport` and a case-insensitive `name contains` for `q`),
+so no filter is a dishonest no-op. Changing a filter resets pagination and refetches;
+"Load more" carries the active filters; a filter that matches nothing shows an honest
+"No SIP trunks match your filters." state (distinct from the "none configured yet" empty
+state) with Clear. `carrierId` is deliberately not exposed (no carrier picker exists yet,
+mirroring `regionId` on carriers). Read-only; server authoritative + tenant-auto-scoped.
+Verified: 169/169 Vitest · `next build` clean (/sip-trunks 5.79 kB). To come: numbers,
+routing and LCR.

@@ -73,6 +73,45 @@ describe("SipTrunksView", () => {
     expect(await screen.findByText(/No SIP trunks are configured yet/i)).toBeInTheDocument();
   });
 
+  it("filters by status, refetching with the status query param", async () => {
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [trunk({ name: "Primary trunk" })], nextCursor: null });
+    render(<SipTrunksView />);
+    expect(await screen.findByText("Primary trunk")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by status" }), { target: { value: "ACTIVE" } });
+    await waitFor(() => expect(listSipTrunks).toHaveBeenLastCalledWith({ status: "ACTIVE" }, expect.anything()));
+  });
+
+  it("filters by direction, refetching with the direction query param", async () => {
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [trunk({ name: "Primary trunk" })], nextCursor: null });
+    render(<SipTrunksView />);
+    expect(await screen.findByText("Primary trunk")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by direction" }), { target: { value: "OUTBOUND" } });
+    await waitFor(() => expect(listSipTrunks).toHaveBeenLastCalledWith({ direction: "OUTBOUND" }, expect.anything()));
+  });
+
+  it("debounces the search box, then refetches with the q param", async () => {
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [trunk({ name: "Primary trunk" })], nextCursor: null });
+    render(<SipTrunksView />);
+    const box = await screen.findByRole("searchbox", { name: "Search SIP trunks" });
+
+    fireEvent.change(box, { target: { value: "primary" } });
+    await waitFor(() => expect(listSipTrunks).toHaveBeenLastCalledWith({ q: "primary" }, expect.anything()));
+  });
+
+  it("shows a no-matches state with a Clear action when a filter yields nothing", async () => {
+    vi.mocked(listSipTrunks)
+      .mockResolvedValueOnce({ items: [trunk({ name: "Primary trunk" })], nextCursor: null })
+      .mockResolvedValue({ items: [], nextCursor: null });
+    render(<SipTrunksView />);
+    expect(await screen.findByText("Primary trunk")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by transport" }), { target: { value: "TLS" } });
+    expect(await screen.findByText(/No SIP trunks match your filters/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument();
+  });
+
   it("shows an error state (RFC 7807 title) when the load fails", async () => {
     vi.mocked(listSipTrunks).mockRejectedValue(new ApiError({ title: "Forbidden", status: 403 }));
     render(<SipTrunksView />);

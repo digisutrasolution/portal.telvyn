@@ -6,8 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Status } from "@/components/ui/status";
 import { Button } from "@/components/ui/button";
 import type { SipTrunk } from "@/lib/contracts";
-import { listSipTrunks } from "@/lib/telecom/sip-trunks-actions";
+import { listSipTrunks, type ListSipTrunksParams } from "@/lib/telecom/sip-trunks-actions";
 import { isApiError } from "@/lib/api/problem";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { ListFilters } from "@/components/telecom/list-filters";
 import { SipTrunkDetailDrawer } from "./sip-trunk-detail-drawer";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
@@ -19,6 +21,22 @@ const HEALTH_TONE: Record<SipTrunk["health"]["status"], Tone> = {
   UNKNOWN: "neutral",
   DISABLED: "neutral",
 };
+
+const STATUS_OPTIONS = [
+  { value: "ACTIVE", label: "Active" },
+  { value: "SUSPENDED", label: "Suspended" },
+  { value: "DISABLED", label: "Disabled" },
+] as const;
+const DIRECTION_OPTIONS = [
+  { value: "INBOUND", label: "Inbound" },
+  { value: "OUTBOUND", label: "Outbound" },
+  { value: "BIDIRECTIONAL", label: "Bidirectional" },
+] as const;
+const TRANSPORT_OPTIONS = [
+  { value: "UDP", label: "UDP" },
+  { value: "TCP", label: "TCP" },
+  { value: "TLS", label: "TLS" },
+] as const;
 
 function messageFrom(err: unknown, fallback: string): string {
   return isApiError(err) ? err.problem.title : fallback;
@@ -39,12 +57,37 @@ export function SipTrunksView() {
   const [reloadKey, setReloadKey] = React.useState(0);
   const [detailId, setDetailId] = React.useState<string | null>(null);
 
+  // Filters (mapped to the already-contracted list query params; "" = no filter).
+  const [search, setSearch] = React.useState("");
+  const [status, setStatus] = React.useState<"" | SipTrunk["status"]>("");
+  const [direction, setDirection] = React.useState<"" | SipTrunk["direction"]>("");
+  const [transport, setTransport] = React.useState<"" | SipTrunk["transport"]>("");
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+
+  const params = React.useMemo<ListSipTrunksParams>(() => {
+    const p: ListSipTrunksParams = {};
+    if (debouncedSearch) p.q = debouncedSearch;
+    if (status) p.status = status;
+    if (direction) p.direction = direction;
+    if (transport) p.transport = transport;
+    return p;
+  }, [debouncedSearch, status, direction, transport]);
+
+  const hasActiveFilters = Boolean(debouncedSearch || status || direction || transport);
+
+  function clearFilters() {
+    setSearch("");
+    setStatus("");
+    setDirection("");
+    setTransport("");
+  }
+
   React.useEffect(() => {
     const ac = new AbortController();
     let active = true;
     setLoading(true);
     setError(null);
-    listSipTrunks({}, ac.signal)
+    listSipTrunks(params, ac.signal)
       .then((page) => {
         if (!active) return;
         setItems(page.items);
@@ -60,14 +103,14 @@ export function SipTrunksView() {
       active = false;
       ac.abort();
     };
-  }, [reloadKey]);
+  }, [params, reloadKey]);
 
   async function loadMore() {
     if (!cursor) return;
     setLoadingMore(true);
     setError(null);
     try {
-      const page = await listSipTrunks({ cursor });
+      const page = await listSipTrunks({ ...params, cursor });
       setItems((prev) => [...prev, ...page.items]);
       setCursor(page.nextCursor);
     } catch (err) {
@@ -93,6 +136,19 @@ export function SipTrunksView() {
         <Button variant="secondary" size="sm" onClick={refresh} disabled={loading}>Refresh</Button>
       </header>
 
+      {(items.length > 0 || hasActiveFilters) && (
+        <ListFilters
+          search={{ value: search, onChange: setSearch, label: "Search SIP trunks", placeholder: "Search SIP trunks…" }}
+          selects={[
+            { name: "status", label: "Filter by status", value: status, options: STATUS_OPTIONS, allLabel: "All statuses", onChange: (v) => setStatus(v as "" | SipTrunk["status"]) },
+            { name: "direction", label: "Filter by direction", value: direction, options: DIRECTION_OPTIONS, allLabel: "All directions", onChange: (v) => setDirection(v as "" | SipTrunk["direction"]) },
+            { name: "transport", label: "Filter by transport", value: transport, options: TRANSPORT_OPTIONS, allLabel: "All transports", onChange: (v) => setTransport(v as "" | SipTrunk["transport"]) },
+          ]}
+          canClear={hasActiveFilters}
+          onClear={clearFilters}
+        />
+      )}
+
       {loading ? (
         <p className="text-[13px] text-muted">Loading SIP trunks…</p>
       ) : error && items.length === 0 ? (
@@ -100,7 +156,9 @@ export function SipTrunksView() {
       ) : items.length === 0 ? (
         <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-lg bg-surface px-8 py-14 text-center shadow-elev-1">
           <Cable aria-hidden className="size-7 text-muted" strokeWidth={1.5} />
-          <p className="text-[13px] text-ink-2">No SIP trunks are configured yet.</p>
+          <p className="text-[13px] text-ink-2">
+            {hasActiveFilters ? "No SIP trunks match your filters." : "No SIP trunks are configured yet."}
+          </p>
         </div>
       ) : (
         <>

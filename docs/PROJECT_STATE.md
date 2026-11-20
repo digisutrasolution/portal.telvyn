@@ -297,10 +297,18 @@ Load-more carries filters); a filter returning nothing shows an honest "No carri
 state (distinct from "none configured") with Clear. `regionId` omitted (no region picker yet). Read-only;
 server authoritative + auto-scoped. **web 156 → 165 (full suite ✓, 33 files): +3 hook / +3 primitive / +3
 carriers. `next build` ✓.** Sets the filter pattern for the other read screens.
-Next (await owner go): apply the filter pattern to the other read screens (SIP trunks / numbers / routing /
-LCR), one per sub-phase; the Admin/members read screen (`/admin` still a ModuleGate placeholder,
-`member.read`); landing the stack. Backend read gaps (HealthEvent/config-version history) stay separately
-approval-gated.
+**12O-2z (DONE)** — list filters: SIP trunks screen. Applies the 2y pattern (`<ListFilters>` +
+`useDebouncedValue`) to the SIP trunks read screen: search (`q`, 300 ms debounce), status, direction,
+transport → the list endpoint's already-contracted params. **No contract/schema change** (pure
+UI→existing-param wiring; verified `sip-trunks.service.ts` genuinely applies all four `where` filters, so
+none is a dishonest no-op). Filter changes reset pagination + refetch; a filter returning nothing shows an
+honest "No SIP trunks match your filters." state with Clear. `carrierId` omitted (no carrier picker yet).
+Read-only; server authoritative + tenant-auto-scoped. **web 165 → 169 (full suite ✓, 33 files): +4
+(status / direction / debounced search / no-matches + Clear). `next build` ✓ (/sip-trunks 5.79 kB).** No
+new reusable code — reuses the 2y primitive.
+Next (await owner go): apply the filter pattern to the remaining read screens (numbers / routing / LCR),
+one per sub-phase; the Admin/members read screen (`/admin` still a ModuleGate placeholder, `member.read`);
+landing the stack. Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 
