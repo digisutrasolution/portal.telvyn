@@ -326,9 +326,22 @@ returning nothing shows an honest "No routing profiles match your filters." stat
 config only — nothing executed. Read-only; server authoritative + tenant-auto-scoped. **web 172 → 176
 (full suite ✓, 33 files): +4 (status / strategy / debounced search / no-matches + Clear). `next build` ✓
 (/routing 5.74 kB).** No new reusable code — reuses the 2y primitive.
-Next (await owner go): apply the filter pattern to the last read screen (LCR), one sub-phase; the
-Admin/members read screen (`/admin` still a ModuleGate placeholder, `member.read`); landing the stack.
-Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
+**12O-2ac (DONE)** — list filters: LCR policies screen (+ backend `enabled`-filter bug fix). **Completes
+the read-screen filter set** (carriers / SIP trunks / numbers / routing / LCR). Applies the 2y pattern
+(`<ListFilters>` + `useDebouncedValue`) to the LCR read screen: search (`q`, 300 ms debounce — name) +
+strategy (lowest-cost/highest-priority/weighted/quality-first) + tri-state state (enabled/disabled) → the
+list endpoint's already-contracted params. **No contract change.** **Backend bug fix** (the one deviation
+from frontend-only): list-query `enabled` was `z.coerce.boolean()` (`Boolean("false")===true`), silently
+inverting `enabled=false`; replaced with an explicit string→boolean parse in `lcr.dto.ts` + new
+`lcr.dto.test.ts` (5 tests) proving both directions. Verified `lcr.service.ts` applies
+`where.enabled`/`selectionStrategy` + `name contains`. UI maps state→real boolean. Filter changes reset
+pagination + refetch; honest "No LCR policies match your filters." empty state. Declarative selection only;
+`costMicros` stays integer. Read-only; server authoritative + tenant-auto-scoped. **web 176 → 180 (full
+suite ✓, 33 files): +4. API unit 187 → 192 (20 files): +5 (DTO coercion). `next build` ✓ (/lcr 5.48 kB);
+API tsc/eslint ✓.** No `API.md` change (contract already declared `enabled: boolean`; impl now honours it).
+Next (await owner go): the Admin/members read screen (`/admin` still a ModuleGate placeholder,
+`member.read`); landing the stack. Backend read gaps (HealthEvent/config-version history) stay separately
+approval-gated.
 
 ### (superseded) sub-phase plan
 

@@ -53,7 +53,7 @@ describe("LcrView", () => {
 
     expect(await screen.findByText("UK least cost")).toBeInTheDocument();
     expect(screen.getByText("LOWEST_COST")).toBeInTheDocument();
-    expect(screen.getByText("Enabled")).toBeInTheDocument();
+    expect(screen.getByText("Enabled", { selector: "span" })).toBeInTheDocument(); // the status badge (not the filter option)
     expect(screen.getByText("2")).toBeInTheDocument(); // candidate count
     expect(screen.getByText("7")).toBeInTheDocument(); // version
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
@@ -80,6 +80,49 @@ describe("LcrView", () => {
     vi.mocked(listLcrPolicies).mockResolvedValue({ items: [], nextCursor: null });
     render(<LcrView />);
     expect(await screen.findByText(/No LCR policies are configured yet/i)).toBeInTheDocument();
+  });
+
+  it("filters by strategy, refetching with the strategy query param", async () => {
+    vi.mocked(listLcrPolicies).mockResolvedValue({ items: [policy({ name: "UK least cost" })], nextCursor: null });
+    render(<LcrView />);
+    expect(await screen.findByText("UK least cost")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by strategy" }), { target: { value: "WEIGHTED" } });
+    await waitFor(() => expect(listLcrPolicies).toHaveBeenLastCalledWith({ strategy: "WEIGHTED" }, expect.anything()));
+  });
+
+  it("filters by state, sending enabled as a real boolean (false stays false)", async () => {
+    vi.mocked(listLcrPolicies).mockResolvedValue({ items: [policy({ name: "UK least cost" })], nextCursor: null });
+    render(<LcrView />);
+    expect(await screen.findByText("UK least cost")).toBeInTheDocument();
+
+    const state = screen.getByRole("combobox", { name: "Filter by state" });
+    fireEvent.change(state, { target: { value: "true" } });
+    await waitFor(() => expect(listLcrPolicies).toHaveBeenLastCalledWith({ enabled: true }, expect.anything()));
+
+    fireEvent.change(state, { target: { value: "false" } });
+    await waitFor(() => expect(listLcrPolicies).toHaveBeenLastCalledWith({ enabled: false }, expect.anything()));
+  });
+
+  it("debounces the search box, then refetches with the q param", async () => {
+    vi.mocked(listLcrPolicies).mockResolvedValue({ items: [policy({ name: "UK least cost" })], nextCursor: null });
+    render(<LcrView />);
+    const box = await screen.findByRole("searchbox", { name: "Search LCR policies" });
+
+    fireEvent.change(box, { target: { value: "uk" } });
+    await waitFor(() => expect(listLcrPolicies).toHaveBeenLastCalledWith({ q: "uk" }, expect.anything()));
+  });
+
+  it("shows a no-matches state with a Clear action when a filter yields nothing", async () => {
+    vi.mocked(listLcrPolicies)
+      .mockResolvedValueOnce({ items: [policy({ name: "UK least cost" })], nextCursor: null })
+      .mockResolvedValue({ items: [], nextCursor: null });
+    render(<LcrView />);
+    expect(await screen.findByText("UK least cost")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by state" }), { target: { value: "false" } });
+    expect(await screen.findByText(/No LCR policies match your filters/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument();
   });
 
   it("shows an error state (RFC 7807 title) when the load fails", async () => {

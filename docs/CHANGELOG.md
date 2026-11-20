@@ -742,3 +742,24 @@ Format: Keep a Changelog; SemVer once releases begin.
   tenant-auto-scoped. +4 web unit tests (172 → 176; full web suite 176 ✓, 33 files): status refetch,
   strategy refetch, debounced search refetch, no-matches + Clear. `next build` ✓ (/routing 5.74 kB). No new
   reusable code — reuses the 2y primitive. Next: LCR.
+- 2026-11-20 — **Phase 12O-2ac — list filters: LCR policies screen (+ a backend `enabled`-filter bug
+  fix).** Completes the read-screen filter set (carriers / SIP trunks / numbers / routing / LCR). Applies
+  the 12O-2y filter pattern (the `<ListFilters>` primitive + `useDebouncedValue` hook) to the **LCR** read
+  screen: search (`q`, 300 ms debounced — case-insensitive name), strategy (lowest-cost / highest-priority
+  / weighted / quality-first), and a tri-state **state** filter (enabled / disabled), each mapped to the
+  list endpoint's **already-contracted** query params (`strategy`/`q`/`enabled`). **No contract change.**
+  **Backend fix (the one deviation from the frontend-only pattern):** the list query's `enabled` used
+  `z.coerce.boolean()` (`Boolean("false") === true`), so a contracted `enabled=false` silently inverted
+  into `enabled=true` — a dishonest filter. Replaced with an explicit string→boolean parse
+  (`"true"→true`, `"false"→false`, real booleans pass through, anything else → 400) in `lcr.dto.ts`, with a
+  new `lcr.dto.test.ts` (5 unit tests) proving both directions. Verified `lcr.service.ts` genuinely applies
+  `where.enabled`/`selectionStrategy` + case-insensitive `name contains`. The UI maps its state select to a
+  real boolean (`enabled: value === "true"`). Filter changes reset pagination and refetch; an active filter
+  that returns nothing shows an honest **"No LCR policies match your filters."** state (distinct from the
+  "none configured yet" empty state) with Clear. Declarative selection only — nothing executed, rated or
+  billed; `costMicros` stays an integer. Read-only; server still authoritative + tenant-auto-scoped. Tests:
+  +4 web (176 → 180; full web suite 180 ✓, 33 files — strategy refetch, state=true/false → real boolean,
+  debounced search, no-matches + Clear; one pre-existing summary assertion disambiguated badge-vs-option)
+  and +5 API unit (187 → 192 unit, 20 files). `next build` ✓ (/lcr 5.48 kB); API `tsc`/eslint ✓. No
+  `API.md` change — the contract already declared `enabled: boolean`; this made the implementation honour
+  it. Next: the Admin/members read screen; landing the stack.

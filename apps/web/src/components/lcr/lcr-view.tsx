@@ -5,9 +5,24 @@ import { TrendingDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { LcrPolicy } from "@/lib/contracts";
-import { listLcrPolicies } from "@/lib/telecom/lcr-actions";
+import { listLcrPolicies, type ListLcrPoliciesParams } from "@/lib/telecom/lcr-actions";
 import { isApiError } from "@/lib/api/problem";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { ListFilters } from "@/components/telecom/list-filters";
 import { LcrDetailDrawer } from "./lcr-detail-drawer";
+
+type Strategy = LcrPolicy["selectionStrategy"];
+const STRATEGY_OPTIONS = [
+  { value: "LOWEST_COST", label: "Lowest cost" },
+  { value: "HIGHEST_PRIORITY", label: "Highest priority" },
+  { value: "WEIGHTED", label: "Weighted" },
+  { value: "QUALITY_FIRST", label: "Quality first" },
+] as const;
+// Query booleans travel as strings; "" = no filter, mapped to a real boolean in params.
+const ENABLED_OPTIONS = [
+  { value: "true", label: "Enabled" },
+  { value: "false", label: "Disabled" },
+] as const;
 
 function messageFrom(err: unknown, fallback: string): string {
   return isApiError(err) ? err.problem.title : fallback;
@@ -30,12 +45,34 @@ export function LcrView() {
   const [reloadKey, setReloadKey] = React.useState(0);
   const [detailId, setDetailId] = React.useState<string | null>(null);
 
+  // Filters (mapped to the already-contracted list query params; "" = no filter).
+  const [search, setSearch] = React.useState("");
+  const [strategy, setStrategy] = React.useState<"" | Strategy>("");
+  const [enabled, setEnabled] = React.useState<"" | "true" | "false">("");
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+
+  const params = React.useMemo<ListLcrPoliciesParams>(() => {
+    const p: ListLcrPoliciesParams = {};
+    if (debouncedSearch) p.q = debouncedSearch;
+    if (strategy) p.strategy = strategy;
+    if (enabled) p.enabled = enabled === "true";
+    return p;
+  }, [debouncedSearch, strategy, enabled]);
+
+  const hasActiveFilters = Boolean(debouncedSearch || strategy || enabled);
+
+  function clearFilters() {
+    setSearch("");
+    setStrategy("");
+    setEnabled("");
+  }
+
   React.useEffect(() => {
     const ac = new AbortController();
     let active = true;
     setLoading(true);
     setError(null);
-    listLcrPolicies({}, ac.signal)
+    listLcrPolicies(params, ac.signal)
       .then((page) => {
         if (!active) return;
         setItems(page.items);
@@ -51,14 +88,14 @@ export function LcrView() {
       active = false;
       ac.abort();
     };
-  }, [reloadKey]);
+  }, [params, reloadKey]);
 
   async function loadMore() {
     if (!cursor) return;
     setLoadingMore(true);
     setError(null);
     try {
-      const page = await listLcrPolicies({ cursor });
+      const page = await listLcrPolicies({ ...params, cursor });
       setItems((prev) => [...prev, ...page.items]);
       setCursor(page.nextCursor);
     } catch (err) {
@@ -84,6 +121,18 @@ export function LcrView() {
         <Button variant="secondary" size="sm" onClick={refresh} disabled={loading}>Refresh</Button>
       </header>
 
+      {(items.length > 0 || hasActiveFilters) && (
+        <ListFilters
+          search={{ value: search, onChange: setSearch, label: "Search LCR policies", placeholder: "Search LCR policies…" }}
+          selects={[
+            { name: "strategy", label: "Filter by strategy", value: strategy, options: STRATEGY_OPTIONS, allLabel: "All strategies", onChange: (v) => setStrategy(v as "" | Strategy) },
+            { name: "enabled", label: "Filter by state", value: enabled, options: ENABLED_OPTIONS, allLabel: "Any state", onChange: (v) => setEnabled(v as "" | "true" | "false") },
+          ]}
+          canClear={hasActiveFilters}
+          onClear={clearFilters}
+        />
+      )}
+
       {loading ? (
         <p className="text-[13px] text-muted">Loading LCR policies…</p>
       ) : error && items.length === 0 ? (
@@ -91,7 +140,9 @@ export function LcrView() {
       ) : items.length === 0 ? (
         <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-lg bg-surface px-8 py-14 text-center shadow-elev-1">
           <TrendingDown aria-hidden className="size-7 text-muted" strokeWidth={1.5} />
-          <p className="text-[13px] text-ink-2">No LCR policies are configured yet.</p>
+          <p className="text-[13px] text-ink-2">
+            {hasActiveFilters ? "No LCR policies match your filters." : "No LCR policies are configured yet."}
+          </p>
         </div>
       ) : (
         <>

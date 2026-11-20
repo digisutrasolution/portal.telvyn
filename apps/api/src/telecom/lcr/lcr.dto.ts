@@ -50,10 +50,20 @@ export const UpdateLcrPolicyDto = z
   })
   .strict();
 
+/**
+ * Query booleans arrive as strings. `z.coerce.boolean()` is `Boolean(v)`, so
+ * "false" would coerce to `true` — a silent filter inversion. Parse the literal
+ * strings explicitly (and pass through a real boolean, for direct callers) so
+ * `enabled=false` honestly means false. Any other value is rejected (400).
+ */
+const queryBoolean = z
+  .union([z.boolean(), z.literal("true"), z.literal("false")])
+  .transform((v) => v === true || v === "true");
+
 export const ListLcrPoliciesQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
   cursor: z.string().uuid().optional(),
-  enabled: z.coerce.boolean().optional(),
+  enabled: queryBoolean.optional(),
   strategy: z.nativeEnum(LcrSelectionStrategy).optional(),
   q: z.string().max(120).optional(),
 });

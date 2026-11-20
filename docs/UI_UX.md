@@ -531,3 +531,21 @@ that matches nothing shows an honest "No routing profiles match your filters." s
 (distinct from the "none configured yet" empty state) with Clear. Declarative config only —
 nothing is executed. Read-only; server authoritative + tenant-auto-scoped. Verified: 176/176
 Vitest · `next build` clean (/routing 5.74 kB). To come: LCR.
+
+List filters — LCR policies — EXISTING (Phase 12O-2ac, 2026-11-20): the 12O-2y pattern
+applied to the LCR read screen, reusing `<ListFilters>` and `useDebouncedValue` unchanged —
+completing the read-screen filter set (carriers / SIP trunks / numbers / routing / LCR).
+Exposes three filters mapped to the list endpoint's already-contracted params: search (`q`,
+300 ms debounce — case-insensitive name), strategy (lowest-cost / highest-priority /
+weighted / quality-first) and a tri-state state filter (enabled / disabled). The state
+select holds the string "true"/"false" and the view maps it to a real boolean
+(`enabled: value === "true"`) before fetching. Honesty note: the backend list query had
+`enabled` on `z.coerce.boolean()` (`Boolean("false") === true`), which silently inverted
+`enabled=false` into `true`; this phase fixed that in `lcr.dto.ts` (explicit string→boolean
+parse, covered by `lcr.dto.test.ts`) so the Disabled option is a true filter, not a no-op.
+Changing a filter resets pagination and refetches; "Load more" carries the active filters;
+a filter that matches nothing shows an honest "No LCR policies match your filters." state
+(distinct from the "none configured yet" empty state) with Clear. Declarative selection
+only — nothing is executed, rated or billed; `costMicros` stays an integer. Read-only;
+server authoritative + tenant-auto-scoped. Verified: 180/180 web Vitest + 192 API unit ·
+`next build` clean (/lcr 5.48 kB). The read-screen filter set is now complete.
