@@ -472,3 +472,19 @@ refetches; loading / error / 404 states. Read-only (`routing.read`, re-checked
 server-side). Contract-first: `getLcrPolicy` authored into the contract, client type
 generated. Verified: 156/156 Vitest · `next build` clean. This COMPLETES the read-screen
 detail-drawer set (carriers, SIP trunks, DIDs, routing, LCR). List filters — to come.
+
+List filters — shared primitive + Carriers — EXISTING (Phase 12O-2y, 2026-11-20): a
+reusable filter bar for the read screens. `<ListFilters>` (components/telecom) is a
+controlled, presentational `role="search"` row: an optional search box plus any number
+of accessible native `<select>` controls (each with an "All" option and an `aria-label`,
+since they carry no visible label) plus a Clear action shown only when a filter is
+active. The parent owns filter state, maps it to the screen's already-contracted list
+query params, and debounces the search term via the new `useDebouncedValue` hook (300 ms)
+so a fetch fires once typing pauses, not per keystroke. Applied first to the Carriers
+screen: search (`q`), status, and scope. Changing a filter resets pagination and
+refetches; "Load more" carries the active filters; a filter that matches nothing shows an
+honest "No carriers match your filters." state (distinct from the "none configured yet"
+empty state) with Clear. `regionId` is deliberately not exposed (no region picker exists
+yet). Server stays authoritative and tenant-auto-scoped; the filters are a query
+convenience, not an authorization surface. Verified: 165/165 Vitest · `next build` clean.
+To come: the same pattern on SIP trunks, numbers, routing and LCR.

@@ -685,3 +685,17 @@ Format: Keep a Changelog; SemVer once releases begin.
   or billed. Read-only; `routing.read` re-checked server-side. +1 web unit test (155 → 156; full web suite
   156 ✓). **No backend/API change** (the endpoint already existed + was documented in `API.md`). `next
   build` ✓. Deferred: list filters across the read screens; the Admin/members read screen.
+- 2026-11-20 — **Phase 12O-2y — list filters: shared primitive + carriers screen (contract-first).**
+  First read-screen filter sub-phase. Adds a reusable `useDebouncedValue(value, delayMs)` hook and a
+  presentational `<ListFilters>` primitive (a debounce-ready search box + any number of accessible native
+  `<select>` controls + a Clear action shown only when a filter is active; `role="search"` landmark),
+  then wires it into the **Carriers** screen: search (`q`, 300 ms debounced), status, and scope, each
+  mapped to the list endpoint's **already-contracted** query params. No contract/schema change — pure
+  UI→existing-param wiring (the carriers list already documented `status`/`scope`/`q`). Filter changes
+  reset pagination and refetch (memoized params; Load-more carries the active filters); an active filter
+  that returns nothing now shows an honest **"No carriers match your filters."** state (distinct from the
+  "none configured yet" empty state) with Clear. `regionId` is left out of the UI (no region picker yet).
+  Read-only; server still authoritative + auto-scoped. +9 web unit tests (156 → 165; full web suite 165 ✓,
+  33 files): 3 for the hook (fake timers), 3 for the primitive, 3 for the carriers screen (status refetch,
+  debounced search refetch, no-matches + Clear). `next build` ✓. Sets the filter pattern for the other
+  read screens (SIP trunks, numbers, routing, LCR), each a following sub-phase.

@@ -67,6 +67,36 @@ describe("CarriersView", () => {
     expect(await screen.findByText(/No carriers are configured yet/i)).toBeInTheDocument();
   });
 
+  it("filters by status, refetching with the status query param", async () => {
+    vi.mocked(listCarriers).mockResolvedValue({ items: [carrier({ name: "Acme SIP" })], nextCursor: null });
+    render(<CarriersView />);
+    expect(await screen.findByText("Acme SIP")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by status" }), { target: { value: "ACTIVE" } });
+    await waitFor(() => expect(listCarriers).toHaveBeenLastCalledWith({ status: "ACTIVE" }, expect.anything()));
+  });
+
+  it("debounces the search box, then refetches with the q param", async () => {
+    vi.mocked(listCarriers).mockResolvedValue({ items: [carrier({ name: "Acme SIP" })], nextCursor: null });
+    render(<CarriersView />);
+    const box = await screen.findByRole("searchbox", { name: "Search carriers" });
+
+    fireEvent.change(box, { target: { value: "globe" } });
+    await waitFor(() => expect(listCarriers).toHaveBeenLastCalledWith({ q: "globe" }, expect.anything()));
+  });
+
+  it("shows a no-matches state with a Clear action when a filter yields nothing", async () => {
+    vi.mocked(listCarriers)
+      .mockResolvedValueOnce({ items: [carrier({ name: "Acme SIP" })], nextCursor: null })
+      .mockResolvedValue({ items: [], nextCursor: null });
+    render(<CarriersView />);
+    expect(await screen.findByText("Acme SIP")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by status" }), { target: { value: "DISABLED" } });
+    expect(await screen.findByText(/No carriers match your filters/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument();
+  });
+
   it("shows an error state (RFC 7807 title) when the load fails", async () => {
     vi.mocked(listCarriers).mockRejectedValue(new ApiError({ title: "Forbidden", status: 403 }));
     render(<CarriersView />);

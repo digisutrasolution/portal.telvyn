@@ -288,9 +288,19 @@ description/version/timestamps and each candidate (priority/prefix+country/cost-
 enabled/optional weight+effective-window). Declarative selection only — nothing executed, rated or billed.
 Read-only; `routing.read` re-checked server-side. **web 155 → 156 (full suite ✓), `next build` ✓. No
 backend/API change** (endpoint already existed + documented in `API.md`).
-Next (await owner go): list filters across the read screens; the Admin/members read screen (`/admin` still
-a ModuleGate placeholder, `member.read`); landing the stack. Backend read gaps (HealthEvent/config-version
-history) stay separately approval-gated.
+**12O-2y (DONE)** — list filters: shared primitive + carriers screen (contract-first). First filter
+sub-phase. New reusable `useDebouncedValue` hook + `<ListFilters>` primitive (debounce-ready search +
+accessible native `<select>`s + Clear, `role="search"`), wired into the Carriers screen: search (`q`,
+300 ms debounce), status, scope → the list endpoint's already-contracted params. **No contract/schema
+change** (pure UI→existing-param wiring). Filter changes reset pagination + refetch (memoized params;
+Load-more carries filters); a filter returning nothing shows an honest "No carriers match your filters."
+state (distinct from "none configured") with Clear. `regionId` omitted (no region picker yet). Read-only;
+server authoritative + auto-scoped. **web 156 → 165 (full suite ✓, 33 files): +3 hook / +3 primitive / +3
+carriers. `next build` ✓.** Sets the filter pattern for the other read screens.
+Next (await owner go): apply the filter pattern to the other read screens (SIP trunks / numbers / routing /
+LCR), one per sub-phase; the Admin/members read screen (`/admin` still a ModuleGate placeholder,
+`member.read`); landing the stack. Backend read gaps (HealthEvent/config-version history) stay separately
+approval-gated.
 
 ### (superseded) sub-phase plan
 

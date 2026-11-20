@@ -6,8 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Status } from "@/components/ui/status";
 import { Button } from "@/components/ui/button";
 import type { Carrier } from "@/lib/contracts";
-import { listCarriers } from "@/lib/telecom/carriers-actions";
+import { listCarriers, type ListCarriersParams } from "@/lib/telecom/carriers-actions";
 import { isApiError } from "@/lib/api/problem";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { ListFilters } from "@/components/telecom/list-filters";
 import { CarrierDetailDrawer } from "./carrier-detail-drawer";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
@@ -20,6 +22,16 @@ const HEALTH_TONE: Record<Carrier["health"]["status"], Tone> = {
   DISABLED: "neutral",
 };
 const SCOPE_TONE: Record<Carrier["scope"], Tone> = { SYSTEM: "info", TENANT: "neutral" };
+
+const STATUS_OPTIONS = [
+  { value: "ACTIVE", label: "Active" },
+  { value: "SUSPENDED", label: "Suspended" },
+  { value: "DISABLED", label: "Disabled" },
+] as const;
+const SCOPE_OPTIONS = [
+  { value: "tenant", label: "Tenant" },
+  { value: "system", label: "System" },
+] as const;
 
 function messageFrom(err: unknown, fallback: string): string {
   return isApiError(err) ? err.problem.title : fallback;
@@ -40,12 +52,34 @@ export function CarriersView() {
   const [reloadKey, setReloadKey] = React.useState(0);
   const [detailId, setDetailId] = React.useState<string | null>(null);
 
+  // Filters (mapped to the already-contracted list query params; "" = no filter).
+  const [search, setSearch] = React.useState("");
+  const [status, setStatus] = React.useState<"" | Carrier["status"]>("");
+  const [scope, setScope] = React.useState<"" | "system" | "tenant">("");
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+
+  const params = React.useMemo<ListCarriersParams>(() => {
+    const p: ListCarriersParams = {};
+    if (debouncedSearch) p.q = debouncedSearch;
+    if (status) p.status = status;
+    if (scope) p.scope = scope;
+    return p;
+  }, [debouncedSearch, status, scope]);
+
+  const hasActiveFilters = Boolean(debouncedSearch || status || scope);
+
+  function clearFilters() {
+    setSearch("");
+    setStatus("");
+    setScope("");
+  }
+
   React.useEffect(() => {
     const ac = new AbortController();
     let active = true;
     setLoading(true);
     setError(null);
-    listCarriers({}, ac.signal)
+    listCarriers(params, ac.signal)
       .then((page) => {
         if (!active) return;
         setItems(page.items);
@@ -61,14 +95,14 @@ export function CarriersView() {
       active = false;
       ac.abort();
     };
-  }, [reloadKey]);
+  }, [params, reloadKey]);
 
   async function loadMore() {
     if (!cursor) return;
     setLoadingMore(true);
     setError(null);
     try {
-      const page = await listCarriers({ cursor });
+      const page = await listCarriers({ ...params, cursor });
       setItems((prev) => [...prev, ...page.items]);
       setCursor(page.nextCursor);
     } catch (err) {
@@ -94,6 +128,18 @@ export function CarriersView() {
         <Button variant="secondary" size="sm" onClick={refresh} disabled={loading}>Refresh</Button>
       </header>
 
+      {(items.length > 0 || hasActiveFilters) && (
+        <ListFilters
+          search={{ value: search, onChange: setSearch, label: "Search carriers", placeholder: "Search carriers…" }}
+          selects={[
+            { name: "status", label: "Filter by status", value: status, options: STATUS_OPTIONS, allLabel: "All statuses", onChange: (v) => setStatus(v as "" | Carrier["status"]) },
+            { name: "scope", label: "Filter by scope", value: scope, options: SCOPE_OPTIONS, allLabel: "All scopes", onChange: (v) => setScope(v as "" | "system" | "tenant") },
+          ]}
+          canClear={hasActiveFilters}
+          onClear={clearFilters}
+        />
+      )}
+
       {loading ? (
         <p className="text-[13px] text-muted">Loading carriers…</p>
       ) : error && items.length === 0 ? (
@@ -101,7 +147,9 @@ export function CarriersView() {
       ) : items.length === 0 ? (
         <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-lg bg-surface px-8 py-14 text-center shadow-elev-1">
           <Waypoints aria-hidden className="size-7 text-muted" strokeWidth={1.5} />
-          <p className="text-[13px] text-ink-2">No carriers are configured yet.</p>
+          <p className="text-[13px] text-ink-2">
+            {hasActiveFilters ? "No carriers match your filters." : "No carriers are configured yet."}
+          </p>
         </div>
       ) : (
         <>
