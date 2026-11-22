@@ -604,3 +604,26 @@ affected). Every successful mutation reloads the list. Credential attachment (en
 linking a vault secret) is deliberately deferred to a later secret-handling slice — it
 stays optional on the API, and the auth mode can still be set here. Verified: 189/189 web
 Vitest · `next build` clean (/sip-trunks 7.08 kB).
+
+Numbers (DID) management — create / edit / delete — EXISTING (Phase 12O-2ag, 2026-11-22):
+the write pattern rolled to the Numbers inventory. All three affordances gate on the
+single `did.manage` permission (DIDs don't have split create/update/delete perms): the
+Numbers screen gains a "New number" button, and the number detail drawer gains Edit and
+Delete footer actions, each shown only with `did.manage`. `<NumberForm>` is a modal for
+both create and edit. On create it takes a raw phone number — normalized to canonical
+E.164 server-side, with the country derived there (neither is a trusted client field) —
+plus an optional status and optional carrier / SIP trunk / routing-profile references.
+Those three are chosen with pickers that each load the first page of their list; because
+the DID API returns reference ids only (no names), in edit mode the current selection is
+seeded labelled by its id and the real name fills in once the list loads, and if a
+picker's list can't load (e.g. the session lacks that read permission) its error shows and
+only None / the current value remain. On edit the number itself is immutable and shown
+read-only; status and the three references are editable, and clearing a picker detaches
+that reference (an explicit null). Delete is a soft delete behind a confirm dialog; every
+successful mutation reloads the list. The region reference is deliberately deferred to a
+later slice (optional on the API; editing never changes it). One honesty note: the backend
+does not yet enforce DID status-*transition* rules, so status is presented as a plain
+select (any value), not a guarded lifecycle stepper — the guard is a future backend
+concern, and the UI does not pretend otherwise. Validation is client-side with a per-field
+message on the number; the server re-checks permission, re-normalizes, and re-validates
+every reference. Verified: 192/192 web Vitest · `next build` clean (/numbers 5.61 kB).

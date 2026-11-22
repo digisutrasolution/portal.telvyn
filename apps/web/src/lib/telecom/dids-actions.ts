@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { Did, DidPage } from "@/lib/contracts";
+import type { Did, DidPage, CreateDid, UpdateDid } from "@/lib/contracts";
 
 /**
  * Read-only DID API calls (tenant-scoped; `did.read`). DIDs are strictly
@@ -38,4 +38,19 @@ export function listDids(params: ListDidsParams = {}, signal?: AbortSignal): Pro
   if (params.q) qs.set("q", params.q);
   const query = qs.toString();
   return api.get<DidPage>(`/v1/telecom/dids${query ? `?${query}` : ""}`, { signal });
+}
+
+/** Create a DID (`did.manage`); ownership + country are server-derived, `number` normalized to E.164. Returns the created DID. */
+export function createDid(body: CreateDid): Promise<Did> {
+  return api.post<Did>("/v1/telecom/dids", body);
+}
+
+/** Partially update a DID (`did.manage`); `number` is immutable, a null reference detaches. Returns the updated DID; 404 if foreign/removed. */
+export function updateDid(id: string, body: UpdateDid): Promise<Did> {
+  return api.patch<Did>(`/v1/telecom/dids/${id}`, body);
+}
+
+/** Soft-delete a DID (`did.manage`); 204 No Content. 404 if foreign/removed. */
+export function deleteDid(id: string): Promise<void> {
+  return api.delete<void>(`/v1/telecom/dids/${id}`);
 }

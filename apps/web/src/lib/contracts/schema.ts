@@ -607,7 +607,11 @@ export interface paths {
          */
         get: operations["listDids"];
         put?: never;
-        post?: never;
+        /**
+         * Create a DID
+         * @description Create a tenant-owned DID (control-plane only — no telecom runtime). Ownership (tenantId) is server-derived and never a client field. The raw `number` is normalized to canonical E.164 server-side and its `country` is derived from it (never trusted from the client); a duplicate number is a 409. Relationship references (carrier / SIP trunk / routing profile / region) are optional and each is validated server-side for scope + existence; if both carrier and SIP trunk are given, the trunk must belong to that carrier. Requires `did.manage`.
+         */
+        post: operations["createDid"];
         delete?: never;
         options?: never;
         head?: never;
@@ -628,10 +632,18 @@ export interface paths {
         get: operations["getDid"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a DID (soft delete)
+         * @description Soft-delete a tenant-owned DID (sets deletedAt; the row is retained for audit and history). A foreign/pool number is 404 (IDOR-safe). Requires `did.manage`.
+         */
+        delete: operations["deleteDid"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a DID
+         * @description Partially update a tenant-owned DID. The `number` is immutable and cannot be changed. Relationship references may be reassigned or explicitly detached by sending `null`; each supplied reference is re-validated for scope + existence, and the carrier/trunk consistency rule still applies. Ownership is never taken from the client; a foreign/pool number is 404 (IDOR-safe). Requires `did.manage`.
+         */
+        patch: operations["updateDid"];
         trace?: never;
     };
     "/v1/telecom/routing-profiles": {
@@ -1293,6 +1305,46 @@ export interface components {
              * @description Pass as `cursor` to fetch the next page; null when exhausted.
              */
             nextCursor: string | null;
+        };
+        /** @description Create-DID body (control-plane only). Ownership (tenantId) is server-derived. `number` is a raw phone number normalized to canonical E.164 server-side; `country` is derived from it and is never a client field. Relationship references are optional and validated server-side for scope + existence (carrier/trunk consistency enforced). */
+        CreateDid: {
+            /** @description Raw phone number; normalized to canonical E.164 server-side. */
+            number: string;
+            /** @enum {string} */
+            status?: "AVAILABLE" | "RESERVED" | "ASSIGNED" | "ACTIVE" | "SUSPENDED" | "PORTING" | "RELEASED";
+            /** Format: uuid */
+            carrierId?: string;
+            /** Format: uuid */
+            sipTrunkId?: string;
+            /** Format: uuid */
+            routingProfileId?: string;
+            /** Format: uuid */
+            regionId?: string;
+        };
+        /** @description Partial DID update. The `number` is immutable and is not a field here. Relationship references may be reassigned or detached by sending `null`. Unknown keys are rejected server-side. */
+        UpdateDid: {
+            /** @enum {string} */
+            status?: "AVAILABLE" | "RESERVED" | "ASSIGNED" | "ACTIVE" | "SUSPENDED" | "PORTING" | "RELEASED";
+            /**
+             * Format: uuid
+             * @description null detaches the carrier.
+             */
+            carrierId?: string | null;
+            /**
+             * Format: uuid
+             * @description null detaches the SIP trunk.
+             */
+            sipTrunkId?: string | null;
+            /**
+             * Format: uuid
+             * @description null detaches the routing profile.
+             */
+            routingProfileId?: string | null;
+            /**
+             * Format: uuid
+             * @description null detaches the region.
+             */
+            regionId?: string | null;
         };
         /** @description Declarative selection + failover policy for a profile's rules (never executed). */
         RoutingPolicy: {
@@ -2371,6 +2423,34 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    createDid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDid"];
+            };
+        };
+        responses: {
+            /** @description DID created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Did"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
     getDid: {
         parameters: {
             query?: never;
@@ -2391,6 +2471,59 @@ export interface operations {
                     "application/json": components["schemas"]["Did"];
                 };
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteDid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DID deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateDid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDid"];
+            };
+        };
+        responses: {
+            /** @description DID updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Did"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

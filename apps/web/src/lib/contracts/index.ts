@@ -92,6 +92,12 @@ export type Did = Schemas["Did"];
 /** Cursor-paginated page of DIDs. */
 export type DidPage = Schemas["DidPage"];
 
+/** Create-DID request body (POST /v1/telecom/dids). */
+export type CreateDid = Schemas["CreateDid"];
+
+/** Partial update-DID request body (PATCH /v1/telecom/dids/{id}). */
+export type UpdateDid = Schemas["UpdateDid"];
+
 /** A routing profile (tenant) with its declarative policy and ordered rules. */
 export type RoutingProfile = Schemas["RoutingProfile"];
 

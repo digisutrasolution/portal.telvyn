@@ -2,11 +2,13 @@
 
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Status } from "@/components/ui/status";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { Did } from "@/lib/contracts";
 import { getDid } from "@/lib/telecom/dids-actions";
 import { useResource } from "@/lib/use-resource";
+import { useSession } from "@/lib/session/session-context";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<Did["status"], Tone> = {
@@ -47,11 +49,29 @@ function RefId({ id }: { id: string | null }) {
  * SIP-path check). Related resources are shown as reference ids only (the API
  * never embeds objects). Read-only; `did.read` is re-checked server-side. Mounted
  * keyed by id so each open refetches; a foreign/pool/removed number surfaces the
- * API's 404 inline.
+ * API's 404 inline. Edit / Delete appear only with `did.manage` (UX gating; the
+ * API re-checks) and hand the loaded DID back to the parent.
  */
-export function NumberDetailDrawer({ didId, onClose }: { didId: string; onClose: () => void }) {
+export function NumberDetailDrawer({
+  didId,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  didId: string;
+  onClose: () => void;
+  /** Open the edit form for this number (shown only with `did.manage`). */
+  onEdit?: (did: Did) => void;
+  /** Request deletion of this number (shown only with `did.manage`). */
+  onDelete?: (did: Did) => void;
+}) {
+  const { hasPermission } = useSession();
   const fetchDid = React.useCallback((s: AbortSignal) => getDid(didId, s), [didId]);
   const { data, loading, error } = useResource<Did>(fetchDid);
+
+  const canManage = hasPermission("did.manage");
+  const canEdit = Boolean(onEdit) && canManage;
+  const canDelete = Boolean(onDelete) && canManage;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -76,6 +96,17 @@ export function NumberDetailDrawer({ didId, onClose }: { didId: string; onClose:
             <Row label="Created">{data.createdAt.slice(0, 10)}</Row>
             <Row label="Updated">{data.updatedAt.slice(0, 10)}</Row>
           </dl>
+        )}
+
+        {data && (canEdit || canDelete) && (
+          <div className="mt-4 flex justify-end gap-2">
+            {canDelete && (
+              <Button variant="danger" size="sm" onClick={() => onDelete!(data)}>Delete</Button>
+            )}
+            {canEdit && (
+              <Button variant="primary" size="sm" onClick={() => onEdit!(data)}>Edit</Button>
+            )}
+          </div>
         )}
       </DialogContent>
     </Dialog>

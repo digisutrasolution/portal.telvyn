@@ -5,12 +5,18 @@ import { Hash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Status } from "@/components/ui/status";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { Did } from "@/lib/contracts";
-import { listDids, type ListDidsParams } from "@/lib/telecom/dids-actions";
+import { listDids, deleteDid, type ListDidsParams } from "@/lib/telecom/dids-actions";
 import { isApiError } from "@/lib/api/problem";
+import { messageFor } from "@/components/auth/auth-message";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useSession } from "@/lib/session/session-context";
 import { ListFilters } from "@/components/telecom/list-filters";
 import { NumberDetailDrawer } from "./number-detail-drawer";
+import { NumberForm } from "./number-form";
+
+type FormState = { mode: "create" } | { mode: "edit"; did: Did } | null;
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<Did["status"], Tone> = {
@@ -69,6 +75,14 @@ export function NumbersView() {
   const [error, setError] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
   const [detailId, setDetailId] = React.useState<string | null>(null);
+
+  // Mutations (Phase 12O-2ag). Gating is UX-only; the API re-checks every call.
+  const { hasPermission } = useSession();
+  const canManage = hasPermission("did.manage");
+  const [form, setForm] = React.useState<FormState>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<Did | null>(null);
+  const [deletePending, setDeletePending] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
 
   // Filters (mapped to the already-contracted list query params; "" = no filter).
   const [search, setSearch] = React.useState("");
@@ -133,6 +147,21 @@ export function NumbersView() {
     setReloadKey((k) => k + 1);
   }
 
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeletePending(true);
+    setDeleteError(null);
+    try {
+      await deleteDid(deleteTarget.id);
+      setDeleteTarget(null);
+      refresh();
+    } catch (err) {
+      setDeleteError(messageFor(err));
+    } finally {
+      setDeletePending(false);
+    }
+  }
+
   return (
     <section aria-labelledby="numbers-heading">
       <header className="mb-4 flex items-center justify-between gap-3">
@@ -140,7 +169,12 @@ export function NumbersView() {
           <h1 id="numbers-heading" className="font-display text-[19px] font-semibold text-ink">Numbers</h1>
           <p className="text-[13px] text-muted">Your DID inventory and its lifecycle status.</p>
         </div>
-        <Button variant="secondary" size="sm" onClick={refresh} disabled={loading}>Refresh</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={refresh} disabled={loading}>Refresh</Button>
+          {canManage && (
+            <Button variant="primary" size="sm" onClick={() => setForm({ mode: "create" })}>New number</Button>
+          )}
+        </div>
       </header>
 
       {(items.length > 0 || hasActiveFilters) && (
@@ -214,7 +248,47 @@ export function NumbersView() {
         </>
       )}
 
-      {detailId && <NumberDetailDrawer key={detailId} didId={detailId} onClose={() => setDetailId(null)} />}
+      {detailId && (
+        <NumberDetailDrawer
+          key={detailId}
+          didId={detailId}
+          onClose={() => setDetailId(null)}
+          onEdit={(did) => {
+            setDetailId(null);
+            setForm({ mode: "edit", did });
+          }}
+          onDelete={(did) => {
+            setDetailId(null);
+            setDeleteError(null);
+            setDeleteTarget(did);
+          }}
+        />
+      )}
+
+      {form && (
+        <NumberForm {...form} onClose={() => setForm(null)} onSaved={refresh} />
+      )}
+
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && !deletePending && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle>Delete number</DialogTitle>
+          <DialogDescription className="text-[13px] text-ink-2">
+            Delete <span className="font-mono font-medium text-ink">{deleteTarget?.e164}</span>? It is removed from
+            your inventory (soft-deleted and retained for audit). This changes configuration only.
+          </DialogDescription>
+          {deleteError && (
+            <p role="alert" className="mt-3 rounded-md border border-danger bg-danger-soft px-3 py-2 text-[12px] text-danger">
+              {deleteError}
+            </p>
+          )}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteTarget(null)} disabled={deletePending}>Cancel</Button>
+            <Button type="button" variant="danger" size="sm" onClick={confirmDelete} disabled={deletePending}>
+              {deletePending ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

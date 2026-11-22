@@ -376,10 +376,26 @@ the list. **Deferred (optional, still on the API):** credential attachment (secr
 still settable. UX-only gating; server re-validates + re-checks every call + stays tenant/scope-authoritative.
 **web 186 → 189 (full suite ✓, 34 files): +3. `next build` ✓ (/sip-trunks 7.08 kB); eslint ✓. No backend
 change** (endpoints + audit + tenant-scoping + SSRF validation pre-existed, e2e-covered). `API.md` updated.
-Next (await owner go): roll the write pattern to the remaining resources (numbers / routing / LCR / member
-mgmt), one per sub-phase; the deferred carrier/trunk credential slice; or land the stack (owner provides
-GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend
-read gaps (HealthEvent/config-version history) stay separately approval-gated.
+**12O-2ag (DONE)** — DID (Numbers) create / edit / delete (THIRD WRITE SLICE, contract-first). Rolls the
+pattern to Numbers. DID POST/PATCH/DELETE already existed (all gated by the single `did.manage`; ownership
+server-derived, `number` normalized to E.164 + `country` derived server-side, relationship refs scope/existence
+validated with a carrier↔trunk consistency rule, dup number → 409, audited with reference ids only). Authored
+into contract: `CreateDid` / `UpdateDid` schemas + POST/PATCH/DELETE paths; regenerated `schema.ts` (additive);
+`CreateDid` / `UpdateDid` aliases + `createDid`/`updateDid`/`deleteDid`. New `<NumberForm>` modal (create: raw
+number + status + carrier/trunk/routing **pickers** — each first-page + seeded-by-id since the DID API returns
+ids only; edit: number read-only/immutable, status + three refs, clearing a picker sends null to detach).
+Detail drawer got Edit/Delete (gated `did.manage`); numbers-view got a New-number button (gated `did.manage`) +
+soft-delete confirm; mutations reload. **Deferred (optional, still on API):** `regionId` picker. **Constitution
+gap surfaced (pre-existing, not introduced here):** the 12G service does NOT enforce status-*transition* rules —
+`status` is a free field, so the UI is a plain select, not a guarded state machine (flagged for a future backend
+slice). UX-only gating; server re-checks + re-normalizes + re-validates relationships every call. **web 189 →
+192 (full suite ✓, 34 files): +3. `next build` ✓ (/numbers 5.61 kB); eslint ✓. No backend change** (endpoints +
+audit + tenant-scoping + E.164 normalization + relationship validation pre-existed, e2e-covered). `API.md`
+updated.
+Next (await owner go): roll the write pattern to the remaining resources (routing / LCR / member mgmt), one per
+sub-phase; the deferred carrier/trunk credential + DID region slice; or land the stack (owner provides GitHub
+remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps
+(HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

@@ -828,3 +828,29 @@ Format: Keep a Changelog; SemVer once releases begin.
   audit + tenant-scoping + SSRF validation pre-existed, e2e-covered). `API.md` updated. Next: roll the
   pattern to numbers / routing / LCR / member management (one per sub-phase), the deferred carrier/trunk
   credential slice, or land the stack.
+- 2026-11-22 — **Phase 12O-2ag — DID (Numbers) create / edit / delete (third write slice, contract-first).**
+  Rolls the write pattern to Numbers. The DID POST/PATCH/DELETE endpoints already existed (`dids.controller.ts`,
+  all gated by the single `did.manage` perm; ownership server-derived, `number` normalized to canonical E.164
+  + `country` derived server-side, relationship refs validated for scope/existence with a carrier↔trunk
+  consistency rule, duplicate number → 409, mutations audited with reference ids only); this phase **authored
+  them into the contract** (new `CreateDid` / `UpdateDid` schemas + POST on the collection and PATCH/DELETE on
+  the item path in `telvyn.v1.yaml`), regenerated `schema.ts` (additive — `never` placeholders became real
+  operations) and added `CreateDid` / `UpdateDid` aliases. New `createDid` / `updateDid` / `deleteDid` actions.
+  New `<NumberForm>` modal (create + edit): on create a raw number (normalized server-side) + optional status +
+  optional carrier / SIP trunk / routing-profile **pickers** (each loads the first page of its list and merges a
+  seeded current id labelled by id until the name loads, since the DID API returns ids only; a picker whose list
+  can't load surfaces its error and leaves None/current); on edit the number is shown read-only (immutable),
+  status + the three refs editable, and clearing a picker sends an explicit `null` to detach. Detail drawer
+  gained **Edit** / **Delete** footer actions (gated on `did.manage` via `useSession`); numbers-view gained a
+  **New number** button (gated on `did.manage`) and a soft-delete confirm dialog; every mutation reloads the
+  list. **Scope deliberately bounded:** the `regionId` reference is **deferred** (optional on the API; editing
+  never touches it). **Honesty note / constitution gap surfaced:** the 12G service does NOT enforce
+  status-*transition* rules — `status` is a free administrative field, so the UI is a plain select, not a
+  guarded state machine; this is pre-existing backend behavior, not introduced here, and is flagged for a future
+  backend slice. All gating is UX-only; the API re-checks `did.manage`, re-normalizes the number, and
+  re-validates every relationship on each call. +3 web unit tests (189 → 192; full web suite 192 ✓, 34 files —
+  create-and-reload, New-number hidden without `did.manage`, delete-via-drawer-after-confirm; existing number
+  tests now wrap `SessionProvider`). `next build` ✓ (/numbers 5.61 kB); eslint ✓. **No backend change**
+  (endpoints + audit + tenant-scoping + E.164 normalization + relationship validation pre-existed, e2e-covered).
+  `API.md` updated. Next: roll the pattern to routing / LCR / member management (one per sub-phase), the deferred
+  carrier/trunk credential + DID region slice, or land the stack.

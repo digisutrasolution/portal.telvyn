@@ -213,7 +213,24 @@ routingProfileId/regionId/status — never secrets, never embedded objects).
 Response DTO: e164 (canonical), country (derived), status, reference ids, honest
 `health: UNKNOWN`. Duplicate number → 409. RBAC note: 12B provides
 `did.read`/`did.assign`/`did.manage` (not `.create`/`.update`/`.delete`) — reused
-read+manage; no duplicates. OpenAPI YAML still `/v1/auth` only (tracked debt).
+read+manage; no duplicates.
+
+As of **Phase 12O-2ag** the full DID surface — list, get, **create, update,
+delete** — is authored into the OpenAPI contract (`CreateDid` / `UpdateDid` schemas
+in `telvyn.v1.yaml`) and the frontend Numbers management screen (create / edit /
+soft-delete) consumes the generated types. The POST/PATCH/DELETE handlers are
+unchanged since Phase 12G — no backend change. All three mutations gate on the
+single `did.manage` permission. `number` is write-once (create only; normalized to
+E.164, `country` derived — neither is a client-trusted field) and immutable on
+update; `UpdateDid` relationship refs are nullable (null detaches). The UI drives
+carrier / SIP trunk / routing-profile with pickers (first page of each list; in edit
+the current id is shown even when its name isn't loaded, since the DID API returns
+ids only). **The `regionId` reference is deferred** to a later slice (optional on the
+API; editing never changes it). **Known gap (not introduced here):** the 12G service
+does not enforce status-*transition* rules — `status` is a free administrative field,
+so the UI exposes it as a plain select rather than a guarded state machine.
+
+OpenAPI YAML still `/v1/auth` only (tracked debt) for the surfaces not yet closed.
 
 ## Routing profile API — EXISTING (Phase 12H, 2026-08-29)
 

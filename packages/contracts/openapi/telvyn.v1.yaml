@@ -736,6 +736,34 @@ paths:
               schema: { $ref: "#/components/schemas/DidPage" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [telecom]
+      summary: Create a DID
+      description: >-
+        Create a tenant-owned DID (control-plane only — no telecom runtime).
+        Ownership (tenantId) is server-derived and never a client field. The raw
+        `number` is normalized to canonical E.164 server-side and its `country` is
+        derived from it (never trusted from the client); a duplicate number is a
+        409. Relationship references (carrier / SIP trunk / routing profile /
+        region) are optional and each is validated server-side for scope +
+        existence; if both carrier and SIP trunk are given, the trunk must belong
+        to that carrier. Requires `did.manage`.
+      operationId: createDid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDid" }
+      responses:
+        "201":
+          description: DID created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Did" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /v1/telecom/dids/{id}:
     get:
       tags: [telecom]
@@ -755,6 +783,49 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Did" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [telecom]
+      summary: Update a DID
+      description: >-
+        Partially update a tenant-owned DID. The `number` is immutable and cannot
+        be changed. Relationship references may be reassigned or explicitly
+        detached by sending `null`; each supplied reference is re-validated for
+        scope + existence, and the carrier/trunk consistency rule still applies.
+        Ownership is never taken from the client; a foreign/pool number is 404
+        (IDOR-safe). Requires `did.manage`.
+      operationId: updateDid
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDid" }
+      responses:
+        "200":
+          description: DID updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Did" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [telecom]
+      summary: Delete a DID (soft delete)
+      description: >-
+        Soft-delete a tenant-owned DID (sets deletedAt; the row is retained for
+        audit and history). A foreign/pool number is 404 (IDOR-safe). Requires
+        `did.manage`.
+      operationId: deleteDid
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: DID deleted }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -1414,6 +1485,34 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Did" }
         nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next page; null when exhausted." }
+    CreateDid:
+      type: object
+      required: [number]
+      description: >-
+        Create-DID body (control-plane only). Ownership (tenantId) is
+        server-derived. `number` is a raw phone number normalized to canonical
+        E.164 server-side; `country` is derived from it and is never a client
+        field. Relationship references are optional and validated server-side for
+        scope + existence (carrier/trunk consistency enforced).
+      properties:
+        number: { type: string, minLength: 3, maxLength: 32, description: "Raw phone number; normalized to canonical E.164 server-side." }
+        status: { type: string, enum: [AVAILABLE, RESERVED, ASSIGNED, ACTIVE, SUSPENDED, PORTING, RELEASED] }
+        carrierId: { type: string, format: uuid }
+        sipTrunkId: { type: string, format: uuid }
+        routingProfileId: { type: string, format: uuid }
+        regionId: { type: string, format: uuid }
+    UpdateDid:
+      type: object
+      description: >-
+        Partial DID update. The `number` is immutable and is not a field here.
+        Relationship references may be reassigned or detached by sending `null`.
+        Unknown keys are rejected server-side.
+      properties:
+        status: { type: string, enum: [AVAILABLE, RESERVED, ASSIGNED, ACTIVE, SUSPENDED, PORTING, RELEASED] }
+        carrierId: { type: string, format: uuid, nullable: true, description: "null detaches the carrier." }
+        sipTrunkId: { type: string, format: uuid, nullable: true, description: "null detaches the SIP trunk." }
+        routingProfileId: { type: string, format: uuid, nullable: true, description: "null detaches the routing profile." }
+        regionId: { type: string, format: uuid, nullable: true, description: "null detaches the region." }
     RoutingPolicy:
       type: object
       required: [selectionStrategy, failoverEnabled, failoverConditions, maxAttempts, overallTimeoutSeconds]
