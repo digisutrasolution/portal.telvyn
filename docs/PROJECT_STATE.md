@@ -435,10 +435,22 @@ change = 409. Detail drawer got Edit/Delete (gated `routing.manage`); lcr-view g
 re-checks + re-validates every call. **web 198 → 202 (full suite ✓, 34 files): +4. `next build` ✓ (/lcr 5.09 kB);
 eslint ✓. No backend change** (endpoints + audit + tenant-scoping + optimistic concurrency + costMicros integer
 handling + carrier/trunk validation pre-existed, e2e-covered). `API.md` updated.
-Next (await owner go): the LCR ROUTES EDITOR (12O-2ak, raw-micros cost entry); roll the write pattern to member
-mgmt; the deferred carrier/trunk credential + DID region + routing-rule failover/schedule slices; or land the
-stack (owner provides GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip →
-CI → PR). Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
+**12O-2ak (DONE)** — LCR ROUTES EDITOR (FRONTEND ONLY — no contract/backend change; completes the LCR write
+surface 2aj deferred). New `<LcrRoutesEditor>` opened by an "Edit routes" drawer footer action (gated
+`routing.manage`); loads the full route set, PATCHes the COMPLETE `routes` array via existing `updateLcrPolicy`
++ `expectedVersion` (409 on concurrent change). **MONEY (owner-chosen): `costMicros` entered as RAW non-negative
+INTEGER micros — NO float (string→int whole-number parse).** **Replace-semantics safety: non-exposed per-route
+fields (sipTrunkId, effectiveFrom/To) PRESERVED verbatim on existing routes ("+ advanced preserved" chip) so
+editing can't drop them.** Editable: carrier (required — picker from listCarriers first page, seeded-by-id since
+LCR API returns ids only), prefix (required `^\+?[0-9]{1,15}$`), cost (required int micros), currency (required
+select USD/EUR/GBP/INR/AUD/CAD/JPY), priority, weight, country (ISO-2), enabled; add/remove; server validates
+carrier-accessible + trunk-owned (authoritative). Empty set removes all routes. Contract already had
+LcrRouteInput (from 2aj) → pure UI. **web 202 → 205 (full suite ✓, 34 files): +3. `next build` ✓ (/lcr 7.45 kB);
+eslint ✓. No backend/contract change.** `API.md` updated. **LCR write surface COMPLETE (policy + routes).**
+Next (await owner go): roll the write pattern to member mgmt; the deferred carrier/trunk credential + DID region
++ routing-rule failover/schedule slices; or land the stack (owner provides GitHub remote → push
+`integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps
+(HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

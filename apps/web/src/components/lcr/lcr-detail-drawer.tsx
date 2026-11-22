@@ -71,12 +71,15 @@ export function LcrDetailDrawer({
   policyId,
   onClose,
   onEdit,
+  onEditRoutes,
   onDelete,
 }: {
   policyId: string;
   onClose: () => void;
   /** Open the edit form for this policy (shown only with `routing.manage`). */
   onEdit?: (policy: LcrPolicy) => void;
+  /** Open the routes editor for this policy (shown only with `routing.manage`). */
+  onEditRoutes?: (policy: LcrPolicy) => void;
   /** Request deletion of this policy (shown only with `routing.manage`). */
   onDelete?: (policy: LcrPolicy) => void;
 }) {
@@ -86,6 +89,7 @@ export function LcrDetailDrawer({
 
   const canManage = hasPermission("routing.manage");
   const canEdit = Boolean(onEdit) && canManage;
+  const canEditRoutes = Boolean(onEditRoutes) && canManage;
   const canDelete = Boolean(onDelete) && canManage;
 
   return (
@@ -124,10 +128,13 @@ export function LcrDetailDrawer({
           </div>
         )}
 
-        {data && (canEdit || canDelete) && (
+        {data && (canEdit || canEditRoutes || canDelete) && (
           <div className="mt-4 flex justify-end gap-2">
             {canDelete && (
               <Button variant="danger" size="sm" onClick={() => onDelete!(data)}>Delete</Button>
+            )}
+            {canEditRoutes && (
+              <Button variant="secondary" size="sm" onClick={() => onEditRoutes!(data)}>Edit routes</Button>
             )}
             {canEdit && (
               <Button variant="primary" size="sm" onClick={() => onEdit!(data)}>Edit</Button>

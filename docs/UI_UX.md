@@ -680,3 +680,22 @@ so a colliding change is rejected with a clear message instead of overwriting. D
 a soft delete behind a confirm dialog that notes the route candidates are removed with
 the policy; every successful mutation reloads the list. Verified: 202/202 web Vitest ·
 `next build` clean (/lcr 5.09 kB).
+
+LCR routes editor — EXISTING (Phase 12O-2ak, 2026-11-22): completes the LCR write
+surface. The LCR detail drawer gains a third footer action, "Edit routes" (gated on
+`routing.manage` alongside Edit and Delete), opening `<LcrRoutesEditor>`. It lists the
+policy's route candidates; each route card chooses a carrier (from a picker loaded from
+the tenant's carriers — because the LCR API returns ids only, an unfamiliar current id
+shows by id until the names load), and sets a prefix, a cost, a currency, and optionally
+priority, weight, country and an enabled toggle. Cost is entered as a plain whole number
+of micros — millionths of a currency unit, e.g. 12000 for 0.012 per minute — with a hint
+to that effect; there is no decimal entry and no floating-point maths, so the stored
+integer is always exact. Routes can be added and removed. Saving sends the whole route
+set back at once (the API replaces it wholesale), carrying the policy's version so a
+colliding change is rejected with a clear message rather than overwriting. Because the
+save replaces everything, the editor keeps every field of every existing route —
+including the options it doesn't surface yet (SIP trunk, effective-from/to dates) — and
+a "+ advanced preserved" chip marks any route that carries them, so nothing is lost by
+editing a route's basics. Carrier accessibility and trunk ownership are validated on the
+server, which stays authoritative. Saving with no routes clears the set. Verified:
+205/205 web Vitest · `next build` clean (/lcr 7.45 kB).

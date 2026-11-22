@@ -11,7 +11,11 @@ vi.mock("@/lib/telecom/lcr-actions", () => ({
   deleteLcrPolicy: vi.fn(),
 }));
 
+// The routes editor loads carriers for its (required) carrier picker.
+vi.mock("@/lib/telecom/carriers-actions", () => ({ listCarriers: vi.fn() }));
+
 import { createLcrPolicy, deleteLcrPolicy, getLcrPolicy, listLcrPolicies, updateLcrPolicy } from "@/lib/telecom/lcr-actions";
+import { listCarriers } from "@/lib/telecom/carriers-actions";
 import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { LcrView } from "./lcr-view";
 
@@ -225,5 +229,75 @@ describe("LcrView", () => {
     fireEvent.click(confirm);
 
     await waitFor(() => expect(deleteLcrPolicy).toHaveBeenCalledWith(row.id));
+  });
+
+  it("edits routes via the drawer, saving the full set with expectedVersion, raw micros, and preserved fields", async () => {
+    const carrierId = crypto.randomUUID();
+    const row = policy({
+      name: "UK least cost",
+      version: 5,
+      candidates: [
+        // A route carrying a SIP trunk + effective date the editor does NOT expose — must round-trip.
+        route({ carrierId, costMicros: 1200, prefix: "44", currency: "GBP", sipTrunkId: crypto.randomUUID(), effectiveFrom: "2026-01-01T00:00:00.000Z" }),
+      ],
+    });
+    vi.mocked(listLcrPolicies).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getLcrPolicy).mockResolvedValue(row);
+    vi.mocked(listCarriers).mockResolvedValue({ items: [{ id: carrierId, name: "Acme" }], nextCursor: null } as never);
+    vi.mocked(updateLcrPolicy).mockResolvedValue(row);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View UK least cost" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit routes" }));
+    const cost = await screen.findByLabelText("Cost (micros)");
+    fireEvent.change(cost, { target: { value: "9999" } }); // raw integer micros
+    fireEvent.click(screen.getByRole("button", { name: "Save routes" }));
+
+    await waitFor(() => expect(updateLcrPolicy).toHaveBeenCalledTimes(1));
+    const [id, body] = vi.mocked(updateLcrPolicy).mock.calls[0];
+    expect(id).toBe(row.id);
+    expect(body.expectedVersion).toBe(5);
+    expect(body.routes).toHaveLength(1);
+    expect(body.routes![0].costMicros).toBe(9999); // integer, no float
+    expect(body.routes![0].carrierId).toBe(carrierId);
+    expect(body.routes![0].sipTrunkId).toBe(row.candidates[0].sipTrunkId); // PRESERVED
+    expect(body.routes![0].effectiveFrom).toBe("2026-01-01T00:00:00.000Z"); // PRESERVED
+  });
+
+  it("adds a route in the editor and saves the longer set", async () => {
+    const carrierId = crypto.randomUUID();
+    const row = policy({ name: "UK least cost", version: 1, candidates: [] });
+    vi.mocked(listLcrPolicies).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getLcrPolicy).mockResolvedValue(row);
+    vi.mocked(listCarriers).mockResolvedValue({ items: [{ id: carrierId, name: "Acme" }], nextCursor: null } as never);
+    vi.mocked(updateLcrPolicy).mockResolvedValue(row);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View UK least cost" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit routes" }));
+    await screen.findByRole("button", { name: "Add route" });
+    fireEvent.click(screen.getByRole("button", { name: "Add route" }));
+
+    await screen.findByRole("option", { name: "Acme" });
+    fireEvent.change(screen.getByLabelText("Carrier"), { target: { value: carrierId } });
+    fireEvent.change(screen.getByLabelText("Prefix"), { target: { value: "44" } });
+    fireEvent.change(screen.getByLabelText("Cost (micros)"), { target: { value: "5000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save routes" }));
+
+    await waitFor(() => expect(updateLcrPolicy).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(updateLcrPolicy).mock.calls[0][1];
+    expect(body.routes).toHaveLength(1);
+    expect(body.routes![0]).toEqual(expect.objectContaining({ carrierId, prefix: "44", costMicros: 5000 }));
+  });
+
+  it("hides Edit routes without routing.manage permission", async () => {
+    const row = policy({ name: "UK least cost" });
+    vi.mocked(listLcrPolicies).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getLcrPolicy).mockResolvedValue(row);
+    renderView(async () => ({ userId: "u", tenantId: "t", tenantType: "RESELLER", roles: [], permissions: ["routing.read"] }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "View UK least cost" }));
+    await screen.findByText("Candidates (2)"); // drawer loaded
+    expect(screen.queryByRole("button", { name: "Edit routes" })).toBeNull();
   });
 });

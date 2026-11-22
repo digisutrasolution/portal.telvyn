@@ -318,9 +318,20 @@ three mutations gate on `routing.manage`. **This slice's UI covers the policy
 envelope only (name, description, selection strategy, enabled); it deliberately does
 NOT send `routes`** — so create starts a policy with an empty route set and edit omits
 `routes` (the backend replaces the set only when `routes` is present, otherwise
-preserves it). A dedicated routes editor — which carries the integer `costMicros`
-money-handling (entered as raw micros, no float) — is the next slice (12O-2ak). Edit
-sends `expectedVersion` for optimistic concurrency (mismatch → 409).
+preserves it). Edit (policy form) sends `expectedVersion` for optimistic concurrency
+(mismatch → 409).
+
+**Phase 12O-2ak** shipped the dedicated routes editor (frontend only — no contract
+change; it consumes the `LcrRouteInput` schema already authored above). It loads a
+policy's full route set, edits the core per-route fields, and PATCHes the **complete**
+`routes` array (replace semantics) with `expectedVersion`. **`costMicros` is entered
+as a raw non-negative integer in millionths of a currency unit — no floating point.**
+Each route needs a carrier (chosen from the tenant's carriers via a picker — the LCR
+API returns ids only, so an unknown current id shows by id until the list loads), a
+prefix, a cost and a currency; priority, weight, country and enabled are optional.
+Per-route options not editable in this slice — SIP trunk and `effectiveFrom`/`To` —
+are preserved verbatim on existing routes so a replace never drops them (a chip marks
+a route that carries them); they remain fully manageable via the API.
 
 OpenAPI YAML still `/v1/auth` only (tracked debt) for the surfaces not yet closed.
 

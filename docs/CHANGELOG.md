@@ -935,3 +935,25 @@ Format: Keep a Changelog; SemVer once releases begin.
   concurrency + costMicros integer handling + carrier/trunk validation pre-existed, e2e-covered). `API.md`
   updated. Next: the LCR routes editor (12O-2ak, raw-micros cost entry), member management write, the deferred
   credential/region/failover-schedule slices, or land the stack.
+- 2026-11-22 — **Phase 12O-2ak — LCR routes editor (frontend only, no contract/backend change).** Completes
+  the LCR write surface that 12O-2aj deferred. New `<LcrRoutesEditor>` modal, opened by an **"Edit routes"**
+  footer action on the LCR detail drawer (gated on `routing.manage` alongside Edit/Delete). It loads the
+  policy's full route set and, on save, PATCHes the **complete** `routes` array via the existing
+  `updateLcrPolicy` action (no new action) with `expectedVersion` — a concurrent change surfaces the API's 409.
+  **Money handling (owner-chosen): `costMicros` is entered as a RAW non-negative INTEGER in millionths of a
+  currency unit — no floating point anywhere** (string → integer via a whole-number parse; a hint shows the
+  convention, e.g. 12000 = 0.012/min). **Replace-semantics safety:** the editor round-trips every route; the
+  per-route options it does NOT expose — `sipTrunkId` and `effectiveFrom`/`effectiveTo` — are preserved
+  verbatim on existing routes (a "+ advanced preserved" chip marks such a route), so editing a route's cost/
+  carrier can't silently drop its trunk or effective window. Editable per route: carrier (required — a picker
+  loaded once from the first page of `listCarriers` and seeded with each route's current id, labelled by id
+  until the name loads, since the LCR API returns ids only; a load failure surfaces inline), prefix (required,
+  validated `^\+?[0-9]{1,15}$`), cost (required integer micros), currency (required select), priority, weight,
+  country (ISO-2), enabled; add / remove routes; client validation per field with a per-row error. The server
+  validates carrier accessibility + trunk ownership and is authoritative. Saving an empty set removes all routes
+  (valid). **No contract change** — `LcrRouteInput` was authored in 12O-2aj; this is pure UI. +3 web unit tests
+  (202 → 205; full web suite 205 ✓, 34 files — edit-saves-full-set-with-expectedVersion-raw-micros-and-preserves-
+  trunk/effective, add-route, Edit-routes-hidden-without-`routing.manage`). `next build` ✓ (/lcr 5.09 → 7.45 kB);
+  eslint ✓. **No backend change.** `API.md` updated. The LCR write surface (policy + routes) is now complete.
+  Next: member management write, the deferred carrier/trunk credential + DID region + routing-rule
+  failover/schedule slices, or land the stack.

@@ -14,6 +14,7 @@ import { useSession } from "@/lib/session/session-context";
 import { ListFilters } from "@/components/telecom/list-filters";
 import { LcrDetailDrawer } from "./lcr-detail-drawer";
 import { LcrForm } from "./lcr-form";
+import { LcrRoutesEditor } from "./lcr-routes-editor";
 
 type FormState = { mode: "create" } | { mode: "edit"; policy: LcrPolicy } | null;
 
@@ -55,6 +56,7 @@ export function LcrView() {
   const { hasPermission } = useSession();
   const canManage = hasPermission("routing.manage");
   const [form, setForm] = React.useState<FormState>(null);
+  const [routesTarget, setRoutesTarget] = React.useState<LcrPolicy | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<LcrPolicy | null>(null);
   const [deletePending, setDeletePending] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
@@ -232,6 +234,10 @@ export function LcrView() {
             setDetailId(null);
             setForm({ mode: "edit", policy });
           }}
+          onEditRoutes={(policy) => {
+            setDetailId(null);
+            setRoutesTarget(policy);
+          }}
           onDelete={(policy) => {
             setDetailId(null);
             setDeleteError(null);
@@ -242,6 +248,10 @@ export function LcrView() {
 
       {form && (
         <LcrForm {...form} onClose={() => setForm(null)} onSaved={refresh} />
+      )}
+
+      {routesTarget && (
+        <LcrRoutesEditor policy={routesTarget} onClose={() => setRoutesTarget(null)} onSaved={refresh} />
       )}
 
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && !deletePending && setDeleteTarget(null)}>
