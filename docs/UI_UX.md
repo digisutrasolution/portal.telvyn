@@ -782,3 +782,14 @@ the raw configuration — only the fingerprint and counts, which carry no secret
 the health history it loads on its own with its own Load-more and never holds up the
 rest of the page. Verified: 228/228 web Vitest · `next build` clean
 (/infrastructure/[id] 4.71 kB).
+
+Node health check — EXISTING (Phase 12O-2au, 2026-11-23): the Nodes list gained a
+per-row "Check" action (shown only with the health-read permission) that runs an
+operator health probe for that node and refreshes the row. Because there is no node
+liveness connector yet, the probe never reports a node as healthy on a hunch — it
+reports an honest posture: disabled when the node is administratively disabled,
+unconfigured when it has no host reference, and otherwise "unverified" (shown as
+UNKNOWN). The result is written to the node's health and the change is recorded, so a
+node's health stops being a permanent placeholder and starts reflecting real operator
+checks. Verified: 230/230 web Vitest · `next build` clean (/infrastructure/nodes
+5.36 kB).

@@ -1,12 +1,30 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Node } from "@/lib/contracts";
 import { ApiError } from "@/lib/api/problem";
 
-vi.mock("@/lib/telecom/telecom-actions", () => ({ listNodes: vi.fn() }));
+vi.mock("@/lib/telecom/telecom-actions", () => ({ listNodes: vi.fn(), checkNodeHealth: vi.fn() }));
 
-import { listNodes } from "@/lib/telecom/telecom-actions";
+import { listNodes, checkNodeHealth } from "@/lib/telecom/telecom-actions";
+import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { NodesView } from "./nodes-view";
+
+// `telecom.health.read` present so the per-row Check (probe) button renders.
+const healthLoader: SessionLoader = async () => ({
+  userId: "u",
+  tenantId: "t",
+  tenantType: "PLATFORM",
+  roles: [],
+  permissions: ["telecom.read", "telecom.health.read"],
+});
+
+function renderView(loader: SessionLoader = healthLoader) {
+  return render(
+    <SessionProvider loader={loader}>
+      <NodesView />
+    </SessionProvider>,
+  );
+}
 
 function node(overrides: Partial<Node> = {}): Node {
   return {
@@ -33,7 +51,7 @@ afterEach(() => vi.clearAllMocks());
 describe("NodesView", () => {
   it("renders a row per node with its status and heartbeat health", async () => {
     vi.mocked(listNodes).mockResolvedValue([node()]);
-    render(<NodesView />);
+    renderView();
     expect(await screen.findByText("node-a")).toBeInTheDocument();
     expect(screen.getByText("ACTIVE")).toBeInTheDocument();
     expect(screen.getByText("UNKNOWN")).toBeInTheDocument();
@@ -42,13 +60,32 @@ describe("NodesView", () => {
 
   it("shows an empty state", async () => {
     vi.mocked(listNodes).mockResolvedValue([]);
-    render(<NodesView />);
+    renderView();
     expect(await screen.findByText("No nodes are configured yet.")).toBeInTheDocument();
   });
 
   it("surfaces an API error", async () => {
     vi.mocked(listNodes).mockRejectedValue(new ApiError({ title: "Insufficient permissions", status: 403 }));
-    render(<NodesView />);
+    renderView();
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Insufficient permissions"));
+  });
+
+  it("probes a node's health from the Check button and reloads the list", async () => {
+    vi.mocked(listNodes).mockResolvedValue([node()]);
+    vi.mocked(checkNodeHealth).mockResolvedValue({ nodeId: "n1", status: "UNKNOWN", reachability: "UNVERIFIED", detail: "no node liveness probe configured — health unverified", correlationId: "c1", checkedAt: "2026-11-23T00:00:00.000Z" });
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Check health of node-a" }));
+
+    await waitFor(() => expect(checkNodeHealth).toHaveBeenCalledWith("n1"));
+    // list re-fetched after the probe (mount call + reload)
+    await waitFor(() => expect(vi.mocked(listNodes).mock.calls.length).toBeGreaterThanOrEqual(2));
+  });
+
+  it("hides the Check button without telecom.health.read", async () => {
+    vi.mocked(listNodes).mockResolvedValue([node()]);
+    renderView(async () => ({ userId: "u", tenantId: "t", tenantType: "PLATFORM", roles: [], permissions: ["telecom.read"] }));
+    await screen.findByText("node-a");
+    expect(screen.queryByRole("button", { name: /Check health of/ })).toBeNull();
   });
 });

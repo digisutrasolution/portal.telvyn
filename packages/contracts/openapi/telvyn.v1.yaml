@@ -459,6 +459,29 @@ paths:
                 items: { $ref: "#/components/schemas/Node" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/nodes/{id}/health-check:
+    post:
+      tags: [telecom]
+      summary: Probe node health (platform)
+      description: >-
+        Operator-driven node health probe (foundation). There is no node liveness
+        connector yet, so health is never fabricated: it is an honest posture from
+        configuration — DISABLED when administratively disabled, UNCONFIGURED with no
+        host reference, otherwise UNVERIFIED → UNKNOWN. The node's health snapshot is
+        updated and a NODE health event is recorded on a status transition. No egress
+        occurs. An unknown node id is 404. Requires PLATFORM + `telecom.health.read`.
+      operationId: checkNodeHealth
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Node health report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NodeHealthReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /v1/telecom/engines/{id}/health-check:
     post:
       tags: [telecom]
@@ -1451,6 +1474,17 @@ components:
         health: { $ref: "#/components/schemas/NodeHealth" }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    NodeHealthReport:
+      type: object
+      required: [nodeId, status, reachability, detail, correlationId, checkedAt]
+      description: Outcome of an operator node health probe (honest posture; never fabricated HEALTHY until a connector exists).
+      properties:
+        nodeId: { type: string, format: uuid }
+        status: { type: string, enum: [HEALTHY, DEGRADED, UNHEALTHY, UNKNOWN, DISABLED] }
+        reachability: { type: string, enum: [UNCONFIGURED, DISABLED, UNVERIFIED] }
+        detail: { type: string, description: "Safe reason — never secrets or raw host details." }
+        correlationId: { type: string }
+        checkedAt: { type: string, format: date-time }
     EngineHealthReport:
       type: object
       required: [engineId, provider, status, reachability, detail, correlationId, checkedAt]

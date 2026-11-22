@@ -64,13 +64,28 @@ the existing `AuditService`. None of these resources hold secrets.
 | `DELETE /v1/telecom/engines/:engineId/assignments/:assignmentId` | `telecom.manage` |
 | `GET /v1/telecom/nodes` · `GET /v1/telecom/nodes/:id` | `telecom.read` |
 | `GET /v1/telecom/nodes/:id/health` | `telecom.health.read` |
+| `POST /v1/telecom/nodes/:id/health-check` (operator probe; records a transition) | `telecom.health.read` |
 | `POST/PUT/DELETE /v1/telecom/nodes[/:id]` | `telecom.manage` |
 
 Engine GET is enriched with honest adapter metadata (ADR-0007): `implemented`
 (false until a real integration), `softwareCapabilities` (the engine's declared
 profile), `capabilities` (admin-enabled per instance), and live `health`
-(UNKNOWN via the stub). Node `health` starts UNKNOWN (populated by the health
-framework, 12I).
+(UNKNOWN via the stub). Node `health` starts UNKNOWN.
+
+**Node health probe (Phase 12O-2au — health-framework foundation).** `POST
+:id/health-check` (`telecom.health.read`, platform) is the operator-driven start of
+the node health framework, mirroring the engine probe. There is no node liveness
+connector yet, so it never fabricates HEALTHY: it resolves an honest **posture** from
+configuration (`reachability` ∈ `DISABLED` when administratively disabled,
+`UNCONFIGURED` with no `hostRef`, else `UNVERIFIED` → `status: UNKNOWN`), writes that
+status to the node's 1:1 health snapshot (`latencyMs` null, `lastHeartbeatAt`
+untouched — a probe is not a heartbeat), and records an append-only NODE `HealthEvent`
+only on a genuine transition. No egress occurs; unknown node → 404; audited
+`telecom.node.health_checked`. Returns `NodeHealthReport` `{nodeId, status,
+reachability, detail, correlationId, checkedAt}`. A real reachability connector (or
+the designed heartbeat/dead-man's-switch ingest) can later replace the posture
+resolution without changing this contract; the history read endpoint over the NODE
+events it now produces is a follow-up slice.
 
 **Engine foundation (Phase 12K, ADR-0007 addendum).** `GET :id/status` returns a
 normalized `EngineStatus` — `provider`, `implemented`, an explicit

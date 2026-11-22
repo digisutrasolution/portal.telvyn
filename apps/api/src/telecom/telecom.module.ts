@@ -22,6 +22,7 @@ import { EnginesController } from "./engines/engines.controller";
 import { EngineAssignmentsService } from "./engines/engine-assignments.service";
 import { EngineAssignmentsController } from "./engines/engine-assignments.controller";
 import { NodesService } from "./nodes/nodes.service";
+import { NodeHealthService } from "./nodes/node-health.service";
 import { NodesController } from "./nodes/nodes.controller";
 import { TelecomCredentialService } from "./secrets/telecom-credential.service";
 import { CarriersService } from "./carriers/carriers.service";
@@ -72,6 +73,7 @@ import { LcrController } from "./lcr/lcr.controller";
     EnginesService,
     EngineAssignmentsService,
     NodesService,
+    NodeHealthService,
     TelecomCredentialService,
     CarriersService,
     SipTrunksService,

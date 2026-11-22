@@ -6,8 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Status } from "@/components/ui/status";
 import { Button } from "@/components/ui/button";
 import type { Node } from "@/lib/contracts";
-import { listNodes } from "@/lib/telecom/telecom-actions";
+import { listNodes, checkNodeHealth } from "@/lib/telecom/telecom-actions";
 import { useResource } from "@/lib/use-resource";
+import { useSession } from "@/lib/session/session-context";
+import { messageFor } from "@/components/auth/auth-message";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<Node["status"], Tone> = { ACTIVE: "ok", SUSPENDED: "warn", DISABLED: "neutral" };
@@ -22,6 +24,25 @@ const HEALTH_TONE: Record<Node["health"]["status"], Tone> = {
 /** Read-only NOC view: telecom nodes with heartbeat health (ADR-0018). */
 export function NodesView() {
   const { data, loading, error, reload } = useResource<Node[]>(listNodes);
+
+  // Operator health probe (Phase 12O-2au). Gating is UX-only; the API re-checks.
+  const { hasPermission } = useSession();
+  const canCheck = hasPermission("telecom.health.read");
+  const [checkingId, setCheckingId] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
+
+  async function check(nodeId: string) {
+    setCheckingId(nodeId);
+    setActionError(null);
+    try {
+      await checkNodeHealth(nodeId);
+      reload();
+    } catch (err) {
+      setActionError(messageFor(err));
+    } finally {
+      setCheckingId(null);
+    }
+  }
 
   return (
     <section aria-labelledby="nodes-heading">
@@ -53,6 +74,7 @@ export function NodesView() {
                 <th scope="col" className="px-3 py-2 font-semibold">Status</th>
                 <th scope="col" className="px-3 py-2 font-semibold">Health</th>
                 <th scope="col" className="px-3 py-2 font-semibold">Version</th>
+                {canCheck && <th scope="col" className="px-3 py-2 font-semibold"><span className="sr-only">Actions</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -64,12 +86,21 @@ export function NodesView() {
                   <td className="px-3 py-2"><Badge tone={STATUS_TONE[node.status]}>{node.status}</Badge></td>
                   <td className="px-3 py-2"><Status tone={HEALTH_TONE[node.health.status]} label={node.health.status} /></td>
                   <td className="font-num px-3 py-2 text-ink-2">{node.version ?? "—"}</td>
+                  {canCheck && (
+                    <td className="px-3 py-2 text-right">
+                      <Button variant="ghost" size="sm" onClick={() => check(node.id)} disabled={checkingId === node.id} aria-label={`Check health of ${node.name}`}>
+                        {checkingId === node.id ? "Checking…" : "Check"}
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {actionError && <p role="alert" className="mt-3 text-[12px] text-danger">{actionError}</p>}
     </section>
   );
 }

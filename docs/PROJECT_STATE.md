@@ -555,10 +555,28 @@ web (224→228, engine-config-history.test). API tsc✓ eslint✓ unit 198✓ (2
 4.36→4.71 kB) eslint✓ suite 228✓ (34 files). e2e CI-only. 12 files + 3 new, NO prisma change. (46th commit; feature
 tip now <2at>; integration branch @5fcd64e now 27 behind.) **Engine detail now carries BOTH read-gap histories
 (health + config-version).**
-Next (await owner go): node/carrier health history (same HealthEvent pattern — model already supports NODE/CARRIER);
-or LAND THE STACK (owner provides GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature
-tip → CI → PR). **NOTE: the stack now spans frontend + TWO backend read endpoints (2as health-events, 2at
-config-versions); refresh the PR draft accordingly.**
+**12O-2au (DONE)** — node HEALTH PROBE (health-framework foundation; owner chose operator-probe over heartbeat).
+**Discovery first: "node/carrier health history" CANNOT be built honestly — NOTHING writes NODE/CARRIER HealthEvent
+rows (engine health service is the only writer; node health = unpopulated 1:1 snapshot, not a log). Surfaced it;
+owner chose to build the framework, operator-probe model (nodes have NO auth surface → heartbeat-ingest would need
+new node-identity/auth = ADR-worthy, deferred).** `POST /v1/telecom/nodes/:id/health-check` (platform +
+`telecom.health.read`), mirrors engine probe. New `NodeHealthService.probe` — **honest posture, NEVER fabricated
+HEALTHY (no node liveness connector): DISABLED(admin)/UNCONFIGURED(no hostRef)/UNVERIFIED→UNKNOWN** — updates NodeHealth
+snapshot (latencyMs null, lastHeartbeatAt untouched — probe≠heartbeat), records NODE HealthEvent on transition (so NODE
+events now get produced → future NODE history read non-empty). **NO schema change** (reuses NodeHealth + HealthEvent
+which already supports NODE). Wired NodeHealthService into telecom.module; endpoint audits telecom.node.health_checked.
+Contract: path + `NodeHealthReport` {nodeId,status,reachability(UNCONFIGURED/DISABLED/UNVERIFIED),detail,correlationId,
+checkedAt}. Frontend: `checkNodeHealth` + `telecom.health.read`-gated per-row "Check" button on `<NodesView>` (probes+
+reloads; NodesView now wraps useSession → test needs SessionProvider). +5 API unit (198→203, node-health.service.test:
+posture mapping + first-transition + no-event-unchanged + 404; stub prisma w/ $transaction) + 2 web (228→230,
+nodes-view.test). API tsc✓ eslint✓ unit 203✓ (23 files); web build✓ (/infrastructure/nodes 5.36 kB) eslint✓ suite 230✓
+(36 files). e2e CI-only. 7 files + 2 new (service + its test), NO prisma. (47th commit; feature tip now <2au>;
+integration branch @5fcd64e now 28 behind.) **Node health now REAL (operator-probed honest UNKNOWN).**
+Next (await owner go): NODE health-history read + UI (now has data); carrier health still has NO writer (would need a
+carrier probe first); a real node reachability connector or heartbeat/dead-man's-switch (ADR); or LAND THE STACK (owner
+provides GitHub remote → push `integration/phase-12o-complete` FF'd to feature tip → CI → PR). **NOTE: stack now spans
+frontend + THREE backend endpoints (2as health-events read, 2at config-versions read, 2au node health-check write);
+refresh the PR draft accordingly.**
 
 ### (superseded) sub-phase plan
 

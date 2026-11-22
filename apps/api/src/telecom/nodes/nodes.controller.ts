@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import { requestContext } from "@/common/request-context";
 import { ZodPipe } from "@/common/zod.pipe";
@@ -10,6 +11,7 @@ import { CurrentTenant, RequirePermissions } from "@/authz/authz.decorators";
 import type { TenantContext } from "@/authz/tenant-context";
 import { AuditService } from "@/authz/audit.service";
 import { NodesService } from "./nodes.service";
+import { NodeHealthService } from "./node-health.service";
 import { CreateNodeDto, UpdateNodeDto, type CreateNodeInput, type UpdateNodeInput } from "../infra.dto";
 
 /** Platform telecom nodes. Config is durable; health is runtime (starts UNKNOWN). */
@@ -18,6 +20,7 @@ import { CreateNodeDto, UpdateNodeDto, type CreateNodeInput, type UpdateNodeInpu
 export class NodesController {
   constructor(
     private readonly nodes: NodesService,
+    private readonly health: NodeHealthService,
     private readonly audit: AuditService,
   ) {}
 
@@ -37,6 +40,27 @@ export class NodesController {
   @RequirePermissions("telecom.health.read")
   getHealth(@Param("id", ParseUUIDPipe) id: string) {
     return this.nodes.getHealth(id);
+  }
+
+  /**
+   * Operator-driven node health probe (foundation). Honest UNKNOWN — there is no
+   * node liveness connector yet, so health is a posture from configuration; a NODE
+   * HealthEvent is recorded on transition. No egress occurs. Audited.
+   */
+  @Post(":id/health-check")
+  @RequirePermissions("telecom.health.read")
+  async healthCheck(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
+    const correlationId = randomUUID();
+    const report = await this.health.probe(id, correlationId);
+    await this.audit.log({
+      ctx,
+      req: requestContext(req),
+      action: "telecom.node.health_checked",
+      resource: "node",
+      resourceId: id,
+      metadata: { status: report.status, reachability: report.reachability, correlationId },
+    });
+    return report;
   }
 
   @Post()

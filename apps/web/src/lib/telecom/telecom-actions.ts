@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { Engine, EngineHealthReport, EngineStatus, HealthEventPage, ConfigVersionPage, Node, Region, SyncOutcome } from "@/lib/contracts";
+import type { Engine, EngineHealthReport, EngineStatus, HealthEventPage, ConfigVersionPage, Node, NodeHealthReport, Region, SyncOutcome } from "@/lib/contracts";
 
 /**
  * Read-only telecom (NOC) API calls. Platform-scoped on the server
@@ -48,6 +48,11 @@ export function listRegions(signal?: AbortSignal): Promise<Region[]> {
 /** Platform list of telecom nodes with heartbeat health. */
 export function listNodes(signal?: AbortSignal): Promise<Node[]> {
   return api.get<Node[]>("/v1/telecom/nodes", { signal });
+}
+
+/** Operator-driven node health probe (`telecom.health.read`); honest posture, records a transition. Non-destructive. */
+export function checkNodeHealth(id: string): Promise<NodeHealthReport> {
+  return api.post<NodeHealthReport>(`/v1/telecom/nodes/${id}/health-check`);
 }
 
 // ---- mutating engine actions (platform; state-changing, never auto-retried) ----

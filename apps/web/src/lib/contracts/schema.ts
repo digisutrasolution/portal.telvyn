@@ -470,6 +470,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/nodes/{id}/health-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Probe node health (platform)
+         * @description Operator-driven node health probe (foundation). There is no node liveness connector yet, so health is never fabricated: it is an honest posture from configuration — DISABLED when administratively disabled, UNCONFIGURED with no host reference, otherwise UNVERIFIED → UNKNOWN. The node's health snapshot is updated and a NODE health event is recorded on a status transition. No egress occurs. An unknown node id is 404. Requires PLATFORM + `telecom.health.read`.
+         */
+        post: operations["checkNodeHealth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/telecom/engines/{id}/health-check": {
         parameters: {
             query?: never;
@@ -1104,6 +1124,20 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        /** @description Outcome of an operator node health probe (honest posture; never fabricated HEALTHY until a connector exists). */
+        NodeHealthReport: {
+            /** Format: uuid */
+            nodeId: string;
+            /** @enum {string} */
+            status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN" | "DISABLED";
+            /** @enum {string} */
+            reachability: "UNCONFIGURED" | "DISABLED" | "UNVERIFIED";
+            /** @description Safe reason — never secrets or raw host details. */
+            detail: string;
+            correlationId: string;
+            /** Format: date-time */
+            checkedAt: string;
         };
         EngineHealthReport: {
             /** Format: uuid */
@@ -2378,6 +2412,31 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    checkNodeHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Node health report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeHealthReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     checkEngineHealth: {

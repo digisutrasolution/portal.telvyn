@@ -1137,3 +1137,28 @@ Format: Keep a Changelog; SemVer once releases begin.
   updated (API.md, CHANGELOG.md, PROJECT_STATE.md, UI_UX.md). The engine detail page now carries both read-gap
   histories (health + config-version). Next read-gap candidate: node/carrier health history (same pattern); or
   land the stack.
+- 2026-11-23 — **Phase 12O-2au — node health probe (health-framework foundation; owner-chosen operator-probe
+  model).** Investigated "node/carrier health history" and found it couldn't be built honestly — **nothing
+  writes NODE/CARRIER `HealthEvent` rows** (the engine health service is the only writer; node health is an
+  unpopulated 1:1 snapshot, not a log). Rather than ship a permanently-empty, misleading history, surfaced the
+  gap; the owner chose to build the node health framework, and (given nodes have no auth/credential surface)
+  the **operator-probe** model over a heartbeat-ingest (which would need a new node-identity/auth design,
+  ADR-worthy). So this slice starts the framework: `POST /v1/telecom/nodes/:id/health-check` (platform +
+  `telecom.health.read`), mirroring the engine probe. New `NodeHealthService.probe` resolves an **honest
+  posture** from configuration — never fabricated HEALTHY, since there's no node liveness connector yet
+  (DISABLED when administratively disabled, UNCONFIGURED with no `hostRef`, else UNVERIFIED → UNKNOWN) — writes
+  that status to the node's health snapshot (`latencyMs` null, `lastHeartbeatAt` untouched — a probe is not a
+  heartbeat), and records an append-only NODE `HealthEvent` only on a genuine transition (so node health events
+  now actually get produced, making a future NODE history read non-empty). **No schema change** — reuses the
+  existing `NodeHealth` snapshot + `HealthEvent` (which already supports NODE). Wired `NodeHealthService` into
+  `telecom.module`; controller endpoint audits `telecom.node.health_checked`. Contract: authored the path +
+  `NodeHealthReport` `{nodeId, status, reachability (UNCONFIGURED/DISABLED/UNVERIFIED), detail, correlationId,
+  checkedAt}`. Frontend: new `checkNodeHealth` action + a `telecom.health.read`-gated per-row "Check" button on
+  `<NodesView>` that probes and reloads (so the updated snapshot shows). **Tests:** +5 API unit (198 → 203;
+  `node-health.service.test.ts` — UNVERIFIED/DISABLED/UNCONFIGURED posture mapping, first-transition recorded,
+  no-event-when-unchanged, 404) and +2 web unit (228 → 230; `nodes-view.test.tsx` now wraps `SessionProvider` —
+  probe-reloads-the-list, Check hidden without the perm). API `tsc` ✓, API eslint ✓, API unit 203 ✓ (23 files);
+  web `next build` ✓ (/infrastructure/nodes 5.36 kB), web eslint ✓, full web suite 230 ✓ (36 files). e2e
+  (platform gating, 404) is CI-only. Docs updated. **Node health is now real (operator-probed, honest UNKNOWN);
+  follow-ups: the NODE health-history read + UI (now has data to show), and later a real reachability connector
+  or the heartbeat/dead-man's-switch model (ADR).**
