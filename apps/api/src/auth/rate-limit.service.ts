@@ -51,4 +51,7 @@ export const RATE_RULES = {
   resetRequest: { bucket: "reset-request-ip", limit: 5, windowSeconds: 900 } satisfies RateRule,
   resetConfirm: { bucket: "reset-confirm-ip", limit: 10, windowSeconds: 900 } satisfies RateRule,
   emailVerify: { bucket: "email-verify-ip", limit: 10, windowSeconds: 900 } satisfies RateRule,
+  // Node heartbeat (ADR-0020): expected cadence ~2/min (30s interval); generous
+  // headroom for retries while bounding a flood. Keyed by nodeId.
+  nodeHeartbeat: { bucket: "node-heartbeat", limit: 120, windowSeconds: 60 } satisfies RateRule,
 } as const;

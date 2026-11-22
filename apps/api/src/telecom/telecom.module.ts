@@ -24,6 +24,10 @@ import { EngineAssignmentsController } from "./engines/engine-assignments.contro
 import { NodesService } from "./nodes/nodes.service";
 import { NodeHealthService } from "./nodes/node-health.service";
 import { NodesController } from "./nodes/nodes.controller";
+import { NodeHeartbeatController } from "./nodes/heartbeat/node-heartbeat.controller";
+import { NodeHeartbeatService } from "./nodes/heartbeat/node-heartbeat.service";
+import { HeartbeatAuthenticator, NullHeartbeatAuthenticator } from "./nodes/heartbeat/heartbeat-authenticator";
+import { RateLimitService } from "@/auth/rate-limit.service";
 import { TelecomCredentialService } from "./secrets/telecom-credential.service";
 import { CarriersService } from "./carriers/carriers.service";
 import { CarrierHealthService } from "./carriers/carrier-health.service";
@@ -48,7 +52,7 @@ import { LcrController } from "./lcr/lcr.controller";
  */
 @Module({
   imports: [AuthModule, AuthzModule],
-  controllers: [RegionsController, EnginesController, EngineAssignmentsController, NodesController, CarriersController, SipTrunksController, DidsController, RoutingProfilesController, LcrController],
+  controllers: [RegionsController, EnginesController, EngineAssignmentsController, NodesController, NodeHeartbeatController, CarriersController, SipTrunksController, DidsController, RoutingProfilesController, LcrController],
   providers: [
     PrismaService,
     RedisService,
@@ -75,6 +79,12 @@ import { LcrController } from "./lcr/lcr.controller";
     EngineAssignmentsService,
     NodesService,
     NodeHealthService,
+    NodeHeartbeatService,
+    // Node heartbeat auth seam (ADR-0020): the ONLY place a verified mTLS client
+    // identity enters. Default = fail-closed Null impl (no terminator wired yet);
+    // a real terminator is a drop-in, exactly like the EngineConnector pattern.
+    { provide: HeartbeatAuthenticator, useClass: NullHeartbeatAuthenticator },
+    RateLimitService,
     TelecomCredentialService,
     CarriersService,
     CarrierHealthService,

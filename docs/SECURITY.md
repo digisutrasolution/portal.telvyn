@@ -655,3 +655,35 @@ browser side only.
   is shown as the honest result it is, not a fabricated success. No secrets in
   the `SyncOutcome` / `EngineHealthReport` (versions are short fingerprints,
   details are safe reasons). No backend/API/schema/DI change.
+
+## Node heartbeat ingest (Phase 12O-2ba, ADR-0020 slice 2)
+
+The node liveness heartbeat is a **machine** ingest endpoint
+(`POST /v1/telecom/nodes/:id/heartbeat`), outside the human auth model. Its
+security posture:
+
+- **mTLS-only, via a single seam, fail-closed.** Authentication is the node's
+  `NODE_AGENT` mTLS client certificate, resolved by one `HeartbeatAuthenticator`
+  abstraction — the inbound analogue of ADR-0011's `EngineConnector`. The seam
+  **never** derives identity from a spoofable header or body field. The default
+  `NullHeartbeatAuthenticator` produces no identity, so **every beat is rejected
+  (401) today** — there is no inbound mTLS terminator in the environment yet (the
+  app is a plain-HTTP JSON API behind a TLS-terminating proxy; the only mTLS is the
+  OUTBOUND engine gateway). We do not pretend to have verified a certificate we
+  never saw. A real terminator (app-terminated TLS socket, or a trusted gateway
+  that forwards a verified fingerprint over an isolated path) is a drop-in.
+- **Identity-bound (no cross-node forgery).** A verified fingerprint is accepted
+  only if it equals the fingerprint stored (non-secret) on the node's `NODE_AGENT`
+  credential; a node can report only its own health. No credential / wrong type /
+  mismatch → 403. The node is looked up **only after** authentication, so an
+  unauthenticated caller gets no node-existence oracle (401 regardless).
+- **Rate-limited, fail-closed.** Per-node fixed window (`node-heartbeat` bucket);
+  a Redis outage refuses the beat (503), never silently allows it.
+- **No privilege, no state transition, no secret.** An accepted beat stamps
+  `lastHeartbeatAt` only — it grants nothing and changes no health status (the
+  dead-man's-switch evaluator owns transitions, slice 3). The payload is non-secret
+  liveness (version/uptime) only.
+- **Not in the audit log.** The audit log is an actor/tenant (human) record; a 30s
+  machine beat has no honest actor and would firehose the OLTP audit table
+  (ADR-0010). Accept/reject go to the structured logger (nodeId + correlation id),
+  the same observability path as engine/node health.

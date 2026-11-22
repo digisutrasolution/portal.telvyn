@@ -510,6 +510,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/nodes/{id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Node heartbeat ingest (node-agent mTLS)
+         * @description Machine endpoint (ADR-0020): a node agent reports liveness. It is NOT behind the human JWT/tenant/permission auth — its ONLY authentication is the node's NODE_AGENT **mTLS client certificate**, verified by a real mTLS terminator and bound to this node (a node can report only its own health). An accepted beat stamps `lastHeartbeatAt` only; it does NOT change health status (the dead-man's-switch evaluator owns transitions). Rate-limited per node; fail-closed if the limiter is unavailable. **Fails closed today**: until an inbound mTLS terminator is wired, no verified identity is produced and every beat is 401 — the control plane never trusts a spoofable signal. Not consumed by the web client.
+         */
+        post: operations["nodeHeartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/telecom/engines/{id}/health-check": {
         parameters: {
             query?: never;
@@ -1198,6 +1218,22 @@ export interface components {
             correlationId: string;
             /** Format: date-time */
             checkedAt: string;
+        };
+        /** @description Optional non-secret liveness payload a node agent may include (ADR-0020). Never credentials, dialplans or call content. */
+        NodeHeartbeat: {
+            /** @description The node's reported build/version. */
+            version?: string;
+            uptimeSeconds?: number;
+        };
+        /** @description Acknowledgement of an accepted heartbeat (liveness stamped; no status transition). */
+        HeartbeatAck: {
+            /** @enum {string} */
+            status: "accepted";
+            /** Format: uuid */
+            nodeId: string;
+            /** Format: date-time */
+            acceptedAt: string;
+            correlationId: string;
         };
         /** @description Outcome of an operator carrier health probe (honest posture; never fabricated HEALTHY until a connector exists). */
         CarrierHealthReport: {
@@ -2540,6 +2576,37 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    nodeHeartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["NodeHeartbeat"];
+            };
+        };
+        responses: {
+            /** @description Heartbeat accepted (liveness stamped) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartbeatAck"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     checkEngineHealth: {

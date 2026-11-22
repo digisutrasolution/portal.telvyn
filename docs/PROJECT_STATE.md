@@ -680,6 +680,30 @@ Next = ADR-0020 slice 2 (heartbeat ingest POST /nodes/:id/heartbeat, mTLS identi
 (dead-man cron evaluator) / LAND THE STACK (owner remote → push → CI → PR; refresh stale phase-12o-PR.md — now also includes the
 2az migration + ADR-0020-Accepted on its own branch).
 
+**12O-2ba (DONE)** — node HEARTBEAT INGEST (ADR-0020 slice 2). Machine endpoint `POST /v1/telecom/nodes/:id/heartbeat` — NOT
+behind JWT/tenant/permission (node agents have no JWT); its ONLY auth is the node's NODE_AGENT mTLS client cert via a single
+`HeartbeatAuthenticator` seam (inbound analogue of ADR-0011 EngineConnector). **FAIL-CLOSED**: default `NullHeartbeatAuthenticator`
+returns no identity (no inbound mTLS terminator exists — app is plain-HTTP behind a proxy; only OUTBOUND engine gateway is mTLS),
+so EVERY beat is 401 today — never trusts a spoofable header/body; real terminator (app-terminated socket cert OR gateway-forwarded
+verified fingerprint) is a drop-in. **Identity-bound**: verified cert fingerprint must equal the node's NODE_AGENT credential `hint`
+(non-secret fingerprint, no per-beat vault decrypt) → a node reports only its own health; node lookup happens ONLY after auth (no
+existence oracle). NODE_AGENT wrong-type/missing/mismatch → 403, unknown node → 404, 202 on accept. **Rate-limited** per node
+(`node-heartbeat` bucket 120/60s, RateLimitService reused — added to TelecomModule providers), fail-closed on Redis outage → 503.
+Accepted beat stamps `NodeHealth.lastHeartbeatAt` ONLY — **NO status transition** (slice 3 evaluator owns HEALTHY/UNKNOWN). **NOT
+audited** (AuditService is actor/tenant/human-based → a machine beat has no honest actor + 30s cadence would firehose the OLTP
+audit table per ADR-0010) → structured logger instead (accept=log, reject=warn, w/ nodeId+correlationId), same path as engine/node
+health. Contract-first: `nodeAgentMTLS` mutualTLS security scheme + `NodeHeartbeat`/`HeartbeatAck` schemas + path; gen:contracts run
+(web won't consume — machine endpoint, no frontend action). NO prisma change (uses 2az NODE_AGENT + TelecomNode.credentialId). NO
+web source change (only generated schema.ts grew additively; web tsc✓). New files: heartbeat/{heartbeat-authenticator, node-heartbeat.service,
+node-heartbeat.controller, node-heartbeat.service.test}. +7 API unit (ingest: fail-closed-no-oracle/404/403-no-cred/403-wrong-type/
+403-mismatch/accept-stamps-only + NullAuthenticator-null) → telecom 195 / full 227; e2e added to telecom-infra (beat→401 fail-closed,
+lastHeartbeatAt unchanged; CI-only NOT run). API tsc✓ eslint✓ web tsc✓. GOTCHA: two controllers share `v1/telecom/nodes` prefix
+(NodesController guarded, NodeHeartbeatController unguarded) — fine, distinct routes. **PROVISIONING GAP (honest): nothing creates a
+NODE_AGENT credential / sets node.credentialId yet** (no attach endpoint) → endpoint is end-to-end fail-closed today even if a
+terminator existed. (53rd commit; feature tip now <2ba>; integration branch @5fcd64e now 34 behind.)
+Next = ADR-0020 slice 3 (dead-man cron evaluator: compares lastHeartbeatAt to TTL 90s → HEALTHY/UNKNOWN HealthEvent transitions) +
+a NODE_AGENT provisioning path (attach endpoint) / LAND THE STACK.
+
 ### (superseded) sub-phase plan
 
 **Phase 12M — real engine adapter (Kamailio first), built in additive review-gated sub-phases.** A disposable Kamailio 6.1.5 test engine is provisioned

@@ -135,6 +135,16 @@ describe("platform CRUD + integrity + honest health", () => {
     expect(probe.status).toBe(200);
     expect(probe.body.status).toBe("UNKNOWN");
 
+    // Heartbeat ingest (ADR-0020, 12O-2ba) FAILS CLOSED: no inbound mTLS terminator
+    // is wired, so the Null authenticator yields no verified identity → 401. The
+    // machine endpoint carries no JWT, so this is not an auth-token 401 — it is the
+    // honest "no verified node-agent certificate". Nothing is ever accepted on a
+    // spoofable signal; lastHeartbeatAt is NOT stamped.
+    const beat = await request(http).post(`/v1/telecom/nodes/${nodeId}/heartbeat`).send({ version: "1.0" });
+    expect(beat.status).toBe(401);
+    const after = await request(http).get(`/v1/telecom/nodes/${nodeId}/health`).set(auth(plat.token));
+    expect(after.body.lastHeartbeatAt ?? null).toBeNull(); // unchanged — the beat was rejected
+
     // Lists include the created rows
     expect((await request(http).get("/v1/telecom/nodes").set(auth(plat.token))).body.some((n: { id: string }) => n.id === nodeId)).toBe(true);
 

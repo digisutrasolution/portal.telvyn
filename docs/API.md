@@ -66,6 +66,7 @@ the existing `AuditService`. None of these resources hold secrets.
 | `GET /v1/telecom/nodes/:id/health` | `telecom.health.read` |
 | `POST /v1/telecom/nodes/:id/health-check` (operator probe; records a transition) | `telecom.health.read` |
 | `GET /v1/telecom/nodes/:id/health-events` (health history; cursor pagination) | `telecom.health.read` |
+| `POST /v1/telecom/nodes/:id/heartbeat` (node-agent ingest) | **node-agent mTLS** (no JWT/permission) |
 | `POST/PUT/DELETE /v1/telecom/nodes[/:id]` | `telecom.manage` |
 
 Engine GET is enriched with honest adapter metadata (ADR-0007): `implemented`
@@ -100,6 +101,27 @@ the first event), toStatus, reason, correlationId, createdAt}` — and never ech
 reuses the `HealthEvent` model and the `HealthEventPage` contract schema; this adds
 the read endpoint (`NodeHealthService.history`) only. Nodes have no detail page, so
 the NOC Nodes list surfaces it as a per-row "History" dialog (same gate).
+
+**Node heartbeat ingest (Phase 12O-2ba, ADR-0020 slice 2).** `POST :id/heartbeat` is a
+**machine** endpoint — a node agent reports liveness. It is **not** behind the human
+JWT/tenant/permission guards; its only authentication is the node's `NODE_AGENT`
+**mTLS client certificate**, resolved by a single `HeartbeatAuthenticator` seam and
+**bound to the node** (the verified cert fingerprint must equal the node's NODE_AGENT
+credential's stored fingerprint, so a node can report only its own health). An accepted
+beat (HTTP **202**) stamps `NodeHealth.lastHeartbeatAt` **only** — it records no status
+transition (the dead-man's-switch evaluator owns those, slice 3). Rate-limited per node
+(`node-heartbeat` bucket), fail-closed on a limiter outage (**503**). Unverified → 401,
+identity/credential mismatch → 403, unknown node → 404 (checked only after
+authentication, so no node-existence oracle). **Fails closed today:** there is no
+inbound mTLS terminator in the environment (the app is plain-HTTP behind a
+TLS-terminating proxy; the only mTLS is the OUTBOUND engine gateway, ADR-0011), so the
+default `NullHeartbeatAuthenticator` yields no identity and **every beat is 401** — the
+control plane never trusts a spoofable header/body. A real terminator (app-terminated
+TLS socket cert, or a trusted gateway forwarding a verified fingerprint) is a drop-in
+replacement of the one seam, exactly like swapping `NullEngineConnector`. Heartbeats are
+**not** written to the human audit log (no honest actor; a 30s beat would firehose the
+OLTP audit table, ADR-0010) — accept/reject go to the structured logger with the nodeId
++ correlation id. Not consumed by the web client.
 
 **Engine foundation (Phase 12K, ADR-0007 addendum).** `GET :id/status` returns a
 normalized `EngineStatus` — `provider`, `implemented`, an explicit

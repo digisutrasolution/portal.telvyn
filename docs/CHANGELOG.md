@@ -6,6 +6,22 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-23 — Phase 12O-2ba — **node heartbeat ingest** (ADR-0020 slice 2). Machine
+  endpoint `POST /v1/telecom/nodes/:id/heartbeat` — a node agent reports liveness,
+  authenticated by its `NODE_AGENT` **mTLS client cert** (no JWT/permission), resolved
+  by a single fail-closed `HeartbeatAuthenticator` seam (the inbound analogue of
+  `EngineConnector`). Identity-bound (verified fingerprint must equal the node's
+  credential fingerprint → a node reports only its own health), rate-limited per node
+  (fail-closed on a Redis outage), 202 on accept. An accepted beat stamps
+  `lastHeartbeatAt` **only** — no status transition (that's slice 3's evaluator).
+  **Fails closed today:** no inbound mTLS terminator exists (the app is plain-HTTP
+  behind a proxy; only the engine gateway is mTLS, ADR-0011), so the default
+  `NullHeartbeatAuthenticator` yields no identity and every beat is 401 — never trusts
+  a spoofable signal; a real terminator is a drop-in. Heartbeats are logged (not
+  audited — no honest actor, and a 30s beat would firehose the audit table, ADR-0010).
+  Contract-first (`nodeAgentMTLS` security scheme + `NodeHeartbeat`/`HeartbeatAck`);
+  +7 API unit tests + a fail-closed e2e; no prisma change (uses 2az's `NODE_AGENT` +
+  `credentialId`); no web change.
 - 2026-11-23 — Phase 12O-2az — **node-agent credential** schema (ADR-0020 slice 1).
   Additive migration `node_agent_credential_ref`, mirroring `engine_credential_ref`:
   `TelecomCredentialType` gains **`NODE_AGENT`** (an mTLS client cert for the node
