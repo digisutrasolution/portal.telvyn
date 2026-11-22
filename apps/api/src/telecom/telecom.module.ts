@@ -26,6 +26,7 @@ import { NodeHealthService } from "./nodes/node-health.service";
 import { NodesController } from "./nodes/nodes.controller";
 import { TelecomCredentialService } from "./secrets/telecom-credential.service";
 import { CarriersService } from "./carriers/carriers.service";
+import { CarrierHealthService } from "./carriers/carrier-health.service";
 import { CarriersController } from "./carriers/carriers.controller";
 import { SipTrunksService } from "./sip-trunks/sip-trunks.service";
 import { SipTrunksController } from "./sip-trunks/sip-trunks.controller";
@@ -76,6 +77,7 @@ import { LcrController } from "./lcr/lcr.controller";
     NodeHealthService,
     TelecomCredentialService,
     CarriersService,
+    CarrierHealthService,
     SipTrunksService,
     DidsService,
     RoutingProfilesService,

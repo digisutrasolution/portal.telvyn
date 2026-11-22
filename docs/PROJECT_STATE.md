@@ -597,6 +597,32 @@ a real node reachability connector or heartbeat/dead-man's-switch (ADR); or LAND
 endpoints (2as health-events read, 2at config-versions read, 2au node health-check write, 2av node health-events read);
 refresh the PR draft accordingly.**
 
+**12O-2aw (DONE)** — carrier HEALTH PROBE (write; event-only — the carrier analogue of 2au, unblocking carrier history 2ax).
+**DISCOVERY corrected my own framing: NOT a clean mirror of 2au.** Carriers have NO health snapshot table (unlike `NodeHealth`),
+and the carrier read's `health` was a HARDCODED literal `{UNKNOWN, "no health check configured"}` (carriers.service.ts). So I
+STOPPED and surfaced the fork (schema change for a `CarrierHealth` table vs event-only); **owner chose EVENT-ONLY (no schema
+change)**. `POST /v1/telecom/carriers/:id/health-check` (`telecom.health.read`; tenant-scoped via `@CurrentTenant`, NOT platform —
+carriers are dual-nature). New `CarrierHealthService.probe(ctx, id, correlationId)` — scope-resolves the carrier (own + system →
+404 foreign/unknown), **honest posture NEVER fabricated HEALTHY: DISABLED(admin) / UNCONFIGURED(no CarrierSipEndpoint) /
+UNVERIFIED→UNKNOWN** — records a CARRIER HealthEvent on transition (carrier's tenantId; null for system). Carrier `health` now
+**DERIVED** from the latest CARRIER event, replacing the literal: list computes per-page in **two bounded queries (groupBy newest
+id → one fetch; NO N+1)**, get in one findFirst; `deriveHealth` → `{status, "last operator health probe"}` or `{UNKNOWN, "not yet
+probed"}`. `@HttpCode(200)` (contract says 200; NOTE: node 2au health-check has no @HttpCode → 201 at runtime vs its contract's
+200 — pre-existing node drift, left for a later node-align slice). **NO schema change** (reuses HealthEvent CARRIER entity).
+Wired CarrierHealthService into telecom.module; audits `telecom.carrier.health_checked`. Contract: path + `CarrierHealthReport`
+{carrierId,status,reachability,detail,correlationId,checkedAt}; `CarrierHealth` description refreshed. Frontend: `checkCarrierHealth`
++ per-row `telecom.health.read`-gated **"Check"** button on `<CarriersView>` (probes + reloads so the existing Health column
+reflects it). +10 API unit (173→183: carrier-health.service posture/transition/unchanged/404/tenantId + carriers.service health
+derivation get/list/no-N+1/empty) + 2 web (236→238 carriers-view: Check probes+reloads, hidden w/o telecom.health.read) + e2e
+added to telecom-carrier.e2e (probe posture, derived health, DISABLED, 404 — **CI-only, NOT run here**, tsc-compiled). API tsc✓
+eslint✓ telecom unit 183✓; web build✓ eslint✓ suite 238✓ (37 files). 10 files + 3 new (service + 2 tests), NO prisma.
+(49th commit; feature tip now <2aw>; integration branch @5fcd64e now 30 behind.) **Carrier health now REAL (operator-probed honest
+posture, derived from events).**
+Next (await owner go): carrier health-history read + UI (2ax — now has data, mirrors 2av; carriers have no detail page → dialog
+from the Carriers list) / a real node OR carrier reachability connector or heartbeat (ADR) / LAND THE STACK (owner provides GitHub
+remote → push `integration/phase-12o-complete` FF'd to feature tip → CI → PR). **NOTE: stack now spans frontend + FIVE backend
+endpoints (2as/2at/2au/2av + 2aw carrier health-check write); refresh the PR draft accordingly.**
+
 ### (superseded) sub-phase plan
 
 **Phase 12M — real engine adapter (Kamailio first), built in additive review-gated sub-phases.** A disposable Kamailio 6.1.5 test engine is provisioned

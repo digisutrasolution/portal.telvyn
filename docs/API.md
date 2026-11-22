@@ -199,11 +199,32 @@ reference only, never the secret).
 | `POST /v1/telecom/carriers` (inline `credential` XOR `credentialId`) | `carrier.create` |
 | `PATCH /v1/telecom/carriers/:id` | `carrier.update` |
 | `DELETE /v1/telecom/carriers/:id` (soft delete) | `carrier.delete` |
+| `POST /v1/telecom/carriers/:id/health-check` (operator probe; records a transition) | `telecom.health.read` |
 
 Response is a safe DTO: `scope` (SYSTEM/TENANT, computed), config fields, a safe
 `credential` summary (`id`, type, label, hint, scope — never the secret), and
-honest `health` (UNKNOWN). Routing note: telecom resources live under
-`/v1/telecom/*` (12D convention) rather than the prompt's `/v1/carriers` example.
+honest `health` — now **derived from the latest operator probe** (Phase 12O-2aw;
+UNKNOWN until first probed, never fabricated). Routing note: telecom resources live
+under `/v1/telecom/*` (12D convention) rather than the prompt's `/v1/carriers` example.
+
+**Carrier health probe (Phase 12O-2aw).** `POST :id/health-check`
+(`telecom.health.read`) is the operator-driven start of the carrier health framework,
+mirroring the node probe (12O-2au). Unlike nodes, carriers have **no health snapshot
+table**, so it is **event-only** (owner-chosen 2026-11-23): there is no carrier
+liveness connector yet, so it never fabricates HEALTHY — it resolves an honest
+**posture** from configuration (`reachability` ∈ `DISABLED` when administratively
+disabled, `UNCONFIGURED` with no `CarrierSipEndpoint`, else `UNVERIFIED` → `status:
+UNKNOWN`) and records an append-only CARRIER `HealthEvent` only on a genuine
+transition (the event carries the carrier's `tenantId`; `null` for a system carrier).
+The carrier's `health` is then **derived** from the latest such event — the carrier
+list computes it per page in two bounded queries (a `groupBy` to the newest event id
+per carrier, then one fetch; no N+1), and `get` from a single lookup. The carrier is
+scope-resolved (own + system), so a foreign/unknown id is **404** (IDOR-safe); no
+egress occurs; audited `telecom.carrier.health_checked`. Returns `CarrierHealthReport`
+`{carrierId, status, reachability, detail, correlationId, checkedAt}` (HTTP 200). No
+schema change — reuses the `HealthEvent` model (`CARRIER` entity). A real reachability
+connector can later replace the posture resolution without changing this contract; the
+carrier health-event history read is the follow-up slice (12O-2ax, mirroring node 2av).
 
 As of **Phase 12O-2ae** the full carrier surface — list, get, **create, update,
 delete** — is authored into the OpenAPI contract (`CreateCarrier` / `UpdateCarrier`

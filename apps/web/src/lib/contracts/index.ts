@@ -95,6 +95,9 @@ export type CreateCarrier = Schemas["CreateCarrier"];
 /** Partial update-carrier request body (PATCH /v1/telecom/carriers/{id}). */
 export type UpdateCarrier = Schemas["UpdateCarrier"];
 
+/** Outcome of an operator carrier health probe (POST /v1/telecom/carriers/{id}/health-check). */
+export type CarrierHealthReport = Schemas["CarrierHealthReport"];
+
 /** A SIP trunk (tenant-owned), with honest health and a non-secret credential ref. */
 export type SipTrunk = Schemas["SipTrunk"];
 

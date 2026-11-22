@@ -6,6 +6,20 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-23 — Phase 12O-2aw — carrier **health probe** (write; event-only). `POST
+  /v1/telecom/carriers/:id/health-check` (`telecom.health.read`) — the operator-driven
+  foundation of carrier health, mirroring the node probe (12O-2au). Carriers have no
+  health snapshot table, so (owner-chosen) it is **event-only**: honest posture from
+  config — DISABLED (administratively disabled) / UNCONFIGURED (no `CarrierSipEndpoint`)
+  / UNVERIFIED → UNKNOWN, never a fabricated HEALTHY — recording an append-only CARRIER
+  `HealthEvent` on a genuine transition (carrier's `tenantId`, null for system). The
+  carrier's `health` is now **derived** from the latest event (replacing the hardcoded
+  UNKNOWN literal): the list computes it per page in two bounded queries (groupBy newest
+  id → one fetch; no N+1), `get` in a single lookup. Scope-resolved (own + system) → 404
+  for foreign/unknown; no egress; audited `telecom.carrier.health_checked`; HTTP 200.
+  No schema change (reuses the `HealthEvent` CARRIER entity). NOC Carriers list gains a
+  per-row **"Check"** button (gated `telecom.health.read`). Contract-first; +10 API unit
+  + 2 web tests + e2e (probe posture, derived health, 404).
 - 2026-11-23 — Phase 12O-2av — node **health-event history** (read). `GET
   /v1/telecom/nodes/:id/health-events` (`telecom.health.read`, platform) returns the
   append-only, cursor-paginated history of the node's honest health-status transitions

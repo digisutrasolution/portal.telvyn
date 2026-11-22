@@ -735,6 +735,31 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/carriers/{id}/health-check:
+    post:
+      tags: [telecom]
+      summary: Probe carrier health (tenant + system)
+      description: >-
+        Operator-driven carrier health probe (foundation). There is no carrier
+        liveness connector yet, so health is never fabricated: it is an honest posture
+        from configuration — DISABLED when administratively disabled, UNCONFIGURED with
+        no SIP endpoint, otherwise UNVERIFIED → UNKNOWN. Carriers have no health
+        snapshot, so this is event-only: a CARRIER health event is recorded on a status
+        transition, and the carrier's `health` is derived from the latest such event.
+        No egress occurs. The carrier is scope-resolved (own + system); a
+        foreign/unknown id is 404. Requires `telecom.health.read`.
+      operationId: checkCarrierHealth
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Carrier health report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CarrierHealthReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /v1/telecom/sip-trunks:
     get:
       tags: [telecom]
@@ -1509,6 +1534,17 @@ components:
         detail: { type: string, description: "Safe reason — never secrets or raw host details." }
         correlationId: { type: string }
         checkedAt: { type: string, format: date-time }
+    CarrierHealthReport:
+      type: object
+      required: [carrierId, status, reachability, detail, correlationId, checkedAt]
+      description: Outcome of an operator carrier health probe (honest posture; never fabricated HEALTHY until a connector exists).
+      properties:
+        carrierId: { type: string, format: uuid }
+        status: { type: string, enum: [HEALTHY, DEGRADED, UNHEALTHY, UNKNOWN, DISABLED] }
+        reachability: { type: string, enum: [UNCONFIGURED, DISABLED, UNVERIFIED] }
+        detail: { type: string, description: "Safe reason — never secrets or raw endpoint details." }
+        correlationId: { type: string }
+        checkedAt: { type: string, format: date-time }
     EngineHealthReport:
       type: object
       required: [engineId, provider, status, reachability, detail, correlationId, checkedAt]
@@ -1592,7 +1628,7 @@ components:
     CarrierHealth:
       type: object
       required: [status, detail]
-      description: Honest carrier health; UNKNOWN until a real probe exists (never fabricated).
+      description: Honest carrier health, derived from the latest operator probe (Phase 12O-2aw); UNKNOWN until first probed, never fabricated.
       properties:
         status: { type: string, enum: [HEALTHY, DEGRADED, UNHEALTHY, UNKNOWN, DISABLED] }
         detail: { type: string }

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Status } from "@/components/ui/status";
 import { Button } from "@/components/ui/button";
 import type { Carrier } from "@/lib/contracts";
-import { listCarriers, deleteCarrier, type ListCarriersParams } from "@/lib/telecom/carriers-actions";
+import { listCarriers, deleteCarrier, checkCarrierHealth, type ListCarriersParams } from "@/lib/telecom/carriers-actions";
 import { isApiError } from "@/lib/api/problem";
 import { messageFor } from "@/components/auth/auth-message";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -61,10 +61,15 @@ export function CarriersView() {
   // Mutations (Phase 12O-2ae). Gating is UX-only; the API re-checks every call.
   const { hasPermission } = useSession();
   const canCreate = hasPermission("carrier.create");
+  const canCheckHealth = hasPermission("telecom.health.read");
   const [form, setForm] = React.useState<FormState>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<Carrier | null>(null);
   const [deletePending, setDeletePending] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
+
+  // Operator health probe (Phase 12O-2aw). Gating is UX-only; the API re-checks.
+  const [checkingId, setCheckingId] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
 
   // Filters (mapped to the already-contracted list query params; "" = no filter).
   const [search, setSearch] = React.useState("");
@@ -130,6 +135,19 @@ export function CarriersView() {
     setItems([]);
     setCursor(null);
     setReloadKey((k) => k + 1);
+  }
+
+  async function checkHealth(carrierId: string) {
+    setCheckingId(carrierId);
+    setActionError(null);
+    try {
+      await checkCarrierHealth(carrierId);
+      refresh(); // re-read so the Health column reflects the probe
+    } catch (err) {
+      setActionError(messageFor(err));
+    } finally {
+      setCheckingId(null);
+    }
   }
 
   async function confirmDelete() {
@@ -212,7 +230,14 @@ export function CarriersView() {
                     <td className="px-3 py-2 text-ink-2">{c.codecs.length > 0 ? c.codecs.join(", ") : "—"}</td>
                     <td className="px-3 py-2"><Status tone={HEALTH_TONE[c.health.status]} label={c.health.status} /></td>
                     <td className="px-3 py-2 text-right">
-                      <Button variant="ghost" size="sm" onClick={() => setDetailId(c.id)} aria-label={`View ${c.name}`}>View</Button>
+                      <span className="inline-flex gap-1">
+                        {canCheckHealth && (
+                          <Button variant="ghost" size="sm" onClick={() => checkHealth(c.id)} disabled={checkingId === c.id} aria-label={`Check health of ${c.name}`}>
+                            {checkingId === c.id ? "Checking…" : "Check"}
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" onClick={() => setDetailId(c.id)} aria-label={`View ${c.name}`}>View</Button>
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -222,6 +247,10 @@ export function CarriersView() {
 
           {error && (
             <p role="alert" className="mt-3 text-[12px] text-danger">{error}</p>
+          )}
+
+          {actionError && (
+            <p role="alert" className="mt-3 text-[12px] text-danger">{actionError}</p>
           )}
 
           {cursor && (

@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { HealthStatus, Prisma, TenantType, type TelecomCredentialType } from "@prisma/client";
+import { HealthEntityType, HealthStatus, Prisma, TenantType, type TelecomCredentialType } from "@prisma/client";
 import { PrismaService } from "@/infra/prisma.service";
 import type { TenantContext } from "@/authz/tenant-context";
 import { authorizeDualNatureWrite, ownerTenantIdForCreate, systemOrTenantWhere } from "@/authz/tenant-scope";
@@ -35,7 +35,39 @@ export class CarriersService {
     return { tenantId: ctx.tenantId, isPlatform: ctx.tenantType === TenantType.PLATFORM };
   }
 
-  private view(c: CarrierRow) {
+  /**
+   * Honest carrier health (Phase 12O-2aw) — derived from the latest CARRIER
+   * HealthEvent (the operator probe writes those). UNKNOWN until first probed;
+   * never fabricated. Carriers have no health snapshot table, so this is the
+   * authoritative current status.
+   */
+  private deriveHealth(latest: HealthStatus | null): { status: HealthStatus; detail: string } {
+    if (latest === null) return { status: HealthStatus.UNKNOWN, detail: "not yet probed" };
+    return { status: latest, detail: "last operator health probe" };
+  }
+
+  /**
+   * Latest CARRIER health status per carrier id, in two bounded queries (no N+1):
+   * group the events to the newest id per carrier (uuidv7 id is time-ordered), then
+   * fetch exactly those rows. Carriers never probed are simply absent from the map.
+   */
+  private async latestHealthFor(ids: string[]): Promise<Map<string, HealthStatus>> {
+    if (ids.length === 0) return new Map();
+    const newest = await this.prisma.healthEvent.groupBy({
+      by: ["entityId"],
+      where: { entityType: HealthEntityType.CARRIER, entityId: { in: ids } },
+      _max: { id: true },
+    });
+    const newestIds = newest.map((g) => g._max.id).filter((id): id is string => id !== null);
+    if (newestIds.length === 0) return new Map();
+    const rows = await this.prisma.healthEvent.findMany({
+      where: { id: { in: newestIds } },
+      select: { entityId: true, toStatus: true },
+    });
+    return new Map(rows.map((r) => [r.entityId, r.toStatus]));
+  }
+
+  private view(c: CarrierRow, latestHealth: HealthStatus | null = null) {
     return {
       id: c.id,
       scope: c.tenantId === null ? "SYSTEM" : "TENANT",
@@ -57,8 +89,7 @@ export class CarriersService {
             scope: c.credential.tenantId === null ? "SYSTEM" : "TENANT",
           }
         : null,
-      // Honest: no carrier health check exists yet — UNKNOWN, never fabricated.
-      health: { status: HealthStatus.UNKNOWN, detail: "no health check configured" },
+      health: this.deriveHealth(latestHealth),
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
     };
@@ -77,7 +108,8 @@ export class CarriersService {
 
     const rows = await this.prisma.carrier.findMany({ where, include: CARRIER_INCLUDE, ...cursorArgs(f.limit, f.cursor) });
     const { items, nextCursor } = toPage(rows, f.limit);
-    return { items: items.map((r) => this.view(r)), nextCursor };
+    const health = await this.latestHealthFor(items.map((r) => r.id)); // page only, two bounded queries
+    return { items: items.map((r) => this.view(r, health.get(r.id) ?? null)), nextCursor };
   }
 
   async get(ctx: TenantContext, id: string) {
@@ -88,7 +120,12 @@ export class CarriersService {
       include: CARRIER_INCLUDE,
     });
     if (!c) throw new NotFoundException("Carrier not found");
-    return this.view(c);
+    const latest = await this.prisma.healthEvent.findFirst({
+      where: { entityType: HealthEntityType.CARRIER, entityId: c.id },
+      orderBy: { id: "desc" },
+      select: { toStatus: true },
+    });
+    return this.view(c, latest?.toStatus ?? null);
   }
 
   async create(ctx: TenantContext, input: CreateCarrierInput) {

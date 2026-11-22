@@ -662,6 +662,26 @@ export interface paths {
         patch: operations["updateCarrier"];
         trace?: never;
     };
+    "/v1/telecom/carriers/{id}/health-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Probe carrier health (tenant + system)
+         * @description Operator-driven carrier health probe (foundation). There is no carrier liveness connector yet, so health is never fabricated: it is an honest posture from configuration — DISABLED when administratively disabled, UNCONFIGURED with no SIP endpoint, otherwise UNVERIFIED → UNKNOWN. Carriers have no health snapshot, so this is event-only: a CARRIER health event is recorded on a status transition, and the carrier's `health` is derived from the latest such event. No egress occurs. The carrier is scope-resolved (own + system); a foreign/unknown id is 404. Requires `telecom.health.read`.
+         */
+        post: operations["checkCarrierHealth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/telecom/sip-trunks": {
         parameters: {
             query?: never;
@@ -1159,6 +1179,20 @@ export interface components {
             /** Format: date-time */
             checkedAt: string;
         };
+        /** @description Outcome of an operator carrier health probe (honest posture; never fabricated HEALTHY until a connector exists). */
+        CarrierHealthReport: {
+            /** Format: uuid */
+            carrierId: string;
+            /** @enum {string} */
+            status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN" | "DISABLED";
+            /** @enum {string} */
+            reachability: "UNCONFIGURED" | "DISABLED" | "UNVERIFIED";
+            /** @description Safe reason — never secrets or raw endpoint details. */
+            detail: string;
+            correlationId: string;
+            /** Format: date-time */
+            checkedAt: string;
+        };
         EngineHealthReport: {
             /** Format: uuid */
             engineId: string;
@@ -1257,7 +1291,7 @@ export interface components {
             /** @enum {string} */
             scope: "SYSTEM" | "TENANT";
         };
-        /** @description Honest carrier health; UNKNOWN until a real probe exists (never fabricated). */
+        /** @description Honest carrier health, derived from the latest operator probe (Phase 12O-2aw); UNKNOWN until first probed, never fabricated. */
         CarrierHealth: {
             /** @enum {string} */
             status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN" | "DISABLED";
@@ -2759,6 +2793,31 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    checkCarrierHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Carrier health report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarrierHealthReport"];
+                };
+            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

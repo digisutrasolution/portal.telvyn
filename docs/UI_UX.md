@@ -803,3 +803,14 @@ no detail page of their own, so the history lives in a dialog opened from the li
 rather than a section on a page (unlike the engine health history, which sits on the
 engine detail page). Read-only; the same list surface, just the stored transitions
 read back. Verified: 236/236 web Vitest · `next build` clean.
+
+Carrier health check — EXISTING (Phase 12O-2aw, 2026-11-23): the Carriers list gained a
+per-row "Check" action (shown only with the health-read permission) that runs an
+operator health probe for that carrier and refreshes the row, exactly like the node
+check. Because there is no carrier liveness connector yet, the probe never reports a
+carrier as healthy on a hunch — it reports an honest posture: disabled when the carrier
+is administratively disabled, unconfigured when it has no SIP endpoint, and otherwise
+"unverified" (shown as UNKNOWN). The carrier's Health column, which used to be a fixed
+"UNKNOWN" placeholder, now reflects the result of the latest probe, so it stops being a
+permanent placeholder and starts showing real operator checks. Verified: 238/238 web
+Vitest · `next build` clean.

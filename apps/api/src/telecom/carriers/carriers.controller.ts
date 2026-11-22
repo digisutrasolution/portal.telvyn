@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import type { Request } from "express";
+import { randomUUID } from "node:crypto";
 import { requestContext } from "@/common/request-context";
 import { ZodPipe } from "@/common/zod.pipe";
 import { JwtAuthGuard } from "@/auth/jwt-auth.guard";
@@ -22,6 +23,7 @@ import { CurrentTenant, RequirePermissions } from "@/authz/authz.decorators";
 import type { TenantContext } from "@/authz/tenant-context";
 import { AuditService } from "@/authz/audit.service";
 import { CarriersService } from "./carriers.service";
+import { CarrierHealthService } from "./carrier-health.service";
 import {
   CreateCarrierDto,
   UpdateCarrierDto,
@@ -41,6 +43,7 @@ import {
 export class CarriersController {
   constructor(
     private readonly carriers: CarriersService,
+    private readonly health: CarrierHealthService,
     private readonly audit: AuditService,
   ) {}
 
@@ -54,6 +57,30 @@ export class CarriersController {
   @RequirePermissions("carrier.read")
   get(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string) {
     return this.carriers.get(ctx, id);
+  }
+
+  /**
+   * Operator-driven carrier health probe (Phase 12O-2aw). Honest UNKNOWN — there is
+   * no carrier liveness connector yet, so health is a posture from configuration; a
+   * CARRIER HealthEvent is recorded on transition (event-only — carriers have no
+   * health snapshot). No egress occurs. The carrier is scope-resolved (own + system);
+   * a foreign/unknown id is 404. Audited.
+   */
+  @Post(":id/health-check")
+  @HttpCode(200)
+  @RequirePermissions("telecom.health.read")
+  async healthCheck(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
+    const correlationId = randomUUID();
+    const report = await this.health.probe(ctx, id, correlationId);
+    await this.audit.log({
+      ctx,
+      req: requestContext(req),
+      action: "telecom.carrier.health_checked",
+      resource: "carrier",
+      resourceId: id,
+      metadata: { status: report.status, reachability: report.reachability, correlationId },
+    });
+    return report;
   }
 
   @Post()

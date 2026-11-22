@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { Carrier, CarrierPage, CreateCarrier, UpdateCarrier } from "@/lib/contracts";
+import type { Carrier, CarrierPage, CarrierHealthReport, CreateCarrier, UpdateCarrier } from "@/lib/contracts";
 
 /**
  * Read-only carrier API calls (tenant-scoped; `carrier.read`). The server scopes
@@ -47,4 +47,13 @@ export function updateCarrier(id: string, body: UpdateCarrier): Promise<Carrier>
 /** Soft-delete a carrier (`carrier.delete`); 204 No Content. 404 if foreign/removed. */
 export function deleteCarrier(id: string): Promise<void> {
   return api.delete<void>(`/v1/telecom/carriers/${id}`);
+}
+
+/**
+ * Operator-driven carrier health probe (`telecom.health.read`); honest posture,
+ * records a transition (event-only). Non-destructive. The carrier's health reflects
+ * the latest probe on the next read. 404 if foreign/removed.
+ */
+export function checkCarrierHealth(id: string): Promise<CarrierHealthReport> {
+  return api.post<CarrierHealthReport>(`/v1/telecom/carriers/${id}/health-check`);
 }

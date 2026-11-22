@@ -190,3 +190,39 @@ describe("validation + honest health + pagination", () => {
     expect(next.body.items.every((x: { id: string }) => !firstIds.has(x.id))).toBe(true);
   });
 });
+
+describe("operator health probe (Phase 12O-2aw)", () => {
+  it("probes an honest posture (no fabricated HEALTHY) and the carrier health then reflects the probe", async () => {
+    const a = await provision("ca", TenantType.CUSTOMER, "owner");
+    const created = await request(http).post("/v1/telecom/carriers").set(auth(a.token)).send(carrierBody("probe")).expect(201);
+    const id = created.body.id as string;
+
+    // Before any probe → honest "not yet probed".
+    const before = await request(http).get(`/v1/telecom/carriers/${id}`).set(auth(a.token)).expect(200);
+    expect(before.body.health).toEqual({ status: "UNKNOWN", detail: "not yet probed" });
+
+    // No SIP endpoint configured → UNCONFIGURED → UNKNOWN, never HEALTHY.
+    const probe = await request(http).post(`/v1/telecom/carriers/${id}/health-check`).set(auth(a.token)).expect(200);
+    expect(probe.body).toMatchObject({ carrierId: id, status: "UNKNOWN", reachability: "UNCONFIGURED" });
+    expect(probe.body.correlationId).toBeTruthy();
+
+    // The carrier health is now derived from the recorded event (not the unprobed literal).
+    const after = await request(http).get(`/v1/telecom/carriers/${id}`).set(auth(a.token)).expect(200);
+    expect(after.body.health).toEqual({ status: "UNKNOWN", detail: "last operator health probe" });
+  });
+
+  it("maps an administratively DISABLED carrier to DISABLED", async () => {
+    const a = await provision("ca", TenantType.CUSTOMER, "owner");
+    const created = await request(http).post("/v1/telecom/carriers").set(auth(a.token)).send(carrierBody("dis", { status: "DISABLED" })).expect(201);
+    const id = created.body.id as string;
+    const probe = await request(http).post(`/v1/telecom/carriers/${id}/health-check`).set(auth(a.token)).expect(200);
+    expect(probe.body).toMatchObject({ status: "DISABLED", reachability: "DISABLED" });
+    const after = await request(http).get(`/v1/telecom/carriers/${id}`).set(auth(a.token)).expect(200);
+    expect(after.body.health.status).toBe("DISABLED");
+  });
+
+  it("404s probing a foreign/unknown carrier (scope-resolved, IDOR-safe)", async () => {
+    const a = await provision("ca", TenantType.CUSTOMER, "owner");
+    await request(http).post("/v1/telecom/carriers/00000000-0000-7000-8000-000000000000/health-check").set(auth(a.token)).expect(404);
+  });
+});

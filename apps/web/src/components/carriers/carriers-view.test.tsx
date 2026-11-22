@@ -9,9 +9,10 @@ vi.mock("@/lib/telecom/carriers-actions", () => ({
   createCarrier: vi.fn(),
   updateCarrier: vi.fn(),
   deleteCarrier: vi.fn(),
+  checkCarrierHealth: vi.fn(),
 }));
 
-import { createCarrier, deleteCarrier, getCarrier, listCarriers, updateCarrier } from "@/lib/telecom/carriers-actions";
+import { checkCarrierHealth, createCarrier, deleteCarrier, getCarrier, listCarriers, updateCarrier } from "@/lib/telecom/carriers-actions";
 import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { CarriersView } from "./carriers-view";
 
@@ -22,6 +23,15 @@ const allPermsLoader: SessionLoader = async () => ({
   tenantType: "RESELLER",
   roles: [],
   permissions: ["carrier.read", "carrier.create", "carrier.update", "carrier.delete"],
+});
+
+// Adds the health-read permission so the per-row Check (probe) button renders.
+const healthLoader: SessionLoader = async () => ({
+  userId: "u",
+  tenantId: "t",
+  tenantType: "RESELLER",
+  roles: [],
+  permissions: ["carrier.read", "telecom.health.read"],
 });
 
 function renderView(loader: SessionLoader = allPermsLoader) {
@@ -222,6 +232,25 @@ describe("CarriersView", () => {
 
     expect(await screen.findByText("The secret is required.")).toBeInTheDocument();
     expect(createCarrier).not.toHaveBeenCalled();
+  });
+
+  it("probes a carrier's health from the Check button and reloads the list", async () => {
+    vi.mocked(listCarriers).mockResolvedValue({ items: [carrier({ name: "Acme SIP" })], nextCursor: null });
+    vi.mocked(checkCarrierHealth).mockResolvedValue({ carrierId: "c1", status: "UNKNOWN", reachability: "UNCONFIGURED", detail: "no SIP endpoint configured", correlationId: "corr-1", checkedAt: "2026-11-23T00:00:00.000Z" });
+    renderView(healthLoader);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Check health of Acme SIP" }));
+
+    await waitFor(() => expect(checkCarrierHealth).toHaveBeenCalledTimes(1));
+    // list re-fetched after the probe (mount call + reload) so the Health column reflects it
+    await waitFor(() => expect(vi.mocked(listCarriers).mock.calls.length).toBeGreaterThanOrEqual(2));
+  });
+
+  it("hides the Check button without telecom.health.read (carrier perms alone don't grant it)", async () => {
+    vi.mocked(listCarriers).mockResolvedValue({ items: [carrier({ name: "Acme SIP" })], nextCursor: null });
+    renderView(); // allPermsLoader has carrier.* but NOT telecom.health.read
+    await screen.findByText("Acme SIP");
+    expect(screen.queryByRole("button", { name: /Check health of/ })).toBeNull();
   });
 
   it("edits a carrier without touching its credential (credential omitted from the body)", async () => {
