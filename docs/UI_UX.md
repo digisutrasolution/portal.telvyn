@@ -611,10 +611,20 @@ each as attacker-controlled input), max CPS, max concurrent calls, DTMF mode, an
 checkboxes. Validation is client-side with per-field errors; the server re-validates and
 re-checks permission on every call (UI gating is convenience only). Delete is a soft
 delete behind a confirm dialog that notes configuration-only impact (no live calls are
-affected). Every successful mutation reloads the list. Credential attachment (entering or
-linking a vault secret) is deliberately deferred to a later secret-handling slice — it
-stays optional on the API, and the auth mode can still be set here. Verified: 189/189 web
-Vitest · `next build` clean (/sip-trunks 7.08 kB).
+affected). Every successful mutation reloads the list. Verified: 189/189 web Vitest ·
+`next build` clean (/sip-trunks 7.08 kB).
+
+SIP trunk credential — EXISTING (Phase 12O-2an, 2026-11-22): the SIP trunk form gained
+an optional Credential section, matching the carrier one but simpler — a SIP credential
+is always a SIP password, so there is no type to choose, just a label, an optional
+non-secret hint, and the secret. The secret is a write-only password field that is
+never pre-filled and never readable afterward; it goes to the vault and the trunk shows
+only a non-secret reference. On create the section offers "Attach a credential"; on edit
+it shows the current credential as a reference with a "Replace credential" toggle, and
+leaving it alone keeps the existing credential. Label and secret are required together
+once entered. As with carriers, linking an existing credential and detaching one are not
+offered (no catalogue to pick from, and no way to clear it on the API). Verified:
+213/213 web Vitest · `next build` clean (/sip-trunks 7.88 kB).
 
 Numbers (DID) management — create / edit / delete — EXISTING (Phase 12O-2ag, 2026-11-22):
 the write pattern rolled to the Numbers inventory. All three affordances gate on the

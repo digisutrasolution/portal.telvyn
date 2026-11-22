@@ -474,10 +474,20 @@ detach (API has no null), regionId (no picker).** Contract already had InlineCre
 {type,label,secret} + Secret input type=password / secret-required-once-engaged blocks submit / edit-without-
 touching-cred omits credential+credentialId) → web **210** (34 files); isolated `next build` REAL_EXIT=0 FIRST
 try (/carriers 5.69→6.7 kB); eslint 0. 2 files (form+test) +~200, NO apps/api, NO contracts.
-Next (await owner go): the remaining deferred slices (SIP TRUNK credential — same inline pattern, InlineSipCredentialInput
-already in contract; DID region; routing-rule failover/schedule editing; LCR per-route trunk/effective-date
-editing; friendlier LCR decimal cost); or land the stack (owner provides GitHub remote → push
-`integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps
+**12O-2an (DONE)** — SIP trunk INLINE CREDENTIAL (FRONTEND ONLY — no contract/backend change; fills the
+credential half 2af deferred; same pattern as carrier 2am). `<SipTrunkForm>` got an optional Credential
+fieldset — but the SIP inline cred has **NO `type` field** (forced SIP_PASSWORD server-side) so only label +
+hint? + secret. **SECRET write-only (type=password, autoComplete=off, never pre-filled) → vault; trunk returns
+only non-secret ref {label,type}.** All-or-nothing when engaged (label+secret required); NOT engaged → omits
+`credential` → edit leaves unchanged. Edit shows current cred ref + "Replace credential"; create "Attach a
+credential". NOT offered: attach-existing-by-credentialId (no list endpoint), detach (no null). Contract already
+had InlineSipCredentialInput + credential (2af); createSipTrunk/updateSipTrunk carry it → pure UI. +3 tests
+(create-with-inline-cred asserts {label,secret} + NO type key + Secret type=password / secret-required blocks /
+edit-without-touching omits credential+credentialId) → web **213** (34 files); isolated `next build` REAL_EXIT=0
+FIRST try (/sip-trunks 7.08→7.88 kB); eslint 0. 2 files (form+test), NO apps/api, NO contracts.
+Next (await owner go): the remaining deferred slices (DID region; routing-rule failover/schedule editing; LCR
+per-route trunk/effective-date editing; friendlier LCR decimal cost); or land the stack (owner provides GitHub
+remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps
 (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan

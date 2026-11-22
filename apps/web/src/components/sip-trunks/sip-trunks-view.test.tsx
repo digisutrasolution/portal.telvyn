@@ -13,7 +13,7 @@ vi.mock("@/lib/telecom/sip-trunks-actions", () => ({
 // The create/edit form loads carriers for its (required) carrier picker.
 vi.mock("@/lib/telecom/carriers-actions", () => ({ listCarriers: vi.fn() }));
 
-import { createSipTrunk, deleteSipTrunk, getSipTrunk, listSipTrunks } from "@/lib/telecom/sip-trunks-actions";
+import { createSipTrunk, deleteSipTrunk, getSipTrunk, listSipTrunks, updateSipTrunk } from "@/lib/telecom/sip-trunks-actions";
 import { listCarriers } from "@/lib/telecom/carriers-actions";
 import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { SipTrunksView } from "./sip-trunks-view";
@@ -200,5 +200,80 @@ describe("SipTrunksView", () => {
     fireEvent.click(confirm);
 
     await waitFor(() => expect(deleteSipTrunk).toHaveBeenCalledWith(row.id));
+  });
+
+  it("creates a trunk with an inline credential (write-only secret, no type field)", async () => {
+    const carrierId = crypto.randomUUID();
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(listCarriers).mockResolvedValue({ items: [{ id: carrierId, name: "Acme SIP" }], nextCursor: null } as never);
+    vi.mocked(createSipTrunk).mockResolvedValue(trunk({ name: "Cred Trunk", carrierId }));
+    renderView();
+    await screen.findByText(/No SIP trunks are configured yet/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "New trunk" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Cred Trunk" } });
+    await screen.findByRole("option", { name: "Acme SIP" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Carrier" }), { target: { value: carrierId } });
+    fireEvent.click(screen.getByRole("button", { name: "Attach a credential" }));
+    fireEvent.change(await screen.findByLabelText("Credential label"), { target: { value: "Primary SIP" } });
+    const secret = screen.getByLabelText("Secret");
+    expect(secret).toHaveAttribute("type", "password"); // write-only
+    fireEvent.change(secret, { target: { value: "s3cr3t" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create trunk" }));
+
+    await waitFor(() =>
+      expect(createSipTrunk).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "Cred Trunk", credential: { label: "Primary SIP", secret: "s3cr3t" } }),
+      ),
+    );
+    // No `type` on the SIP inline credential (forced SIP_PASSWORD server-side).
+    expect(vi.mocked(createSipTrunk).mock.calls[0][0].credential).not.toHaveProperty("type");
+  });
+
+  it("requires the secret once a trunk credential is being attached", async () => {
+    const carrierId = crypto.randomUUID();
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(listCarriers).mockResolvedValue({ items: [{ id: carrierId, name: "Acme SIP" }], nextCursor: null } as never);
+    renderView();
+    await screen.findByText(/No SIP trunks are configured yet/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "New trunk" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Cred Trunk" } });
+    await screen.findByRole("option", { name: "Acme SIP" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Carrier" }), { target: { value: carrierId } });
+    fireEvent.click(screen.getByRole("button", { name: "Attach a credential" }));
+    fireEvent.change(await screen.findByLabelText("Credential label"), { target: { value: "Primary SIP" } });
+    // Secret blank → blocked.
+    fireEvent.click(screen.getByRole("button", { name: "Create trunk" }));
+
+    expect(await screen.findByText("The secret is required.")).toBeInTheDocument();
+    expect(createSipTrunk).not.toHaveBeenCalled();
+  });
+
+  it("edits a trunk without touching its credential (credential omitted from the body)", async () => {
+    const carrierId = crypto.randomUUID();
+    const row = trunk({
+      name: "Primary trunk",
+      carrierId,
+      carrier: { id: carrierId, name: "Acme SIP", scope: "TENANT" },
+      credential: { id: crypto.randomUUID(), type: "SIP_PASSWORD", label: "Live secret", hint: null },
+    });
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getSipTrunk).mockResolvedValue(row);
+    vi.mocked(listCarriers).mockResolvedValue({ items: [{ id: carrierId, name: "Acme SIP" }], nextCursor: null } as never);
+    vi.mocked(updateSipTrunk).mockResolvedValue(row);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Primary trunk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    expect(await screen.findByText(/Live secret/)).toBeInTheDocument(); // current credential shown as a reference
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Primary SBC" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(updateSipTrunk).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(updateSipTrunk).mock.calls[0][1];
+    expect(body).toEqual(expect.objectContaining({ name: "Primary SBC" }));
+    expect(body).not.toHaveProperty("credential"); // unchanged → not sent
+    expect(body).not.toHaveProperty("credentialId");
   });
 });

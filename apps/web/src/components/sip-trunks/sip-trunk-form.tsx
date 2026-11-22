@@ -46,14 +46,20 @@ function parseList(raw: string): string[] {
 }
 
 /**
- * Create / edit a SIP trunk (Phase 12O-2af). Covers the declarative control-plane
- * fields (carrier, endpoint, transport, auth mode, codecs, capacity). Ownership is
- * server-derived and never sent. Credential attachment (secret handling) is deferred
- * to a later slice — both `credentialId` and inline `credential` are optional on the
- * API, so authoring a trunk here never touches a secret; the Auth mode can still be
- * set and a credential attached separately. Endpoint values are validated server-side
- * as attacker-controlled input (host / sipUri / allowed IPs). The server re-checks
- * `sip_trunk.create` / `sip_trunk.update` and re-validates every field on each call.
+ * Create / edit a SIP trunk (Phase 12O-2af; inline credential added in 12O-2an).
+ * Covers the declarative control-plane fields (carrier, endpoint, transport, auth
+ * mode, codecs, capacity) and an optional INLINE credential — a label/hint plus a
+ * write-only secret that goes straight to the vault (the trunk only ever carries a
+ * non-secret reference back; the credential type is forced SIP_PASSWORD server-side,
+ * so there is no type field). The secret is never pre-filled and the existing secret
+ * is never readable; on edit the current credential is shown as a reference and a
+ * "Replace credential" toggle reveals the inline fields (omitted → the credential is
+ * left unchanged). Attaching an *existing* credential by id is NOT offered (no
+ * credentials-list endpoint), and the API has no way to DETACH one, so neither does
+ * this form. Ownership is server-derived and never sent. Endpoint values are validated
+ * server-side as attacker-controlled input (host / sipUri / allowed IPs). The server
+ * re-checks `sip_trunk.create` / `sip_trunk.update`, re-validates every field, and
+ * vaults the secret (never returned) on each call.
  */
 export function SipTrunkForm(props: Mode & { onClose: () => void; onSaved: () => void }) {
   const { onClose, onSaved } = props;
@@ -77,6 +83,14 @@ export function SipTrunkForm(props: Mode & { onClose: () => void; onSaved: () =>
     existing?.maxConcurrentCalls != null ? String(existing.maxConcurrentCalls) : "",
   );
   const [status, setStatus] = React.useState<"" | Status>(existing?.status ?? "");
+
+  // Inline credential (Phase 12O-2an). Off by default; the secret is write-only and
+  // never pre-filled. On edit, engaging this REPLACES the trunk's credential. The SIP
+  // credential type is forced to SIP_PASSWORD server-side, so there is no type field.
+  const [showCred, setShowCred] = React.useState(false);
+  const [credLabel, setCredLabel] = React.useState("");
+  const [credHint, setCredHint] = React.useState("");
+  const [credSecret, setCredSecret] = React.useState("");
 
   // Carrier picker — carrierId is a required FK, re-validated for scope access server-side.
   // Seed with the trunk's current carrier (edit) so it always shows even if outside the first page.
@@ -167,6 +181,19 @@ export function SipTrunkForm(props: Mode & { onClose: () => void; onSaved: () =>
     if (parsed.maxCps !== undefined) body.maxCps = parsed.maxCps;
     if (parsed.maxConcurrentCalls !== undefined) body.maxConcurrentCalls = parsed.maxConcurrentCalls;
     if (status) body.status = status;
+
+    // Inline credential — all-or-nothing when engaged (type is forced SIP_PASSWORD
+    // server-side, so only label + secret here). Omitted when not, so an edit that
+    // doesn't touch it leaves the trunk's credential unchanged.
+    if (showCred) {
+      const label = credLabel.trim();
+      if (label === "") return { error: { field: "credLabel", message: "A credential label is required." } };
+      if (credSecret === "") return { error: { field: "credSecret", message: "The secret is required." } };
+      const credential: NonNullable<CreateSipTrunk["credential"]> = { label, secret: credSecret };
+      const hint = credHint.trim();
+      if (hint) credential.hint = hint;
+      body.credential = credential;
+    }
     return body;
   }
 
@@ -345,6 +372,60 @@ export function SipTrunkForm(props: Mode & { onClose: () => void; onSaved: () =>
                 </label>
               ))}
             </div>
+          </fieldset>
+
+          <fieldset className="rounded-md border border-line px-3 pb-3 pt-2">
+            <legend className="px-1 text-[12px] font-medium text-ink-2">Credential</legend>
+            {existing?.credential ? (
+              <p className="text-[12px] text-muted">
+                Current: <span className="text-ink-2">{existing.credential.label}</span> ({existing.credential.type})
+              </p>
+            ) : (
+              <p className="text-[12px] text-muted">No credential attached.</p>
+            )}
+
+            {!showCred ? (
+              <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={() => setShowCred(true)}>
+                {existing?.credential ? "Replace credential" : "Attach a credential"}
+              </Button>
+            ) : (
+              <div className="mt-2 space-y-3">
+                <p className="text-[12px] text-muted">
+                  A SIP password credential — the secret is stored in the vault and never shown again.{existing?.credential ? " Saving replaces the current credential." : ""}
+                </p>
+                <Field id="trunk-cred-label" label="Credential label" error={fe("credLabel")}>
+                  <Input id="trunk-cred-label" value={credLabel} maxLength={120} onChange={(e) => setCredLabel(e.target.value)} aria-invalid={fe("credLabel") ? true : undefined} placeholder="Primary SIP password" />
+                </Field>
+                <Field id="trunk-cred-hint" label="Hint" hint="Optional, non-secret reminder.">
+                  <Input id="trunk-cred-hint" value={credHint} maxLength={120} onChange={(e) => setCredHint(e.target.value)} />
+                </Field>
+                <Field id="trunk-cred-secret" label="Secret" error={fe("credSecret")}>
+                  <Input
+                    id="trunk-cred-secret"
+                    type="password"
+                    autoComplete="off"
+                    value={credSecret}
+                    maxLength={4096}
+                    onChange={(e) => setCredSecret(e.target.value)}
+                    aria-invalid={fe("credSecret") ? true : undefined}
+                    placeholder="Write-only — vaulted immediately"
+                  />
+                </Field>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowCred(false);
+                    setCredLabel("");
+                    setCredHint("");
+                    setCredSecret("");
+                  }}
+                >
+                  Cancel credential
+                </Button>
+              </div>
+            )}
           </fieldset>
 
           {error && (

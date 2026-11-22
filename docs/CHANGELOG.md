@@ -1003,3 +1003,22 @@ Format: Keep a Changelog; SemVer once releases begin.
   kB); eslint ✓. **No backend change.** `API.md` updated. Next: the remaining deferred slices (SIP trunk
   credential — same pattern; DID region; routing-rule failover/schedule; LCR per-route trunk/effective-date;
   friendlier LCR decimal cost), or land the stack.
+- 2026-11-22 — **Phase 12O-2an — SIP trunk inline credential (frontend only, no contract/backend change).**
+  Fills the credential half of the SIP trunk write slice that 12O-2af deferred — the same pattern as the carrier
+  credential (12O-2am), with one difference: the SIP inline credential has **no `type` field** (the type is
+  forced `SIP_PASSWORD` server-side), so the Credential fieldset asks only for a label, optional hint, and the
+  secret. **Secret handling:** write-only password field (`type="password"`, `autoComplete="off"`, never
+  pre-filled) → straight to the vault; the trunk carries back only a non-secret reference (the detail drawer
+  already shows `{label, type}`). All-or-nothing when engaged (label + secret required, per-field errors; hint
+  optional); when not engaged the body omits `credential`, so an edit that doesn't touch it leaves the trunk's
+  credential unchanged. On edit the current credential shows as a reference with a "Replace credential" toggle;
+  on create it's "Attach a credential". **Deliberately NOT offered** (same as carriers): attaching an existing
+  `credentialId` (no credentials-list endpoint), detaching (no null on the API). No contract change —
+  `InlineSipCredentialInput` + `credential` were authored in 12O-2af; no new action (`createSipTrunk`/
+  `updateSipTrunk` already carry it); pure UI. +3 web unit tests (210 → 213; full web suite 213 ✓, 34 files —
+  create-with-inline-credential asserting the `{label,secret}` body + that it has NO `type` key + the Secret
+  input is `type=password`, secret-required-once-engaged blocks submit, edit-without-touching-credential omits
+  `credential`/`credentialId`). The credential label field is "Credential label" (distinct from other labels).
+  `next build` ✓ (/sip-trunks 7.08 → 7.88 kB); eslint ✓. **No backend change.** `API.md` updated. Remaining
+  deferred slices: DID region, routing-rule failover/schedule editing, LCR per-route trunk/effective-date
+  editing, friendlier LCR decimal cost — or land the stack.

@@ -190,9 +190,19 @@ management screen (create / edit / soft-delete) consumes the generated types. Th
 POST/PATCH/DELETE handlers themselves are unchanged since Phase 12F — no backend
 change. `carrierId` is a required create field and is re-validated server-side for
 scope accessibility; the UI drives it with a carrier picker (first page of
-`listCarriers`). The UI defers credential attachment (`credentialId` / inline
-`credential` secret) to a later secret-handling slice — both remain fully available
-on the API, and `authMode` can still be set in the form.
+`listCarriers`). `authMode` is set in the form.
+
+**Phase 12O-2an** added the inline credential to the SIP trunk form (frontend only —
+no contract change; it consumes the `InlineSipCredentialInput` already authored here).
+It mirrors the carrier credential (2am) but the SIP inline credential has **no `type`
+field** — the type is forced `SIP_PASSWORD` server-side — so the form asks only for a
+label, optional hint, and the secret. The secret is write-only (password input,
+`autoComplete="off"`, never pre-filled) and goes straight to the vault; the trunk
+carries back only a non-secret reference. On edit the current credential shows as a
+reference with a "Replace credential" toggle; leaving it untouched omits `credential`
+so the trunk's credential is unchanged. As with carriers, attaching an *existing*
+`credentialId` is not offered (no credentials-list endpoint) and detaching is not
+possible (no null for it).
 
 > **OpenAPI debt — partial closure (Phase 12O-2f/2g/2h, 2026-11-18):** the
 > contract now also covers `GET /v1/me/context`, `GET /v1/telecom/engines`,
