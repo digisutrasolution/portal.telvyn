@@ -699,3 +699,17 @@ a "+ advanced preserved" chip marks any route that carries them, so nothing is l
 editing a route's basics. Carrier accessibility and trunk ownership are validated on the
 server, which stays authoritative. Saving with no routes clears the set. Verified:
 205/205 web Vitest · `next build` clean (/lcr 7.45 kB).
+
+Member management — role assignment — EXISTING (Phase 12O-2al, 2026-11-22): the
+member write surface on Admin → Members. The only member change the backend supports
+is assigning roles, so that is the only affordance — there is no invite, suspend or
+remove here. With `member.manage`, each member row gains a "Manage roles" action
+(an Actions column that appears only with the permission); it opens a dialog listing
+the tenant's assignable roles (the shared system roles, marked with a System badge,
+plus the tenant's custom roles, each with its description), pre-checked to the
+member's current roles. Saving sends the whole selected set — the API replaces the
+member's roles with it — and the list refreshes from the authoritative response.
+Selecting none is allowed and clears the member's roles; the dialog notes this before
+you save. Role names shown everywhere come from the role catalog; the server
+re-checks permission and validates every chosen role against the tenant, staying
+authoritative. Verified: 207/207 web Vitest · `next build` clean (/admin 2.7 kB).

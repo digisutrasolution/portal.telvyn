@@ -145,6 +145,59 @@ paths:
                 items: { $ref: "#/components/schemas/Member" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/members/{id}/roles:
+    put:
+      tags: [authz]
+      summary: Set a member's roles
+      description: >-
+        Replace the set of roles assigned to a membership in the current tenant.
+        The membership is resolved from the server-derived tenant context (a
+        foreign tenant's membership is 404 — IDOR-safe). Every `roleIds` entry must
+        be a role valid for this tenant — a system role or one of this tenant's own
+        custom roles — or the request is a 409; duplicates are rejected the same
+        way. The replacement is atomic. Returns the full, updated member list.
+        Requires `member.manage`.
+      operationId: setMemberRoles
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "The membership id (Member.membershipId)." }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetMemberRoles" }
+      responses:
+        "200":
+          description: The updated member list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Member" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /v1/roles:
+    get:
+      tags: [authz]
+      summary: List roles assignable in the current tenant
+      description: >-
+        The roles available in the session's tenant — the shared system roles plus
+        this tenant's own custom roles — each with its permission keys. Ordered
+        system-first, then by name. Used to populate the member role picker.
+        Requires `role.read`.
+      operationId: listRoles
+      responses:
+        "200":
+          description: Assignable roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Role" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
   /v1/auth/sessions:
     get:
       tags: [auth]
@@ -1172,6 +1225,32 @@ components:
               id: { type: string, format: uuid }
               key: { type: string }
               name: { type: string }
+    Role:
+      type: object
+      required: [id, key, name, description, isSystem, permissions]
+      description: A role assignable in the current tenant — a shared system role or a tenant custom role.
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        isSystem: { type: boolean, description: "System roles are shared, read-only templates (cannot be edited/deleted)." }
+        permissions:
+          type: array
+          description: Permission keys this role grants.
+          items: { type: string }
+    SetMemberRoles:
+      type: object
+      required: [roleIds]
+      description: >-
+        The complete set of roles to assign to a membership (replace semantics).
+        Each id must be a role valid for the tenant; send distinct ids. An empty
+        array removes all of the member's roles.
+      properties:
+        roleIds:
+          type: array
+          maxItems: 20
+          items: { type: string, format: uuid }
     Session:
       type: object
       required: [id, createdAt, lastSeenAt, current]

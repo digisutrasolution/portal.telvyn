@@ -957,3 +957,28 @@ Format: Keep a Changelog; SemVer once releases begin.
   eslint ✓. **No backend change.** `API.md` updated. The LCR write surface (policy + routes) is now complete.
   Next: member management write, the deferred carrier/trunk credential + DID region + routing-rule
   failover/schedule slices, or land the stack.
+- 2026-11-22 — **Phase 12O-2al — member management write: role assignment (contract-first).** Adds the member
+  write surface to the Admin → Members screen. **Honest scope dictated by the backend:** the only member
+  mutation `authz.controller.ts` exposes is `PUT /v1/members/:id/roles` (`member.manage`) — there is NO invite,
+  suspend/activate or remove endpoint, so the UI offers only role assignment and none of those. The endpoint
+  already existed (Phase 12B authz surface; scoped membership → 404 for foreign tenant, validates every
+  `roleId` is a role valid for the tenant — system or custom — else 409, replaces the role set atomically,
+  returns the full updated member list); this phase **authored it into the contract** along with the roles-list
+  read it depends on (new `PUT /v1/members/{id}/roles` with `SetMemberRoles` `{roleIds: uuid[] max 20}` → returns
+  `Member[]`, and `GET /v1/roles` → `Role[]` with permission keys), regenerated `schema.ts` (additive) and added
+  `TenantRole` + `SetMemberRoles` aliases (the new contract `Role` is aliased `TenantRole` because the existing
+  `Role` alias is the session's own role shape from `MeContext`). New `listRoles` / `setMemberRoles` actions
+  (`setMemberRoles` uses the API client's `put`). New `<MemberRolesDialog>`: loads the tenant's assignable roles
+  (system + custom, with a System badge + description), pre-checks the member's current roles, and on Save sends
+  the COMPLETE selected set (replace semantics); a gentle note warns when nothing is selected (saving removes all
+  roles — allowed by the API), and the server stays authoritative. `<MembersView>` gained a `member.manage`-gated
+  "Manage roles" action per row (an Actions column that only appears with the permission) and reloads the list
+  from the authoritative refetch on save. All gating is UX-only; the API re-checks `member.manage` on every call.
+  +2 web unit tests (205 → 207; full web suite 207 ✓, 34 files — assign-roles-replace-set-and-reload incl. the
+  exact roleIds sent, Manage-roles hidden without `member.manage`; existing members tests now wrap
+  `SessionProvider`). `next build` ✓ (/admin 2.7 kB); eslint ✓. **No backend change** (endpoints + audit +
+  tenant-scoping + role validation pre-existed, e2e-covered). `API.md` updated. **The NOC/admin write surface is
+  now complete** across carriers, SIP trunks, numbers, routing (profile+policy+rules), LCR (policy+routes) and
+  member roles. Next: the deferred enhancement slices (carrier/trunk credential, DID region, routing-rule
+  failover/schedule editing, LCR per-route trunk/effective-date editing, friendlier LCR decimal cost), or land
+  the stack.

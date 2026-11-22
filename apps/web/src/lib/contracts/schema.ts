@@ -146,6 +146,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/members/{id}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a member's roles
+         * @description Replace the set of roles assigned to a membership in the current tenant. The membership is resolved from the server-derived tenant context (a foreign tenant's membership is 404 — IDOR-safe). Every `roleIds` entry must be a role valid for this tenant — a system role or one of this tenant's own custom roles — or the request is a 409; duplicates are rejected the same way. The replacement is atomic. Returns the full, updated member list. Requires `member.manage`.
+         */
+        put: operations["setMemberRoles"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List roles assignable in the current tenant
+         * @description The roles available in the session's tenant — the shared system roles plus this tenant's own custom roles — each with its permission keys. Ordered system-first, then by name. Used to populate the member role picker. Requires `role.read`.
+         */
+        get: operations["listRoles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/sessions": {
         parameters: {
             query?: never;
@@ -837,6 +877,22 @@ export interface components {
                 key: string;
                 name: string;
             }[];
+        };
+        /** @description A role assignable in the current tenant — a shared system role or a tenant custom role. */
+        Role: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            name: string;
+            description: string | null;
+            /** @description System roles are shared, read-only templates (cannot be edited/deleted). */
+            isSystem: boolean;
+            /** @description Permission keys this role grants. */
+            permissions: string[];
+        };
+        /** @description The complete set of roles to assign to a membership (replace semantics). Each id must be a role valid for the tenant; send distinct ids. An empty array removes all of the member's roles. */
+        SetMemberRoles: {
+            roleIds: string[];
         };
         Session: {
             /** Format: uuid */
@@ -1796,6 +1852,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Member"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setMemberRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The membership id (Member.membershipId). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMemberRoles"];
+            };
+        };
+        responses: {
+            /** @description The updated member list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assignable roles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"][];
                 };
             };
             401: components["responses"]["Problem"];

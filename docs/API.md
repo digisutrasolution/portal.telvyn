@@ -367,9 +367,23 @@ small — no pagination), ordered by join time (createdAt ASC).
 | Method & path | Auth |
 |---|---|
 | `GET /v1/members` | `member.read` |
+| `PUT /v1/members/:id/roles` (set a member's roles) | `member.manage` |
+| `GET /v1/roles` (assignable roles) | `role.read` |
 
 Response: `Member[]`, each `{ membershipId, status (ACTIVE\|SUSPENDED), user{id, email, fullName, status (ACTIVE\|INVITED\|DISABLED)}, roles[{id,key,name}] }`.
-No secrets appear. `401` unauthenticated; `403` without `member.read`. Read-only;
-member management (invite / role changes) is a later phase. This endpoint already
-existed in `authz.controller.ts`; 12O-2ad authored it into the contract (`Member`
-in `telvyn.v1.yaml`) and built the screen — no backend change.
+No secrets appear. `401` unauthenticated; `403` without `member.read`. This endpoint
+already existed in `authz.controller.ts`; 12O-2ad authored it into the contract
+(`Member` in `telvyn.v1.yaml`) and built the read screen — no backend change.
+
+As of **Phase 12O-2al** the member **write** surface is authored into the contract
+and built in the UI (frontend only — no backend change; the endpoints existed in
+`authz.controller.ts`). `PUT /v1/members/{id}/roles` (`member.manage`) replaces a
+membership's role set from `SetMemberRoles` `{ roleIds: uuid[] }` (replace semantics;
+empty removes all; the server validates every id is a role valid for the tenant —
+system or the tenant's custom — else 409; a foreign membership is 404) and returns
+the full updated `Member[]`. `GET /v1/roles` (`role.read`) returns the assignable
+`Role[]` (`{id,key,name,description,isSystem,permissions[]}`, system-first) to
+populate the role picker. **Role assignment is the ONLY member mutation the API
+exposes — there is no invite, suspend/activate, or remove endpoint**, so the UI
+offers none. The aliased client type is `TenantRole` (the existing `Role` alias is
+the session's own role shape from `MeContext`).

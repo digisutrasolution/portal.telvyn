@@ -32,6 +32,12 @@ export type Me = Schemas["Me"];
 /** A member of the current tenant: identity + membership status + assigned roles (GET /v1/members). */
 export type Member = Schemas["Member"];
 
+/** A role assignable in the current tenant — system or custom — with its permission keys (GET /v1/roles). */
+export type TenantRole = Schemas["Role"];
+
+/** Replace-the-roles body for a membership (PUT /v1/members/{id}/roles). */
+export type SetMemberRoles = Schemas["SetMemberRoles"];
+
 /** Begin-TOTP-enrollment result (POST /v1/auth/mfa/enroll): an otpauth:// URI. */
 export type MfaEnrollResult = operations["mfaEnroll"]["responses"]["200"]["content"]["application/json"];
 

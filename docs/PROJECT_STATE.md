@@ -447,10 +447,24 @@ select USD/EUR/GBP/INR/AUD/CAD/JPY), priority, weight, country (ISO-2), enabled;
 carrier-accessible + trunk-owned (authoritative). Empty set removes all routes. Contract already had
 LcrRouteInput (from 2aj) → pure UI. **web 202 → 205 (full suite ✓, 34 files): +3. `next build` ✓ (/lcr 7.45 kB);
 eslint ✓. No backend/contract change.** `API.md` updated. **LCR write surface COMPLETE (policy + routes).**
-Next (await owner go): roll the write pattern to member mgmt; the deferred carrier/trunk credential + DID region
-+ routing-rule failover/schedule slices; or land the stack (owner provides GitHub remote → push
-`integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps
-(HealthEvent/config-version history) stay separately approval-gated.
+**12O-2al (DONE)** — member management write = ROLE ASSIGNMENT (contract-first; frontend only). **Honest scope:
+the ONLY member mutation the backend exposes is `PUT /v1/members/:id/roles` (`member.manage`) — NO invite /
+suspend / remove endpoint, so the UI offers only role assignment.** Endpoint pre-existed (12B authz surface,
+`authz.controller.ts`; scoped membership → 404 foreign, validates roleIds valid-for-tenant → 409, atomic
+replace, returns full member list). Authored into contract: `PUT /v1/members/{id}/roles` w/ `SetMemberRoles`
+`{roleIds uuid[] max20}` → `Member[]`, + `GET /v1/roles` (`role.read`) → `Role[]` {id,key,name,description,
+isSystem,permissions[]}. Regenerated schema.ts (additive); aliases `TenantRole` (new contract `Role`; the
+existing `Role` alias is MeContext's own role shape) + `SetMemberRoles`. New `listRoles`/`setMemberRoles` actions
+(put). New `<MemberRolesDialog>` (loads assignable roles, pre-checks current, Save sends COMPLETE set = replace
+semantics; empty-set warning; server authoritative). `<MembersView>` got a `member.manage`-gated "Manage roles"
+action per row + reloads from authoritative refetch on save. **web 205 → 207 (full suite ✓, 34 files): +2.
+`next build` ✓ (/admin 2.7 kB); eslint ✓. No backend change** (endpoints + audit + tenant-scoping + role
+validation pre-existed, e2e-covered). `API.md` updated. **NOC/ADMIN WRITE SURFACE COMPLETE** (carriers · SIP
+trunks · numbers · routing profile+policy+rules · LCR policy+routes · member roles).
+Next (await owner go): the deferred enhancement slices (carrier/trunk credential, DID region, routing-rule
+failover/schedule editing, LCR per-route trunk/effective-date editing, friendlier LCR decimal cost); or land the
+stack (owner provides GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip →
+CI → PR). Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

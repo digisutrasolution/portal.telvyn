@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import type { Member } from "@/lib/contracts";
 import { listMembers } from "@/lib/admin/members-actions";
 import { useResource } from "@/lib/use-resource";
+import { useSession } from "@/lib/session/session-context";
+import { MemberRolesDialog } from "./member-roles-dialog";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const MEMBERSHIP_TONE: Record<Member["status"], Tone> = { ACTIVE: "ok", SUSPENDED: "warn" };
@@ -19,12 +21,19 @@ const ACCOUNT_TONE: Record<Member["user"]["status"], Tone> = { ACTIVE: "ok", INV
  * session's tenant (a foreign tenant's members are never returned) and the
  * route/nav gate on `member.read` (ADR-0017); the API re-checks every request.
  * No secrets appear. A tenant's team is small, so the full list loads at once
- * (no pagination). Member management (invite / role changes) is a later phase.
+ * (no pagination). With `member.manage`, each member row offers "Manage roles"
+ * (Phase 12O-2al) — role assignment is the only member mutation the API exposes;
+ * there is no invite / suspend / remove endpoint.
  */
 export function MembersView() {
   const load = React.useCallback((signal: AbortSignal) => listMembers(signal), []);
   const { data, loading, error, reload } = useResource<Member[]>(load);
   const members = data ?? [];
+
+  // Role assignment (Phase 12O-2al). Gating is UX-only; the API re-checks `member.manage`.
+  const { hasPermission } = useSession();
+  const canManage = hasPermission("member.manage");
+  const [rolesTarget, setRolesTarget] = React.useState<Member | null>(null);
 
   return (
     <section aria-labelledby="members-heading">
@@ -55,6 +64,7 @@ export function MembersView() {
                 <th scope="col" className="px-3 py-2 font-semibold">Membership</th>
                 <th scope="col" className="px-3 py-2 font-semibold">Account</th>
                 <th scope="col" className="px-3 py-2 font-semibold">Roles</th>
+                {canManage && <th scope="col" className="px-3 py-2 font-semibold"><span className="sr-only">Actions</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -75,11 +85,27 @@ export function MembersView() {
                       <span className="text-muted">—</span>
                     )}
                   </td>
+                  {canManage && (
+                    <td className="px-3 py-2 text-right">
+                      <Button variant="ghost" size="sm" onClick={() => setRolesTarget(m)} aria-label={`Manage roles for ${m.user.fullName ?? m.user.email}`}>
+                        Manage roles
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {rolesTarget && (
+        <MemberRolesDialog
+          key={rolesTarget.membershipId}
+          member={rolesTarget}
+          onClose={() => setRolesTarget(null)}
+          onSaved={() => reload()}
+        />
       )}
     </section>
   );
