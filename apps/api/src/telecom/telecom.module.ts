@@ -26,6 +26,7 @@ import { NodeHealthService } from "./nodes/node-health.service";
 import { NodesController } from "./nodes/nodes.controller";
 import { NodeHeartbeatController } from "./nodes/heartbeat/node-heartbeat.controller";
 import { NodeHeartbeatService } from "./nodes/heartbeat/node-heartbeat.service";
+import { NodeHealthEvaluatorService } from "./nodes/heartbeat/node-health-evaluator.service";
 import { HeartbeatAuthenticator, NullHeartbeatAuthenticator } from "./nodes/heartbeat/heartbeat-authenticator";
 import { RateLimitService } from "@/auth/rate-limit.service";
 import { TelecomCredentialService } from "./secrets/telecom-credential.service";
@@ -80,6 +81,7 @@ import { LcrController } from "./lcr/lcr.controller";
     NodesService,
     NodeHealthService,
     NodeHeartbeatService,
+    NodeHealthEvaluatorService,
     // Node heartbeat auth seam (ADR-0020): the ONLY place a verified mTLS client
     // identity enters. Default = fail-closed Null impl (no terminator wired yet);
     // a real terminator is a drop-in, exactly like the EngineConnector pattern.

@@ -530,6 +530,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/nodes/health/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the node dead-man's-switch evaluator (platform)
+         * @description Dead-man's-switch tick (ADR-0020): compares every node's `lastHeartbeatAt` to the staleness TTL and records honest status transitions — administratively DISABLED → DISABLED; a heartbeat within the TTL → HEALTHY; otherwise (stale or never seen) → UNKNOWN (it caps at UNKNOWN; no DEGRADED/UNHEALTHY from silence). A transition only on a genuine change, appended to the node's HealthEvent history. Multi-instance safe (Redis-locked, fail-closed → `skipped` when the lock is held or Redis is unavailable). Triggered by a platform operator or a dedicated external cron on the TTL cadence. Requires PLATFORM + `telecom.manage`.
+         */
+        post: operations["evaluateNodeHealth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/telecom/engines/{id}/health-check": {
         parameters: {
             query?: never;
@@ -1233,6 +1253,21 @@ export interface components {
             nodeId: string;
             /** Format: date-time */
             acceptedAt: string;
+            correlationId: string;
+        };
+        /** @description Summary of one dead-man's-switch evaluator tick (ADR-0020). */
+        NodeHealthEvaluation: {
+            /** @description True when the tick did not run (lock held, or Redis unavailable). */
+            skipped: boolean;
+            /**
+             * @description Present only when skipped.
+             * @enum {string}
+             */
+            reason?: "locked" | "lock-unavailable";
+            /** @description Nodes examined this tick. */
+            evaluated: number;
+            /** @description Nodes whose health status changed. */
+            transitioned: number;
             correlationId: string;
         };
         /** @description Outcome of an operator carrier health probe (honest posture; never fabricated HEALTHY until a connector exists). */
@@ -2607,6 +2642,28 @@ export interface operations {
             404: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
+        };
+    };
+    evaluateNodeHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Evaluation summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeHealthEvaluation"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     checkEngineHealth: {

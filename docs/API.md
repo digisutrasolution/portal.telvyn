@@ -67,6 +67,7 @@ the existing `AuditService`. None of these resources hold secrets.
 | `POST /v1/telecom/nodes/:id/health-check` (operator probe; records a transition) | `telecom.health.read` |
 | `GET /v1/telecom/nodes/:id/health-events` (health history; cursor pagination) | `telecom.health.read` |
 | `POST /v1/telecom/nodes/:id/heartbeat` (node-agent ingest) | **node-agent mTLS** (no JWT/permission) |
+| `POST /v1/telecom/nodes/health/evaluate` (dead-man's-switch tick) | `telecom.manage` |
 | `POST/PUT/DELETE /v1/telecom/nodes[/:id]` | `telecom.manage` |
 
 Engine GET is enriched with honest adapter metadata (ADR-0007): `implemented`
@@ -122,6 +123,26 @@ replacement of the one seam, exactly like swapping `NullEngineConnector`. Heartb
 **not** written to the human audit log (no honest actor; a 30s beat would firehose the
 OLTP audit table, ADR-0010) — accept/reject go to the structured logger with the nodeId
 + correlation id. Not consumed by the web client.
+
+**Node health evaluator — dead-man's-switch (Phase 12O-2bb, ADR-0020 slice 3).** `POST
+/nodes/health/evaluate` (PLATFORM + `telecom.manage`) runs one evaluator tick — the job
+that makes node health **real**. It compares every node's `lastHeartbeatAt` to the
+staleness TTL (default 90s, env `NODE_HEARTBEAT_TTL_MS`) and records honest status
+transitions: administratively `DISABLED` → `DISABLED`; a heartbeat within the TTL →
+`HEALTHY`; otherwise (stale or never seen) → `UNKNOWN`. It **caps at `UNKNOWN`** — silence
+never yields `DEGRADED`/`UNHEALTHY` (ADR-0020). A transition is appended to the node's
+`HealthEvent` history only on a genuine change (the same rows the operator probe and NOC
+"History" read). Multi-instance safe: a Redis `SET NX` lock means only one tick runs at a
+time, **fail-closed** — if the lock is held or Redis is down the tick returns
+`{skipped: true, reason}` and the next tick retries (never a racing double-write). Returns
+`NodeHealthEvaluation` `{skipped, reason?, evaluated, transitioned, correlationId}` (HTTP
+200). Triggered by a platform operator or a **dedicated external cron** on the TTL cadence
+(the app adds no scheduler dependency). Idle ticks are logged, not audited; a tick that
+transitioned ≥1 node writes one bounded audit row (`telecom.node.health_evaluated`) — the
+per-node detail lives in `HealthEvent`. **End-to-end today node health still reads
+`UNKNOWN`** until a heartbeat is actually accepted (which needs the `NODE_AGENT`
+provisioning path + a real inbound mTLS terminator); a `DISABLED` node, however, already
+transitions correctly.
 
 **Engine foundation (Phase 12K, ADR-0007 addendum).** `GET :id/status` returns a
 normalized `EngineStatus` — `provider`, `implemented`, an explicit

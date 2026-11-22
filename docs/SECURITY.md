@@ -687,3 +687,22 @@ security posture:
   machine beat has no honest actor and would firehose the OLTP audit table
   (ADR-0010). Accept/reject go to the structured logger (nodeId + correlation id),
   the same observability path as engine/node health.
+
+## Node health evaluator — dead-man's-switch (Phase 12O-2bb, ADR-0020 slice 3)
+
+The periodic evaluator that turns heartbeats into honest health:
+
+- **Platform-gated action.** `POST /v1/telecom/nodes/health/evaluate` is PLATFORM +
+  `telecom.manage`; a non-platform or under-permissioned caller gets 403. It is
+  triggered by a platform operator or a dedicated external cron with platform
+  credentials — not a public or node-facing endpoint.
+- **Multi-instance safe, fail-closed.** A Redis `SET NX` lock ensures only one tick
+  evaluates at a time across a horizontally-scaled fleet; if the lock is held or
+  Redis is unavailable the tick is **skipped** (never a racing double-write of a
+  transition), and the next tick retries. Same fail-closed posture as the engine
+  sync lock.
+- **Honest, bounded, caps at UNKNOWN.** Only genuine status changes are written, as
+  append-only `HealthEvent` rows (the durable record); silence yields `UNKNOWN`,
+  never a fabricated `DEGRADED`/`UNHEALTHY`. Idle ticks are logged, not audited; a
+  tick that transitioned ≥1 node writes one bounded audit row — a ~90s cadence is
+  never allowed to firehose the OLTP audit table (ADR-0010).

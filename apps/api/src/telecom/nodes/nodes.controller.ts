@@ -13,6 +13,7 @@ import type { TenantContext } from "@/authz/tenant-context";
 import { AuditService } from "@/authz/audit.service";
 import { NodesService } from "./nodes.service";
 import { NodeHealthService } from "./node-health.service";
+import { NodeHealthEvaluatorService } from "./heartbeat/node-health-evaluator.service";
 import { CreateNodeDto, UpdateNodeDto, type CreateNodeInput, type UpdateNodeInput } from "../infra.dto";
 
 /** Platform telecom nodes. Config is durable; health is runtime (starts UNKNOWN). */
@@ -22,8 +23,36 @@ export class NodesController {
   constructor(
     private readonly nodes: NodesService,
     private readonly health: NodeHealthService,
+    private readonly evaluator: NodeHealthEvaluatorService,
     private readonly audit: AuditService,
   ) {}
+
+  /**
+   * Dead-man's-switch evaluator tick (ADR-0020 slice 3). A platform operator — or a
+   * dedicated external cron with platform credentials — triggers this on the TTL
+   * cadence. It compares every node's lastHeartbeatAt to the staleness TTL and
+   * records honest HEALTHY/UNKNOWN transitions (caps at UNKNOWN). Multi-instance safe
+   * (Redis-locked, fail-closed → skipped if held/unavailable). Transitions are the
+   * durable record (append-only HealthEvent); an audit row is written ONLY when the
+   * tick actually transitioned something (idle ticks are logged, not audited — a ~90s
+   * cadence would otherwise firehose the audit table, ADR-0010).
+   */
+  @Post("health/evaluate")
+  @HttpCode(200)
+  @RequirePermissions("telecom.manage")
+  async evaluate(@CurrentTenant() ctx: TenantContext, @Req() req: Request) {
+    const summary = await this.evaluator.sweep();
+    if (summary.transitioned > 0) {
+      await this.audit.log({
+        ctx,
+        req: requestContext(req),
+        action: "telecom.node.health_evaluated",
+        resource: "node",
+        metadata: { evaluated: summary.evaluated, transitioned: summary.transitioned, correlationId: summary.correlationId },
+      });
+    }
+    return summary;
+  }
 
   @Get()
   @RequirePermissions("telecom.read")

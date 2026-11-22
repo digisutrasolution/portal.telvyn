@@ -542,6 +542,28 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/nodes/health/evaluate:
+    post:
+      tags: [telecom]
+      summary: Run the node dead-man's-switch evaluator (platform)
+      description: >-
+        Dead-man's-switch tick (ADR-0020): compares every node's `lastHeartbeatAt`
+        to the staleness TTL and records honest status transitions — administratively
+        DISABLED → DISABLED; a heartbeat within the TTL → HEALTHY; otherwise (stale or
+        never seen) → UNKNOWN (it caps at UNKNOWN; no DEGRADED/UNHEALTHY from silence).
+        A transition only on a genuine change, appended to the node's HealthEvent
+        history. Multi-instance safe (Redis-locked, fail-closed → `skipped` when the
+        lock is held or Redis is unavailable). Triggered by a platform operator or a
+        dedicated external cron on the TTL cadence. Requires PLATFORM + `telecom.manage`.
+      operationId: evaluateNodeHealth
+      responses:
+        "200":
+          description: Evaluation summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NodeHealthEvaluation" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
   /v1/telecom/engines/{id}/health-check:
     post:
       tags: [telecom]
@@ -1616,6 +1638,16 @@ components:
         status: { type: string, enum: [accepted] }
         nodeId: { type: string, format: uuid }
         acceptedAt: { type: string, format: date-time }
+        correlationId: { type: string }
+    NodeHealthEvaluation:
+      type: object
+      required: [skipped, evaluated, transitioned, correlationId]
+      description: Summary of one dead-man's-switch evaluator tick (ADR-0020).
+      properties:
+        skipped: { type: boolean, description: "True when the tick did not run (lock held, or Redis unavailable)." }
+        reason: { type: string, enum: [locked, lock-unavailable], description: "Present only when skipped." }
+        evaluated: { type: integer, minimum: 0, description: "Nodes examined this tick." }
+        transitioned: { type: integer, minimum: 0, description: "Nodes whose health status changed." }
         correlationId: { type: string }
     CarrierHealthReport:
       type: object

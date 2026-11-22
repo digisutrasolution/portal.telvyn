@@ -704,6 +704,29 @@ terminator existed. (53rd commit; feature tip now <2ba>; integration branch @5fc
 Next = ADR-0020 slice 3 (dead-man cron evaluator: compares lastHeartbeatAt to TTL 90s → HEALTHY/UNKNOWN HealthEvent transitions) +
 a NODE_AGENT provisioning path (attach endpoint) / LAND THE STACK.
 
+**12O-2bb (DONE)** — node HEALTH EVALUATOR / dead-man's-switch (ADR-0020 slice 3 — the slice that makes node health REAL).
+`NodeHealthEvaluatorService`: pure static `decideTarget(status, lastHeartbeatAt, now, ttlMs)` — DISABLED→DISABLED / within-TTL→
+HEALTHY / else→UNKNOWN (**caps at UNKNOWN**, no DEGRADED/UNHEALTHY-from-silence, boundary `<=` inclusive). `sweep()`: Redis SET-NX
+lock (purpose-built inline, NOT the engine namespace; compare-and-delete release) → **FAIL-CLOSED** (Redis throw → skipped
+`lock-unavailable`; held → skipped `locked`; never a racing double-write) → findMany non-deleted nodes w/ health → per CHANGED node a
+`$transaction([nodeHealth.update(status), healthEvent.create(NODE, from→to, correlationId)])` (append-only, transition ONLY on genuine
+change). TTL from env `NODE_HEARTBEAT_TTL_MS` default 90000 (floor 1000). Trigger `POST /v1/telecom/nodes/health/evaluate` on
+NodesController (PLATFORM + telecom.manage, @HttpCode(200)); **audited ONLY when transitioned>0** (bounded — idle ~90s ticks would
+firehose; per-node detail is in HealthEvent) via real ops ctx; returns `NodeHealthEvaluation {skipped,reason?,evaluated,transitioned,
+correlationId}`. **NO scheduler dependency added** (owner-conservative default: triggered endpoint + external cron; in-process
+@nestjs/schedule is a thin follow-up if wanted — evaluator logic is mechanism-agnostic). NO schema change (reuses NodeHealth +
+HealthEvent), NO web source change (schema.ts additive, web tsc✓). Contract: path + `NodeHealthEvaluation` schema; gen:contracts.
+New files: heartbeat/{node-health-evaluator.service, .service.test}. +9 API unit (decideTarget 6 + sweep: locked-skip / Redis-down-
+skip / transition-only-changed+append-event+lock-release / HEALTHY→UNKNOWN-caps) → telecom 204 / full 236; e2e added to telecom-infra
+(default-DISABLED node → evaluate → health UNKNOWN→DISABLED + HealthEvent; CI-only NOT-run). API tsc✓ eslint✓ web tsc✓. GOTCHA:
+`sweep(correlationId: string = randomUUID())` — MUST annotate `: string` (randomUUID() return type is a uuid template-literal that
+rejects plain strings); also `tsc | tail` masks tsc's exit code → check `$?` explicitly. **NODE LIVENESS PIPELINE COMPLETE: schema
+(2az) → ingest (2ba) → evaluator (2bb).** But reads UNKNOWN end-to-end until BOTH a NODE_AGENT provisioning path (attach cert + set
+node.credentialId) AND a real inbound mTLS terminator exist (a DISABLED node already transitions correctly, proving the evaluator).
+(54th commit; feature tip now <2bb>; integration branch @5fcd64e now 35 behind.)
+Next = NODE_AGENT provisioning/attach path (admin endpoint: create NODE_AGENT cred w/ cert + fingerprint-as-hint, set node.credentialId)
+— the last piece before node health can go green with a real terminator / carrier health projection (later) / LAND THE STACK.
+
 ### (superseded) sub-phase plan
 
 **Phase 12M — real engine adapter (Kamailio first), built in additive review-gated sub-phases.** A disposable Kamailio 6.1.5 test engine is provisioned

@@ -145,6 +145,18 @@ describe("platform CRUD + integrity + honest health", () => {
     const after = await request(http).get(`/v1/telecom/nodes/${nodeId}/health`).set(auth(plat.token));
     expect(after.body.lastHeartbeatAt ?? null).toBeNull(); // unchanged — the beat was rejected
 
+    // Dead-man's-switch evaluator (ADR-0020, 12O-2bb). The node was created with the
+    // default administrative status DISABLED, so the tick transitions its health
+    // UNKNOWN -> DISABLED (a real, honest change — no heartbeat needed to demonstrate).
+    const evalRes = await request(http).post("/v1/telecom/nodes/health/evaluate").set(auth(plat.token)).send({});
+    expect(evalRes.status).toBe(200);
+    expect(evalRes.body.skipped).toBe(false);
+    expect(evalRes.body.transitioned).toBeGreaterThanOrEqual(1);
+    const graded = await request(http).get(`/v1/telecom/nodes/${nodeId}/health`).set(auth(plat.token));
+    expect(graded.body.status).toBe("DISABLED"); // health now reflects the evaluator, not a placeholder
+    const events = await request(http).get(`/v1/telecom/nodes/${nodeId}/health-events`).set(auth(plat.token));
+    expect(events.body.items.some((e: { toStatus: string }) => e.toStatus === "DISABLED")).toBe(true);
+
     // Lists include the created rows
     expect((await request(http).get("/v1/telecom/nodes").set(auth(plat.token))).body.some((n: { id: string }) => n.id === nodeId)).toBe(true);
 

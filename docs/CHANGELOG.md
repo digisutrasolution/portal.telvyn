@@ -6,6 +6,19 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-23 — Phase 12O-2bb — **node health evaluator (dead-man's-switch)** (ADR-0020
+  slice 3) — the slice that makes node health real. `POST /v1/telecom/nodes/health/evaluate`
+  (PLATFORM + `telecom.manage`) compares each node's `lastHeartbeatAt` to the staleness TTL
+  (default 90s, env `NODE_HEARTBEAT_TTL_MS`) and records honest `HealthEvent` transitions:
+  DISABLED→DISABLED, within-TTL→HEALTHY, else→UNKNOWN. **Caps at UNKNOWN** (no
+  DEGRADED/UNHEALTHY from silence); a transition only on genuine change. Multi-instance safe
+  via a Redis `SET NX` lock, **fail-closed** (lock held / Redis down → `skipped`, next tick
+  retries — never a racing double-write). Triggered by a platform operator or a dedicated
+  external cron (no scheduler dependency added). Idle ticks logged; a transitioning tick
+  writes one bounded audit row (`telecom.node.health_evaluated`). No schema, no web change.
+  +9 API unit tests + an e2e (a default-DISABLED node transitions UNKNOWN→DISABLED). **Node
+  liveness pipeline now complete** (schema → ingest → evaluator); it reads UNKNOWN
+  end-to-end until the `NODE_AGENT` provisioning path + a real mTLS terminator exist.
 - 2026-11-23 — Phase 12O-2ba — **node heartbeat ingest** (ADR-0020 slice 2). Machine
   endpoint `POST /v1/telecom/nodes/:id/heartbeat` — a node agent reports liveness,
   authenticated by its `NODE_AGENT` **mTLS client cert** (no JWT/permission), resolved
