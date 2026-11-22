@@ -528,10 +528,22 @@ bounded ≤1e12). EditRoute `costMicros:string` → `cost:string`. Pure UI. +2 t
 hydrate-as-decimal+round-trip-exact; 2 prior cost tests updated to decimals asserting exact micros 0.012→12000,
 0.05→50000) → web **220** (34 files); isolated `next build` REAL_EXIT=0 (one next/font retry) (/lcr 8.16→8.37
 kB); eslint 0. 2 files (editor+test), NO apps/api, NO contracts.
-**🎉 ALL Phase 12O deferred enhancement slices COMPLETE — NOC/admin frontend write surface + all polish done.**
-Next (await owner go): LAND THE STACK (owner provides GitHub remote → push `integration/phase-12o-complete`
-fast-forwarded to the feature tip → CI → PR). Backend read gaps (HealthEvent/config-version history) stay
-separately approval-gated.
+**🎉 ALL Phase 12O deferred FRONTEND enhancement slices COMPLETE — NOC/admin write surface + all polish done.**
+**12O-2as (DONE)** — engine HEALTH-EVENT HISTORY (read; **FIRST BACKEND slice this run**, owner-approved as the
+backend read-gap feature). `GET /v1/telecom/engines/:id/health-events` (platform + `telecom.health.read`,
+cursor-paginated newest-first). **NO schema change** — HealthEvent model existed; added `EngineHealthService.history`
+(shared cursorArgs/toPage over uuidv7 id) + controller endpoint (engines.get→404 then health.history) + contract
+`HealthEvent`/`HealthEventPage`. **Safe view: {id, fromStatus(null-first), toStatus, reason, correlationId,
+createdAt} — never entityType/entityId/tenantId.** Frontend: `listEngineHealthEvents` action + self-contained
+`<EngineHealthHistory>` "Health history" timeline on engine detail (/infrastructure/[id]), own load/error/Load-more,
+from→to+reason+time. +3 API unit (192→195, engine-health.service.test — scoped query + safe-view-no-leak + nextCursor
++ cursor-passthrough) + 4 web (220→224, engine-health-history.test). API tsc✓ eslint✓ unit 195✓ (21 files); web
+build✓ (/infrastructure/[id] 3.23→4.36 kB) eslint✓ suite 224✓. e2e (platform gating/404/ordering) CI-only. 11 files
+(2 api + 1 api-test + contract/schema + 4 web + ...). Docs updated.
+Next (await owner go): more backend read-gaps (engine config-version history `TelecomConfigVersion`; node/carrier
+health history — same pattern); or LAND THE STACK (owner provides GitHub remote → push `integration/phase-12o-complete`
+fast-forwarded to the feature tip → CI → PR). **NOTE: 2as is a BACKEND change — the integration branch / PR now
+spans frontend + a backend read endpoint; refresh the PR draft accordingly.**
 
 ### (superseded) sub-phase plan
 

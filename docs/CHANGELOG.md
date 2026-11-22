@@ -1090,3 +1090,25 @@ Format: Keep a Changelog; SemVer once releases begin.
   known `next/font` fetch flake and passed on retry); eslint ✓. **No backend change.** `API.md` updated. **This
   is the last of the deferred Phase 12O enhancement slices — the NOC/admin frontend write surface and all its
   polish are now complete.** Next: land the stack.
+- 2026-11-22 — **Phase 12O-2as — engine health-event history (read; first backend read-gap slice).** The first
+  slice this run to touch the backend — a new READ endpoint closing one of the long-flagged read gaps.
+  `GET /v1/telecom/engines/:id/health-events` (platform + `telecom.health.read`) returns the append-only
+  history of an engine's honest health-status transitions (a `HealthEvent` is recorded only when the status
+  actually changes, by `health-check`), newest first and cursor-paginated. **No schema change** — the
+  `HealthEvent` model already existed (written by `EngineHealthService.recordTransition`); this adds the read
+  path (`EngineHealthService.history`, using the shared `cursorArgs`/`toPage` over the uuidv7 id) + the
+  controller endpoint (`engines.controller`, first `engines.get(id)` for a 404 then `health.history`), authored
+  into the contract as `HealthEvent` / `HealthEventPage`. The event view is **safe** — `{id, fromStatus (null
+  on the first event), toStatus, reason, correlationId, createdAt}`, never echoing `entityType`/`entityId`/
+  `tenantId`. Frontend: a new `listEngineHealthEvents` action and a self-contained `<EngineHealthHistory>`
+  "Health history" timeline section on the engine detail page (`/infrastructure/[id]`) — its own load / error /
+  Load more, so it never blocks the detail render; renders each transition as `from → to` with its reason and
+  timestamp. Contract regenerated (additive); `HealthEvent`/`HealthEventPage` aliases added. **Tests:** +3 API
+  unit (192 → 195; `engine-health.service.test.ts` — query scoped to the engine with newest-first cursor args,
+  the safe view omits entity/tenant fields, nextCursor on a full page, cursor passes through) and +4 web unit
+  (220 → 224; `engine-health-history.test.tsx` — newest-first render with from→to + reason, empty state, load-
+  more-appends, RFC 7807 error; the engine-detail-view test now defaults the history mock to empty). API `tsc`
+  ✓, API eslint ✓, API unit 195 ✓ (21 files); web `next build` ✓ (/infrastructure/[id] 3.23 → 4.36 kB), web
+  eslint ✓, full web suite 224 ✓ (34 files). e2e (platform gating, 404, real ordering) is CI-only. Docs
+  updated (API.md, CHANGELOG.md, PROJECT_STATE.md, UI_UX.md). Next read-gap candidate: engine config-version
+  history (`TelecomConfigVersion`), or node/carrier health history (same pattern); or land the stack.

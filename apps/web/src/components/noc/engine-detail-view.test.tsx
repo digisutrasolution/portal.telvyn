@@ -1,12 +1,12 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import type { Engine, EngineStatus } from "@/lib/contracts";
 import { ApiError } from "@/lib/api/problem";
 
-vi.mock("@/lib/telecom/telecom-actions", () => ({ getEngine: vi.fn(), getEngineStatus: vi.fn() }));
+vi.mock("@/lib/telecom/telecom-actions", () => ({ getEngine: vi.fn(), getEngineStatus: vi.fn(), listEngineHealthEvents: vi.fn() }));
 vi.mock("next/link", () => ({ default: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }));
 
-import { getEngine, getEngineStatus } from "@/lib/telecom/telecom-actions";
+import { getEngine, getEngineStatus, listEngineHealthEvents } from "@/lib/telecom/telecom-actions";
 import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { EngineDetailView } from "./engine-detail-view";
 
@@ -66,6 +66,12 @@ function status(): EngineStatus {
 }
 
 afterEach(() => vi.clearAllMocks());
+
+// The embedded health-history section loads independently; default it to empty so
+// these read-detail tests stay focused (its own behavior lives in its own test).
+beforeEach(() => {
+  vi.mocked(listEngineHealthEvents).mockResolvedValue({ items: [], nextCursor: null });
+});
 
 describe("EngineDetailView", () => {
   it("renders identity, health, connection, version and desired summary", async () => {

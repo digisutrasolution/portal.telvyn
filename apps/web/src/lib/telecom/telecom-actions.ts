@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { Engine, EngineHealthReport, EngineStatus, Node, Region, SyncOutcome } from "@/lib/contracts";
+import type { Engine, EngineHealthReport, EngineStatus, HealthEventPage, Node, Region, SyncOutcome } from "@/lib/contracts";
 
 /**
  * Read-only telecom (NOC) API calls. Platform-scoped on the server
@@ -20,6 +20,15 @@ export function getEngine(id: string, signal?: AbortSignal): Promise<Engine> {
 /** Normalized engine status: health + connection + config-version posture (read-only). */
 export function getEngineStatus(id: string, signal?: AbortSignal): Promise<EngineStatus> {
   return api.get<EngineStatus>(`/v1/telecom/engines/${id}/status`, { signal });
+}
+
+/** The engine's health-event history (newest first), cursor-paginated (`telecom.health.read`). */
+export function listEngineHealthEvents(id: string, params: { limit?: number; cursor?: string } = {}, signal?: AbortSignal): Promise<HealthEventPage> {
+  const qs = new URLSearchParams();
+  if (params.limit !== undefined) qs.set("limit", String(params.limit));
+  if (params.cursor) qs.set("cursor", params.cursor);
+  const query = qs.toString();
+  return api.get<HealthEventPage>(`/v1/telecom/engines/${id}/health-events${query ? `?${query}` : ""}`, { signal });
 }
 
 /** Platform list of telecom regions. */

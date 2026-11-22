@@ -62,6 +62,12 @@ export type Node = Schemas["Node"];
 /** Result of an active engine health probe. */
 export type EngineHealthReport = Schemas["EngineHealthReport"];
 
+/** One engine health-status transition (GET /v1/telecom/engines/{id}/health-events). */
+export type HealthEvent = Schemas["HealthEvent"];
+
+/** Cursor-paginated page of engine health events. */
+export type HealthEventPage = Schemas["HealthEventPage"];
+
 /** Outcome of an engine config sync / rollback attempt. */
 export type SyncOutcome = Schemas["SyncOutcome"];
 

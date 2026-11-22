@@ -761,3 +761,13 @@ Selecting none is allowed and clears the member's roles; the dialog notes this b
 you save. Role names shown everywhere come from the role catalog; the server
 re-checks permission and validates every chosen role against the tenant, staying
 authoritative. Verified: 207/207 web Vitest · `next build` clean (/admin 2.7 kB).
+
+Engine health history — EXISTING (Phase 12O-2as, 2026-11-22): the engine detail page
+gained a "Health history" section below the status cards — the timeline of the engine's
+honest health-status changes, newest first. Each entry shows the transition (for
+example UNKNOWN → HEALTHY), a short safe reason, and when it happened; the first-ever
+event has no "from" status. The section loads on its own with its own Load-more, so it
+never holds up the rest of the page, and a health-check that doesn't change the status
+adds no entry (the history only records real transitions). Read-only; the page is
+already platform + health-read gated. Verified: 224/224 web Vitest · `next build` clean
+(/infrastructure/[id] 4.36 kB).

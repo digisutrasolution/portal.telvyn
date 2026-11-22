@@ -12,9 +12,11 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
+import { PaginationQuery, type PaginationInput } from "@/common/pagination";
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import { requestContext } from "@/common/request-context";
@@ -95,6 +97,14 @@ export class EnginesController {
       metadata: { status: report.status, reachability: report.reachability, correlationId, provider: engine.type },
     });
     return report;
+  }
+
+  /** Append-only health-event history for the engine (newest first, cursor-paginated). Read-only. */
+  @Get(":id/health-events")
+  @RequirePermissions("telecom.health.read")
+  async healthEvents(@Param("id", ParseUUIDPipe) id: string, @Query(new ZodPipe(PaginationQuery)) query: PaginationInput) {
+    await this.engines.get(id); // 404 if not found; platform-scoped
+    return this.health.history(id, query);
   }
 
   /**

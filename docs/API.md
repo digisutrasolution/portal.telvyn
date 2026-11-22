@@ -54,6 +54,7 @@ the existing `AuditService`. None of these resources hold secrets.
 | `POST/PUT/DELETE /v1/telecom/engines[/:id]` · `PUT /v1/telecom/engines/:id/capabilities` | `telecom.manage` |
 | `GET /v1/telecom/engines/:id/status` | `telecom.health.read` |
 | `POST /v1/telecom/engines/:id/health-check` | `telecom.health.read` |
+| `GET /v1/telecom/engines/:id/health-events` (health history; cursor pagination) | `telecom.health.read` |
 | `POST /v1/telecom/engines/:id/sync` | `telecom.manage` |
 | `POST /v1/telecom/engines/:id/sync/rollback` | `telecom.manage` |
 | `GET /v1/telecom/engines/:engineId/assignments` | `telecom.read` |
@@ -106,6 +107,18 @@ desired version (append-only; **400** when there is no previous version), audite
 `telecom.engine.rollback_attempted`. The management **endpoint** on engine
 create/update is SSRF-validated (private/loopback/metadata/malformed → **400**).
 All runtime endpoints are platform-only.
+
+**Engine health-event history (Phase 12O-2as).** `GET :id/health-events`
+(`telecom.health.read`, platform) returns the append-only history of the engine's
+honest health-status transitions — a `HealthEvent` is recorded only when the status
+actually changes (by `POST :id/health-check`). Newest first, cursor-paginated
+(`HealthEventPage` = `{items, nextCursor}`; the uuidv7 id is the cursor). Each
+`HealthEvent` is a safe view — `{id, fromStatus (null on the first event), toStatus,
+reason (safe text, never secrets/raw provider errors), correlationId, createdAt}` —
+and never echoes `entityType`/`entityId`/`tenantId`. An unknown engine id is **404**.
+No schema change — the `HealthEvent` model existed; this adds the read endpoint
+(`EngineHealthService.history`) and authors `HealthEvent`/`HealthEventPage` into the
+contract. The NOC engine detail page renders it as a "Health history" timeline.
 
 **Desired config from assignments (Phase 12N-3).** `GET :id/status` now also returns
 `desired` — a live, read-only preview of the engine's desired configuration built

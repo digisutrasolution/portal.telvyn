@@ -490,6 +490,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/engines/{id}/health-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Engine health-event history (platform)
+         * @description The append-only history of this engine's honest health-status transitions (a new event is recorded only when the status actually changes). Newest first, cursor-paginated. Each event carries the from/to status, a safe reason (never secrets or raw provider errors) and a correlation id. A foreign/unknown engine id is 404. Requires PLATFORM + `telecom.health.read`.
+         */
+        get: operations["listEngineHealthEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/telecom/engines/{id}/sync": {
         parameters: {
             query?: never;
@@ -1080,6 +1100,31 @@ export interface components {
             correlationId: string;
             /** Format: date-time */
             checkedAt: string;
+        };
+        /** @description One append-only health-status transition for an engine (config-plane history; no secrets). */
+        HealthEvent: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description null for the first-ever event.
+             * @enum {string|null}
+             */
+            fromStatus?: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN" | "DISABLED" | null;
+            /** @enum {string} */
+            toStatus: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN" | "DISABLED";
+            /** @description Safe reason — never secrets or raw provider errors. */
+            reason?: string | null;
+            correlationId?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        HealthEventPage: {
+            items: components["schemas"]["HealthEvent"][];
+            /**
+             * Format: uuid
+             * @description Pass as `cursor` to fetch the next (older) page; null when exhausted.
+             */
+            nextCursor: string | null;
         };
         SyncOutcome: {
             ok: boolean;
@@ -2300,6 +2345,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EngineHealthReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listEngineHealthEvents: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Health events (newest first) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthEventPage"];
                 };
             };
             401: components["responses"]["Problem"];

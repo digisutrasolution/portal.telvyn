@@ -479,6 +479,30 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/engines/{id}/health-events:
+    get:
+      tags: [telecom]
+      summary: Engine health-event history (platform)
+      description: >-
+        The append-only history of this engine's honest health-status transitions
+        (a new event is recorded only when the status actually changes). Newest
+        first, cursor-paginated. Each event carries the from/to status, a safe
+        reason (never secrets or raw provider errors) and a correlation id. A
+        foreign/unknown engine id is 404. Requires PLATFORM + `telecom.health.read`.
+      operationId: listEngineHealthEvents
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: cursor, in: query, required: false, schema: { type: string, format: uuid }, description: "nextCursor from a prior page." }
+      responses:
+        "200":
+          description: Health events (newest first)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthEventPage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /v1/telecom/engines/{id}/sync:
     post:
       tags: [telecom]
@@ -1413,6 +1437,25 @@ components:
         detail: { type: string, description: "Safe reason — never secrets or raw provider errors." }
         correlationId: { type: string }
         checkedAt: { type: string, format: date-time }
+    HealthEvent:
+      type: object
+      required: [id, toStatus, createdAt]
+      description: One append-only health-status transition for an engine (config-plane history; no secrets).
+      properties:
+        id: { type: string, format: uuid }
+        fromStatus: { type: string, enum: [HEALTHY, DEGRADED, UNHEALTHY, UNKNOWN, DISABLED], nullable: true, description: "null for the first-ever event." }
+        toStatus: { type: string, enum: [HEALTHY, DEGRADED, UNHEALTHY, UNKNOWN, DISABLED] }
+        reason: { type: string, nullable: true, description: "Safe reason — never secrets or raw provider errors." }
+        correlationId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    HealthEventPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HealthEvent" }
+        nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next (older) page; null when exhausted." }
     SyncOutcome:
       type: object
       required: [ok, outcome, syncState, desiredVersion, appliedVersion, changed, correlationId]
