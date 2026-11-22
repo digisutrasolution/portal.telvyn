@@ -12,8 +12,11 @@ import { CarrierType, Codec, TelecomStatus, TelecomCredentialType } from "@prism
 const iso2 = z.string().length(2).regex(/^[A-Z]{2}$/, "ISO-3166-1 alpha-2, uppercase");
 
 // Inline credential to create + attach (secret goes straight to the vault).
+// The type is an explicit carrier-attachable allow-list, NOT `nativeEnum`, so a
+// new infrastructure credential type added to the enum (e.g. NODE_AGENT, ADR-0020)
+// can never be silently attached to a carrier. Frozen to today's accepted set.
 const InlineCredential = z.object({
-  type: z.nativeEnum(TelecomCredentialType),
+  type: z.enum([TelecomCredentialType.SIP_PASSWORD, TelecomCredentialType.CARRIER_API, TelecomCredentialType.ENGINE_API]),
   label: z.string().min(1).max(120),
   hint: z.string().max(120).optional(),
   secret: z.string().min(1).max(4096),

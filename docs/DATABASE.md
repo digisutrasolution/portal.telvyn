@@ -260,6 +260,30 @@ NOT a schema column — it extends the existing append-only snapshot model in
 `TelecomConfigVersion` (`newConfig.kind`), the option ADR-0011 reserved. No live
 egress, DI, or behavior changed by this sub-phase.
 
+## Node-agent credential — EXISTING (Phase 12O-2az, 2026-11-23, ADR-0020 slice 1)
+
+Additive migration `node_agent_credential_ref` — the schema foundation for the
+node liveness heartbeat (ADR-0020). Mirrors `engine_credential_ref` exactly, three
+additive operations, **zero destructive** (`TelecomNode` currently 0 rows):
+
+- `enum TelecomCredentialType` gains `NODE_AGENT` — the credential kind for a
+  node's heartbeat agent (an **mTLS client certificate**, ADR-0020). Vault-only
+  like the others: `secretEnc` never leaves the vault (ADR-0009).
+- `TelecomNode.credentialId` (nullable UUID, FK → `TelecomCredential`,
+  `ON DELETE SET NULL`) + `TelecomNode_credentialId_idx`. A **reference**, never a
+  secret; `TelecomCredential` gains the `nodes` back-relation. SET NULL so revoking
+  a credential never orphans/deletes the node row.
+- **Not** auto-widened into tenant DTOs: unlike the earlier note that `ENGINE_API`
+  "flows automatically to every `z.nativeEnum(TelecomCredentialType)`", the carrier
+  inline-credential DTO was **frozen** to an explicit allow-list
+  (`SIP_PASSWORD`/`CARRIER_API`/`ENGINE_API`) in this slice, so `NODE_AGENT` can
+  never be attached to a carrier. A node credential is node-only.
+
+No endpoint, no behaviour change yet — the heartbeat ingest and dead-man's-switch
+evaluator that use this column are later ADR-0020 slices. Applied to the dev DB and
+verified (`migrate status` → "up to date"); reaches other environments via
+`prisma migrate deploy`.
+
 ## Engine ↔ resource assignment — EXISTING (Phase 12N-1, 2026-11-17)
 
 Additive migration `engine_resource_assignment` (ADR-0012) — the model of which

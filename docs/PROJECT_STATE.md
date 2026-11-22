@@ -662,6 +662,24 @@ Next (await owner go): resolve/Accept ADR-0020 → implement liveness slices / L
 push `integration/phase-12o-complete` FF'd to feature tip → CI → PR; refresh stale phase-12o-PR.md — predates 2ad-2ay, spans
 frontend + SIX backend endpoints + the 2ay conformance fix; ADR-0020 is a separate branch).
 
+**12O-2az (DONE)** — node-agent credential SCHEMA (ADR-0020 slice 1 — FIRST schema change since 12N; ADR-0020 now ACCEPTED
+b775dc1). Additive migration `node_agent_credential_ref` mirroring `engine_credential_ref` (12M-1): `TelecomCredentialType`
+gains **NODE_AGENT** (mTLS client cert for the node heartbeat agent, vault-only); `TelecomNode` gains nullable `credentialId`
+FK→TelecomCredential (ON DELETE SET NULL) + `TelecomNode_credentialId_idx` + `nodes` back-relation on TelecomCredential. **THREE
+additive ops, ZERO destructive** (TelecomNode 0 rows). CAUGHT + fixed a leak: the carrier inline-credential DTO used
+`z.nativeEnum(TelecomCredentialType)` → adding NODE_AGENT would have silently let it be attached to a carrier (unwanted
+behaviour change); **FROZE** that DTO to an explicit allow-list `[SIP_PASSWORD, CARRIER_API, ENGINE_API]` — today's accepted set
+preserved, NODE_AGENT excluded. **Schema-capable only, NO behaviour change** (no endpoint, node read-surface unchanged — doesn't
+expose credentialId; heartbeat ingest + dead-man cron are slices 2-3). NO contract, NO web change. Migration **applied to the dev
+DB + verified** (`migrate status` → "Database schema is up to date!"; ADD VALUE + ADD COLUMN + INDEX + FK all valid); reaches
+other envs via `prisma migrate deploy`. +3 API unit (carriers.dto.test: NODE_AGENT rejected, carrier set accepted, bogus
+rejected) → API unit 188 telecom / 220 full; tsc✓ eslint✓ prisma generate✓. 2 files modified (schema + carriers.dto) + 2 new
+(migration + dto test). (52nd commit; feature tip now <2az>; integration branch @5fcd64e now 33 behind.) GOTCHA: `ALTER TYPE ADD
+VALUE` + other DDL in one migration tx is fine in PG17/18 because the new value isn't USED in the same tx (mirrors 12M-1).
+Next = ADR-0020 slice 2 (heartbeat ingest POST /nodes/:id/heartbeat, mTLS identity-bound rate-limited audited) then slice 3
+(dead-man cron evaluator) / LAND THE STACK (owner remote → push → CI → PR; refresh stale phase-12o-PR.md — now also includes the
+2az migration + ADR-0020-Accepted on its own branch).
+
 ### (superseded) sub-phase plan
 
 **Phase 12M — real engine adapter (Kamailio first), built in additive review-gated sub-phases.** A disposable Kamailio 6.1.5 test engine is provisioned

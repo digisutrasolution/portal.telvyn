@@ -5,6 +5,20 @@ Format: Keep a Changelog; SemVer once releases begin.
 
 ## [Unreleased]
 
+### Added
+- 2026-11-23 — Phase 12O-2az — **node-agent credential** schema (ADR-0020 slice 1).
+  Additive migration `node_agent_credential_ref`, mirroring `engine_credential_ref`:
+  `TelecomCredentialType` gains **`NODE_AGENT`** (an mTLS client cert for the node
+  heartbeat agent, vault-only), and `TelecomNode` gains a nullable `credentialId` FK
+  → `TelecomCredential` (`ON DELETE SET NULL`) + index + `nodes` back-relation. The
+  carrier inline-credential DTO was **frozen** from `z.nativeEnum` to an explicit
+  allow-list (`SIP_PASSWORD`/`CARRIER_API`/`ENGINE_API`) so the new type can't be
+  silently attached to a carrier — no behaviour change (today's accepted set
+  preserved). Schema-only foundation: no endpoint, no node read-surface change yet
+  (the heartbeat ingest + dead-man's-switch evaluator are later ADR-0020 slices).
+  Migration applied + verified on the dev DB; +3 API unit tests (DTO freeze). No
+  contract, no web change.
+
 ### Fixed
 - 2026-11-23 — Phase 12O-2ay — operator-action POSTs now return **HTTP 200** to
   match their OpenAPI contracts (they were returning NestJS's default **201** on

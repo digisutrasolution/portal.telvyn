@@ -67,23 +67,23 @@ enum TenantStatus {
 }
 
 model Tenant {
-  id       String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  slug     String       @unique
-  name     String
-  type     TenantType   @default(CUSTOMER)
-  status   TenantStatus @default(ACTIVE)
+  id     String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  slug   String       @unique
+  name   String
+  type   TenantType   @default(CUSTOMER)
+  status TenantStatus @default(ACTIVE)
 
-  memberships   Membership[]
-  roles         Role[]
-  primaryUsers  User[]       @relation("UserPrimaryTenant")
+  memberships  Membership[]
+  roles        Role[]
+  primaryUsers User[]       @relation("UserPrimaryTenant")
 
   // Telecom control plane (Phase 12). Back-relations only — no new column on Tenant.
-  carriers           Carrier[]
-  sipTrunks          SipTrunk[]
-  dids               Did[]
-  routingProfiles    RoutingProfile[]
-  telecomCredentials TelecomCredential[]
-  lcrPolicies        LcrPolicy[]
+  carriers                  Carrier[]
+  sipTrunks                 SipTrunk[]
+  dids                      Did[]
+  routingProfiles           RoutingProfile[]
+  telecomCredentials        TelecomCredential[]
+  lcrPolicies               LcrPolicy[]
   engineResourceAssignments EngineResourceAssignment[]
 
   createdAt DateTime  @default(now())
@@ -478,6 +478,7 @@ enum TelecomCredentialType {
   SIP_PASSWORD
   CARRIER_API
   ENGINE_API // engine management-plane credential (e.g. mTLS client cert / JSONRPC auth)
+  NODE_AGENT // node-agent heartbeat credential (mTLS client cert) — ADR-0020
 }
 
 enum ConfigChangeType {
@@ -626,6 +627,12 @@ model TelecomNode {
   maxCps             Int? // capacity ceiling (config, not live value)
   maxConcurrentCalls Int?
 
+  // Node-agent heartbeat credential reference (vault, ADR-0009/ADR-0020). A
+  // reference only — the mTLS material lives in the vault, never on this row.
+  // SET NULL so revoking a credential never orphans/deletes the node row.
+  credentialId String?            @db.Uuid
+  credential   TelecomCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+
   health NodeHealth?
 
   createdAt DateTime  @default(now())
@@ -635,6 +642,7 @@ model TelecomNode {
   @@index([engineId])
   @@index([regionId])
   @@index([status])
+  @@index([credentialId])
 }
 
 // --- Node health: RUNTIME snapshot (ephemeral, 1:1) ------------------------
@@ -743,8 +751,8 @@ model SipTrunk {
   credentialId String?            @db.Uuid
   credential   TelecomCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
 
-  dids             Did[]
-  lcrRoutes        LcrRoute[]
+  dids              Did[]
+  lcrRoutes         LcrRoute[]
   engineAssignments EngineResourceAssignment[]
 
   createdAt DateTime  @default(now())
@@ -803,12 +811,12 @@ model RoutingProfile {
 
   // Routing policy (Phase 12I) — declarative; NOT executed. Loop protection via
   // bounded maxAttempts; `version` gives optimistic-concurrency on updates.
-  selectionStrategy   RoutingSelectionStrategy    @default(PRIORITY)
-  failoverEnabled     Boolean                     @default(false)
-  failoverConditions  RoutingFailoverCondition[]
-  maxAttempts         Int? // bounded attempt cap (loop protection)
+  selectionStrategy     RoutingSelectionStrategy   @default(PRIORITY)
+  failoverEnabled       Boolean                    @default(false)
+  failoverConditions    RoutingFailoverCondition[]
+  maxAttempts           Int? // bounded attempt cap (loop protection)
   overallTimeoutSeconds Int?
-  version             Int                         @default(0)
+  version               Int                        @default(0)
 
   rules             RoutingRule[]
   dids              Did[]
@@ -823,26 +831,26 @@ model RoutingProfile {
 }
 
 model RoutingRule {
-  id               String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  routingProfileId String         @db.Uuid
-  routingProfile   RoutingProfile @relation(fields: [routingProfileId], references: [id], onDelete: Cascade)
-  priority         Int                    @default(100)
-  destinationType  RoutingDestinationType
-  destination      String // validated per destinationType (Phase 12H) — declarative config
-  carrierId        String?                @db.Uuid
-  carrier          Carrier?               @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  id                      String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  routingProfileId        String                  @db.Uuid
+  routingProfile          RoutingProfile          @relation(fields: [routingProfileId], references: [id], onDelete: Cascade)
+  priority                Int                     @default(100)
+  destinationType         RoutingDestinationType
+  destination             String // validated per destinationType (Phase 12H) — declarative config
+  carrierId               String?                 @db.Uuid
+  carrier                 Carrier?                @relation(fields: [carrierId], references: [id], onDelete: SetNull)
   // Retry/timeout are bounded CONFIG — never executed in 12H.
-  timeoutSeconds Int?
-  retryCount     Int?
-  weight         Int? // for the WEIGHTED selection strategy (config only)
+  timeoutSeconds          Int?
+  retryCount              Int?
+  weight                  Int? // for the WEIGHTED selection strategy (config only)
   // Optional declarative schedule: { timezone, daysOfWeek[], startMinute, endMinute } (validated at write).
-  schedule Json?
+  schedule                Json?
   // FailoverPolicy stays as fields (12A). Phase 12I types the failover destination
   // so it is validated like the primary and self-loops are rejected.
   failoverDestination     String?
   failoverDestinationType RoutingDestinationType?
   failoverAfterSeconds    Int?
-  enabled                 Boolean  @default(true)
+  enabled                 Boolean                 @default(true)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -879,20 +887,20 @@ model LcrPolicy {
 // millionths of a currency unit (no floating point) — a SELECTION cost, not a
 // billed amount. Carrier/trunk are references (never duplicated / no secrets).
 model LcrRoute {
-  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  lcrPolicyId String    @db.Uuid
-  lcrPolicy   LcrPolicy @relation(fields: [lcrPolicyId], references: [id], onDelete: Cascade)
-  carrierId   String    @db.Uuid
-  carrier     Carrier   @relation(fields: [carrierId], references: [id], onDelete: Restrict)
-  sipTrunkId  String?   @db.Uuid
-  sipTrunk    SipTrunk? @relation(fields: [sipTrunkId], references: [id], onDelete: SetNull)
-  prefix      String // E.164-style destination prefix (e.g. "44", "9198")
-  country     String?   @db.Char(2)
-  costMicros  BigInt // millionths of a currency unit; integer, non-negative
-  currency    Currency
-  priority    Int       @default(100)
-  weight      Int? // for WEIGHTED strategy
-  enabled     Boolean   @default(true)
+  id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  lcrPolicyId   String    @db.Uuid
+  lcrPolicy     LcrPolicy @relation(fields: [lcrPolicyId], references: [id], onDelete: Cascade)
+  carrierId     String    @db.Uuid
+  carrier       Carrier   @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  sipTrunkId    String?   @db.Uuid
+  sipTrunk      SipTrunk? @relation(fields: [sipTrunkId], references: [id], onDelete: SetNull)
+  prefix        String // E.164-style destination prefix (e.g. "44", "9198")
+  country       String?   @db.Char(2)
+  costMicros    BigInt // millionths of a currency unit; integer, non-negative
+  currency      Currency
+  priority      Int       @default(100)
+  weight        Int? // for WEIGHTED strategy
+  enabled       Boolean   @default(true)
   effectiveFrom DateTime?
   effectiveTo   DateTime?
 
@@ -921,6 +929,7 @@ model TelecomCredential {
   carriers  Carrier[]
   sipTrunks SipTrunk[]
   engines   TelecomEngine[]
+  nodes     TelecomNode[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
