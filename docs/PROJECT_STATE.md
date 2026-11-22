@@ -746,6 +746,20 @@ not code) stands between here and node health going green. (55th commit; feature
 Next = carrier health projection (later ADR-0020, needs engine/media or CDR — not buildable now) / optional NOC FE: show node credential +
 a "rotate cert" affordance / LAND THE STACK (owner remote; refresh stale phase-12o-PR.md — predates 2ad-2bc + ADR-0020 branch).
 
+**12O-2bd (DONE)** — node-agent credential UI (NOC FRONTEND; consumes 2bc contract, NO backend/contract/schema change). NodesView:
+new per-row **"Credential"** button gated `telecom.manage` (alongside health-read Check/History); Actions column now shows for
+`telecom.health.read` OR `telecom.manage` (`showActions`), each button self-gated. New `<NodeCredentialDialog>`: shows current
+identity (label + cert fingerprint `hint`, non-secret) or "none attached"; textarea to paste the node's PUBLIC cert (never private
+key) → Attach/Rotate; Detach if one exists; empty-cert blocked client-side; server 400 (invalid PEM) surfaced, dialog stays open;
+on success `reload()`. New actions `attachNodeCredential`/`detachNodeCredential` in telecom-actions. +8 web (dialog 6: no-cred/
+empty-blocked/attach+reload+close/existing-rotate+detach-shown/detach/API-error; nodes-view 2: Credential shown w/ manage+opens,
+hidden w/o manage) → web suite 251; eslint✓ isolated build✓ (/infrastructure/nodes 4.4 kB). Web-only: nodes-view + its test +
+telecom-actions modified, node-credential-dialog + its test new. NO prisma, NO contract (schema.ts untouched), NO API doc change.
+(56th commit; feature tip now <2bd>; integration branch @5fcd64e now 37 behind.)
+Next = LAND THE STACK (owner git remote; refresh stale phase-12o-PR.md — now predates 2ad-2bd + ADR-0020 branch) / carrier health
+projection (later, needs engine/media or CDR). **All buildable-now 12O software is DONE; node health goes green once ops deploy a
+real inbound mTLS terminator.**
+
 ### (superseded) sub-phase plan
 
 **Phase 12M — real engine adapter (Kamailio first), built in additive review-gated sub-phases.** A disposable Kamailio 6.1.5 test engine is provisioned

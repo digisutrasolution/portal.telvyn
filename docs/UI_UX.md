@@ -824,3 +824,15 @@ Carriers have no detail page of their own, so the history lives in a dialog open
 the list — the same pattern as the node health history, and unlike the engine health
 history, which sits on the engine detail page. Read-only. Verified: 243/243 web Vitest ·
 `next build` clean.
+
+Node-agent credential management — EXISTING (Phase 12O-2bd, 2026-11-23): the Nodes list
+gained a per-row "Credential" action (shown only with the manage permission, alongside
+the health-read Check/History actions) that opens a dialog to attach, rotate, or detach
+the node's mTLS heartbeat identity. The dialog shows the node's current identity — its
+label and certificate fingerprint (non-secret) — or that none is attached (so the node
+cannot be authenticated yet). An operator pastes the node's public certificate (never the
+private key) to attach or rotate it; an existing identity can be detached. Empty input is
+blocked before any call, and an invalid certificate is reported from the server (the form
+stays open). On success the list reloads so the change is reflected. The Actions column
+now appears for either the health-read or the manage permission; each button is gated on
+its own. Verified: 251/251 web Vitest · `next build` clean (/infrastructure/nodes 4.4 kB).

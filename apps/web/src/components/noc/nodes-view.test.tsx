@@ -3,7 +3,13 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Node } from "@/lib/contracts";
 import { ApiError } from "@/lib/api/problem";
 
-vi.mock("@/lib/telecom/telecom-actions", () => ({ listNodes: vi.fn(), checkNodeHealth: vi.fn(), listNodeHealthEvents: vi.fn() }));
+vi.mock("@/lib/telecom/telecom-actions", () => ({
+  listNodes: vi.fn(),
+  checkNodeHealth: vi.fn(),
+  listNodeHealthEvents: vi.fn(),
+  attachNodeCredential: vi.fn(),
+  detachNodeCredential: vi.fn(),
+}));
 
 import { listNodes, checkNodeHealth, listNodeHealthEvents } from "@/lib/telecom/telecom-actions";
 import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
@@ -16,6 +22,15 @@ const healthLoader: SessionLoader = async () => ({
   tenantType: "PLATFORM",
   roles: [],
   permissions: ["telecom.read", "telecom.health.read"],
+});
+
+// `telecom.manage` present so the per-row Credential button renders (Phase 12O-2bd).
+const manageLoader: SessionLoader = async () => ({
+  userId: "u",
+  tenantId: "t",
+  tenantType: "PLATFORM",
+  roles: [],
+  permissions: ["telecom.read", "telecom.manage"],
 });
 
 function renderView(loader: SessionLoader = healthLoader) {
@@ -109,5 +124,20 @@ describe("NodesView", () => {
     renderView(async () => ({ userId: "u", tenantId: "t", tenantType: "PLATFORM", roles: [], permissions: ["telecom.read"] }));
     await screen.findByText("node-a");
     expect(screen.queryByRole("button", { name: /Health history of/ })).toBeNull();
+  });
+
+  it("shows the Credential button with telecom.manage and opens the dialog", async () => {
+    vi.mocked(listNodes).mockResolvedValue([node()]);
+    renderView(manageLoader);
+    fireEvent.click(await screen.findByRole("button", { name: "Manage credential for node-a" }));
+    expect(await screen.findByText(/Node-agent credential — node-a/)).toBeInTheDocument();
+    expect(screen.getByText(/No credential attached/i)).toBeInTheDocument();
+  });
+
+  it("hides the Credential button without telecom.manage (health.read alone doesn't grant it)", async () => {
+    vi.mocked(listNodes).mockResolvedValue([node()]);
+    renderView(healthLoader); // telecom.read + telecom.health.read, no manage
+    await screen.findByText("node-a");
+    expect(screen.queryByRole("button", { name: /Manage credential for/ })).toBeNull();
   });
 });

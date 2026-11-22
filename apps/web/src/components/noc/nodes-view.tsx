@@ -11,6 +11,7 @@ import { useResource } from "@/lib/use-resource";
 import { useSession } from "@/lib/session/session-context";
 import { messageFor } from "@/components/auth/auth-message";
 import { NodeHealthHistoryDialog } from "./node-health-history-dialog";
+import { NodeCredentialDialog } from "./node-credential-dialog";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<Node["status"], Tone> = { ACTIVE: "ok", SUSPENDED: "warn", DISABLED: "neutral" };
@@ -29,9 +30,12 @@ export function NodesView() {
   // Operator health probe (Phase 12O-2au). Gating is UX-only; the API re-checks.
   const { hasPermission } = useSession();
   const canCheck = hasPermission("telecom.health.read");
+  const canManage = hasPermission("telecom.manage"); // node-agent credential management (Phase 12O-2bd)
+  const showActions = canCheck || canManage;
   const [checkingId, setCheckingId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [historyNode, setHistoryNode] = React.useState<Node | null>(null);
+  const [credentialNode, setCredentialNode] = React.useState<Node | null>(null);
 
   async function check(nodeId: string) {
     setCheckingId(nodeId);
@@ -76,7 +80,7 @@ export function NodesView() {
                 <th scope="col" className="px-3 py-2 font-semibold">Status</th>
                 <th scope="col" className="px-3 py-2 font-semibold">Health</th>
                 <th scope="col" className="px-3 py-2 font-semibold">Version</th>
-                {canCheck && <th scope="col" className="px-3 py-2 font-semibold"><span className="sr-only">Actions</span></th>}
+                {showActions && <th scope="col" className="px-3 py-2 font-semibold"><span className="sr-only">Actions</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -88,13 +92,20 @@ export function NodesView() {
                   <td className="px-3 py-2"><Badge tone={STATUS_TONE[node.status]}>{node.status}</Badge></td>
                   <td className="px-3 py-2"><Status tone={HEALTH_TONE[node.health.status]} label={node.health.status} /></td>
                   <td className="font-num px-3 py-2 text-ink-2">{node.version ?? "—"}</td>
-                  {canCheck && (
+                  {showActions && (
                     <td className="px-3 py-2 text-right">
                       <span className="inline-flex gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setHistoryNode(node)} aria-label={`Health history of ${node.name}`}>History</Button>
-                        <Button variant="ghost" size="sm" onClick={() => check(node.id)} disabled={checkingId === node.id} aria-label={`Check health of ${node.name}`}>
-                          {checkingId === node.id ? "Checking…" : "Check"}
-                        </Button>
+                        {canCheck && (
+                          <>
+                            <Button variant="ghost" size="sm" onClick={() => setHistoryNode(node)} aria-label={`Health history of ${node.name}`}>History</Button>
+                            <Button variant="ghost" size="sm" onClick={() => check(node.id)} disabled={checkingId === node.id} aria-label={`Check health of ${node.name}`}>
+                              {checkingId === node.id ? "Checking…" : "Check"}
+                            </Button>
+                          </>
+                        )}
+                        {canManage && (
+                          <Button variant="ghost" size="sm" onClick={() => setCredentialNode(node)} aria-label={`Manage credential for ${node.name}`}>Credential</Button>
+                        )}
                       </span>
                     </td>
                   )}
@@ -109,6 +120,10 @@ export function NodesView() {
 
       {historyNode && (
         <NodeHealthHistoryDialog key={historyNode.id} node={historyNode} onClose={() => setHistoryNode(null)} />
+      )}
+
+      {credentialNode && (
+        <NodeCredentialDialog key={credentialNode.id} node={credentialNode} onClose={() => setCredentialNode(null)} onSaved={reload} />
       )}
     </section>
   );

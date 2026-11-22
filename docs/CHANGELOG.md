@@ -6,6 +6,16 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-23 — Phase 12O-2bd — **node-agent credential UI** (NOC). The Nodes list gained a
+  per-row **"Credential"** action (gated `telecom.manage`, alongside the health-read
+  Check/History) opening a dialog to **attach / rotate / detach** a node's mTLS heartbeat
+  identity. Shows the current identity's label + certificate fingerprint (non-secret), or
+  "none attached"; an operator pastes the node's **public** certificate (never the private
+  key) to attach/rotate, and can detach. Empty input blocked client-side; an invalid cert is
+  reported from the server (dialog stays open); on success the list reloads. The Actions
+  column now shows for `telecom.health.read` **or** `telecom.manage`, each button gated on
+  its own permission. Frontend-only — consumes the 2bc contract (`Node.credential` +
+  attach/detach); no backend, contract, or schema change. +8 web tests.
 - 2026-11-23 — Phase 12O-2bc — **node-agent credential provisioning** (ADR-0020) — closes
   the provisioning gap. `POST /v1/telecom/nodes/:id/credential` (PLATFORM + `telecom.manage`)
   attaches/rotates a node's `NODE_AGENT` mTLS identity: the body carries the node's **public**

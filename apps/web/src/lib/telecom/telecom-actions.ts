@@ -64,6 +64,20 @@ export function listNodeHealthEvents(id: string, params: { limit?: number; curso
   return api.get<HealthEventPage>(`/v1/telecom/nodes/${id}/health-events${query ? `?${query}` : ""}`, { signal });
 }
 
+/**
+ * Attach or rotate the node's NODE_AGENT mTLS credential (`telecom.manage`). The
+ * `certificate` is the node's PUBLIC client cert (PEM) — never a private key; the
+ * server derives the fingerprint and vaults the cert. Returns the updated node.
+ */
+export function attachNodeCredential(id: string, body: { certificate: string; label?: string }): Promise<Node> {
+  return api.post<Node>(`/v1/telecom/nodes/${id}/credential`, body);
+}
+
+/** Detach the node's NODE_AGENT credential (`telecom.manage`); 204 No Content. */
+export function detachNodeCredential(id: string): Promise<void> {
+  return api.delete<void>(`/v1/telecom/nodes/${id}/credential`);
+}
+
 // ---- mutating engine actions (platform; state-changing, never auto-retried) ----
 
 /** Actively probe engine health (telecom.health.read). Non-destructive. */
