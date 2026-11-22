@@ -86,3 +86,13 @@ export const CreateNodeDto = z.object({
 export const UpdateNodeDto = CreateNodeDto.partial().omit({ engineId: true });
 export type CreateNodeInput = z.infer<typeof CreateNodeDto>;
 export type UpdateNodeInput = z.infer<typeof UpdateNodeDto>;
+
+// Attach/rotate a node-agent mTLS credential (ADR-0020). The node's PUBLIC client
+// certificate is submitted; the private key stays on the node and is never sent.
+// The server derives the SHA-256 fingerprint (stored as the credential hint) and
+// vaults the cert PEM.
+export const AttachNodeCredentialDto = z.object({
+  certificate: z.string().min(1).max(16384),
+  label: z.string().min(1).max(120).optional(),
+});
+export type AttachNodeCredentialInput = z.infer<typeof AttachNodeCredentialDto>;

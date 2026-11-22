@@ -706,3 +706,25 @@ The periodic evaluator that turns heartbeats into honest health:
   never a fabricated `DEGRADED`/`UNHEALTHY`. Idle ticks are logged, not audited; a
   tick that transitioned ≥1 node writes one bounded audit row — a ~90s cadence is
   never allowed to firehose the OLTP audit table (ADR-0010).
+
+## Node-agent credential provisioning (Phase 12O-2bc, ADR-0020)
+
+Attaching a node's heartbeat identity (`POST /v1/telecom/nodes/:id/credential`):
+
+- **Private key never leaves the node.** The admin submits only the node's PUBLIC
+  client certificate; the server derives the SHA-256 fingerprint and vaults the
+  cert. There is no key generation or private-key handoff — the node keeps its key.
+  The fingerprint (the heartbeat matcher) is non-secret and surfaced as the
+  credential `hint`; the cert PEM is vaulted and never returned (`Node.credential`
+  is a safe reference only).
+- **Platform-gated.** PLATFORM + `telecom.manage`; nodes are platform-global, so the
+  credential is a system (null-tenant) vault entry. A non-platform/under-permissioned
+  caller gets 403.
+- **Rotation is clean.** Re-attaching replaces the identity and soft-deletes the
+  prior node-agent credential, so a node has exactly one active identity; detach
+  soft-deletes it. Audited (`telecom.node.credential_attached` / `_detached`), no
+  secret in the audit metadata (only the credentialId + non-secret fingerprint).
+- **Closes the gap, not the terminator.** This makes a node's expected fingerprint
+  known, so the heartbeat authenticator can bind a verified cert to the node — but
+  acceptance still requires a real inbound mTLS terminator (none is deployed yet),
+  so the ingest remains fail-closed until then.

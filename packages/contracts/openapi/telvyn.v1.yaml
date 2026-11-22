@@ -564,6 +564,49 @@ paths:
               schema: { $ref: "#/components/schemas/NodeHealthEvaluation" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/nodes/{id}/credential:
+    post:
+      tags: [telecom]
+      summary: Attach / rotate a node-agent mTLS credential (platform)
+      description: >-
+        Provision the node's NODE_AGENT mTLS identity (ADR-0020). Submit the node's
+        PUBLIC client certificate (PEM) — the private key stays on the node and is
+        never sent. The server derives the certificate's SHA-256 fingerprint (stored
+        as the non-secret credential `hint`, the matcher the heartbeat ingest uses)
+        and vaults the certificate. If the node already has a node-agent credential it
+        is rotated (the prior one is soft-deleted). Requires PLATFORM + `telecom.manage`.
+      operationId: attachNodeCredential
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttachNodeCredential" }
+      responses:
+        "200":
+          description: The node with its node-agent credential reference
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Node" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [telecom]
+      summary: Detach the node-agent credential (platform)
+      description: >-
+        Remove the node's NODE_AGENT credential (the credential row is soft-deleted).
+        Idempotent. Requires PLATFORM + `telecom.manage`.
+      operationId: detachNodeCredential
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Credential detached }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /v1/telecom/engines/{id}/health-check:
     post:
       tags: [telecom]
@@ -1611,8 +1654,30 @@ components:
         maxCps: { type: integer, nullable: true, description: "Configured capacity ceiling, not a live value." }
         maxConcurrentCalls: { type: integer, nullable: true }
         health: { $ref: "#/components/schemas/NodeHealth" }
+        credential:
+          description: The node-agent mTLS credential reference (non-secret), or null if none is attached.
+          oneOf:
+            - $ref: "#/components/schemas/NodeCredentialRef"
+            - type: "null"
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    NodeCredentialRef:
+      type: object
+      required: [id, type, label, scope]
+      description: Non-secret vault reference to a node's NODE_AGENT mTLS credential — never the secret.
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [NODE_AGENT] }
+        label: { type: string }
+        hint: { type: string, nullable: true, description: "The client certificate's SHA-256 fingerprint (non-secret)." }
+        scope: { type: string, enum: [SYSTEM, TENANT] }
+    AttachNodeCredential:
+      type: object
+      required: [certificate]
+      description: Attach/rotate a node-agent mTLS credential. The node's PUBLIC client certificate (PEM); the private key stays on the node.
+      properties:
+        certificate: { type: string, description: "PEM-encoded X.509 client certificate." }
+        label: { type: string }
     NodeHealthReport:
       type: object
       required: [nodeId, status, reachability, detail, correlationId, checkedAt]

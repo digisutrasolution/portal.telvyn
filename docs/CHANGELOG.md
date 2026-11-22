@@ -6,6 +6,17 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-23 — Phase 12O-2bc — **node-agent credential provisioning** (ADR-0020) — closes
+  the provisioning gap. `POST /v1/telecom/nodes/:id/credential` (PLATFORM + `telecom.manage`)
+  attaches/rotates a node's `NODE_AGENT` mTLS identity: the body carries the node's **public**
+  client certificate (PEM; private key never sent), the server derives its SHA-256 fingerprint
+  (→ the non-secret credential `hint` the heartbeat ingest matches) and vaults the cert; a prior
+  node-agent credential is rotated (soft-deleted). `DELETE /v1/telecom/nodes/:id/credential`
+  detaches (idempotent, soft-deletes). The `Node` read now carries a safe `credential` ref
+  (`{id, type, label, hint, scope}` or null — never the secret). Invalid PEM → 400. No schema
+  change (reuses 2az's `credentialId`). Contract-first (`AttachNodeCredential` + `NodeCredentialRef`
+  + `Node.credential`). +6 API unit tests + e2e (attach→200/rotate/400/detach→204). No web source
+  change. Node health can now go green once a real inbound mTLS terminator is deployed.
 - 2026-11-23 — Phase 12O-2bb — **node health evaluator (dead-man's-switch)** (ADR-0020
   slice 3) — the slice that makes node health real. `POST /v1/telecom/nodes/health/evaluate`
   (PLATFORM + `telecom.manage`) compares each node's `lastHeartbeatAt` to the staleness TTL

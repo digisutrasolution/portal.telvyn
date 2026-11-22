@@ -20,6 +20,28 @@ process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 import { createApp } from "../src/main";
 import { ARGON2_OPTIONS } from "../src/auth/account-flows.service";
 
+// A throwaway self-signed client certificate (public — test fixture, no private key)
+// for NODE_AGENT provisioning (ADR-0020, 12O-2bc).
+const TEST_NODE_CERT = `-----BEGIN CERTIFICATE-----
+MIIDIzCCAgugAwIBAgIUQ/yCuV4qD/fI3iu975qTSiWfofwwDQYJKoZIhvcNAQEL
+BQAwITEfMB0GA1UEAwwWdGVsdnluLW5vZGUtYWdlbnQtdGVzdDAeFw0yNjExMjIy
+MzE3NTlaFw0zNjExMTkyMzE3NTlaMCExHzAdBgNVBAMMFnRlbHZ5bi1ub2RlLWFn
+ZW50LXRlc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCyMeg6ZPCy
+8v/lQdFtZz7/BgEklMjV7uTkSz8u1nAbKFQjdOIBqiV4BlLlaZeFusy5cRuIXezH
+bduoevpLuKOSkPVzJ1FxDti/ogqDXjhhvyGFICdYR4WxHAT0ZUoP11PiZ7BRq2CG
+j7UEarhChnBa/sxHtSucXO44CAdmnRuuj2y5eKhLKoMFQOzK/50aDm8H445EPm1A
+0hZMlVZzS+GBOBexfs75k90CCtMMf0+8kMrp/4TfUBxYrdAP5ppdKn5LWnTujv+j
+HEWxk/QUwfnJyMefCtVxluln188sT3UOSnq+XqySLG500anhW83IKV07ZJ/usAA0
+PncOCFEUIGPVAgMBAAGjUzBRMB0GA1UdDgQWBBRqlXaSo1yr8WJDm7rh2OCBlNJr
+sTAfBgNVHSMEGDAWgBRqlXaSo1yr8WJDm7rh2OCBlNJrsTAPBgNVHRMBAf8EBTAD
+AQH/MA0GCSqGSIb3DQEBCwUAA4IBAQARS37+s4XjXVpzrXpEBMjU+DBo7iqESx92
+IiiuzkcmsWWe5NO8wOUyb+BZUa+MiqQRVMoWxmogJjXiLMu9H5WOtgUX6oiHBaPT
+JiEc2h0mG4Ky20pT/Ci2R/Ma3FeWn6OhZWBUELYIaeMxzFciPYgWkE8BAIGSOIj/
+Xd7cdvX3O0NmIrsJVICZCjwGOojOsY4pPWDXyjJGX/Abwc0rM6rEmfCegKoPfaAX
+fvVkRwc4w/i6MTzz2gnwJOGgfFwZ73/Zgk79X4KEjTl93sVY4oOqoK3LcUUSEsMT
+JylZ0shd2lodH+dX+TYu+aa6SXWWkxiy5N+eHwnmxEDZ8HreJjsZ
+-----END CERTIFICATE-----`;
+
 const prisma = new PrismaClient();
 const redis = new Redis(process.env.REDIS_URL!);
 let app: NestExpressApplication;
@@ -156,6 +178,19 @@ describe("platform CRUD + integrity + honest health", () => {
     expect(graded.body.status).toBe("DISABLED"); // health now reflects the evaluator, not a placeholder
     const events = await request(http).get(`/v1/telecom/nodes/${nodeId}/health-events`).set(auth(plat.token));
     expect(events.body.items.some((e: { toStatus: string }) => e.toStatus === "DISABLED")).toBe(true);
+
+    // NODE_AGENT provisioning (ADR-0020, 12O-2bc): attach the node's public client cert,
+    // then detach. The server derives the fingerprint (hint); the private key never sent.
+    const attach = await request(http).post(`/v1/telecom/nodes/${nodeId}/credential`).set(auth(plat.token)).send({ certificate: TEST_NODE_CERT });
+    expect(attach.status).toBe(200);
+    expect(attach.body.credential).toMatchObject({ type: "NODE_AGENT" });
+    expect(attach.body.credential.hint).toMatch(/^[0-9a-f]{64}$/); // normalized SHA-256 fingerprint
+    const reget = await request(http).get(`/v1/telecom/nodes/${nodeId}`).set(auth(plat.token));
+    expect(reget.body.credential?.type).toBe("NODE_AGENT");
+    await request(http).post(`/v1/telecom/nodes/${nodeId}/credential`).set(auth(plat.token)).send({ certificate: "not a cert" }).expect(400);
+    await request(http).delete(`/v1/telecom/nodes/${nodeId}/credential`).set(auth(plat.token)).expect(204);
+    const afterDetach = await request(http).get(`/v1/telecom/nodes/${nodeId}`).set(auth(plat.token));
+    expect(afterDetach.body.credential ?? null).toBeNull();
 
     // Lists include the created rows
     expect((await request(http).get("/v1/telecom/nodes").set(auth(plat.token))).body.some((n: { id: string }) => n.id === nodeId)).toBe(true);

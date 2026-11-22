@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
+import { TenantType } from "@prisma/client";
 import { requestContext } from "@/common/request-context";
 import { ZodPipe } from "@/common/zod.pipe";
 import { PaginationQuery, type PaginationInput } from "@/common/pagination";
@@ -14,7 +15,8 @@ import { AuditService } from "@/authz/audit.service";
 import { NodesService } from "./nodes.service";
 import { NodeHealthService } from "./node-health.service";
 import { NodeHealthEvaluatorService } from "./heartbeat/node-health-evaluator.service";
-import { CreateNodeDto, UpdateNodeDto, type CreateNodeInput, type UpdateNodeInput } from "../infra.dto";
+import type { CredentialScopeCtx } from "../secrets/telecom-credential.service";
+import { CreateNodeDto, UpdateNodeDto, AttachNodeCredentialDto, type CreateNodeInput, type UpdateNodeInput, type AttachNodeCredentialInput } from "../infra.dto";
 
 /** Platform telecom nodes. Config is durable; health is runtime (starts UNKNOWN). */
 @Controller("v1/telecom/nodes")
@@ -52,6 +54,42 @@ export class NodesController {
       });
     }
     return summary;
+  }
+
+  /**
+   * Attach (or rotate) the node's NODE_AGENT mTLS credential (ADR-0020 provisioning).
+   * The node's PUBLIC client certificate is submitted; the private key stays on the
+   * node. The server derives the fingerprint (→ the matcher the heartbeat ingest
+   * uses) and vaults the cert. Platform + telecom.manage; audited (no secret).
+   */
+  @Post(":id/credential")
+  @HttpCode(200)
+  @RequirePermissions("telecom.manage")
+  async attachCredential(
+    @CurrentTenant() ctx: TenantContext,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(AttachNodeCredentialDto)) body: AttachNodeCredentialInput,
+    @Req() req: Request,
+  ) {
+    const node = await this.nodes.attachCredential(scopeOf(ctx), id, body);
+    await this.audit.log({
+      ctx,
+      req: requestContext(req),
+      action: "telecom.node.credential_attached",
+      resource: "node",
+      resourceId: id,
+      metadata: { credentialId: node.credential?.id ?? null, fingerprint: node.credential?.hint ?? null }, // fingerprint is non-secret
+    });
+    return node;
+  }
+
+  /** Detach the node's NODE_AGENT credential (soft-deletes it). Platform + telecom.manage; audited. */
+  @Delete(":id/credential")
+  @HttpCode(204)
+  @RequirePermissions("telecom.manage")
+  async detachCredential(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
+    await this.nodes.detachCredential(id);
+    await this.audit.log({ ctx, req: requestContext(req), action: "telecom.node.credential_detached", resource: "node", resourceId: id });
   }
 
   @Get()
@@ -134,4 +172,9 @@ export class NodesController {
     await this.nodes.remove(id);
     await this.audit.log({ ctx, req: requestContext(req), action: "telecom.node.deleted", resource: "node", resourceId: id });
   }
+}
+
+/** Platform credential scope for node-agent provisioning (nodes are platform-global; creds are system/null). */
+function scopeOf(ctx: TenantContext): CredentialScopeCtx {
+  return { tenantId: ctx.tenantId, isPlatform: ctx.tenantType === TenantType.PLATFORM };
 }

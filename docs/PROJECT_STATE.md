@@ -727,6 +727,25 @@ node.credentialId) AND a real inbound mTLS terminator exist (a DISABLED node alr
 Next = NODE_AGENT provisioning/attach path (admin endpoint: create NODE_AGENT cred w/ cert + fingerprint-as-hint, set node.credentialId)
 — the last piece before node health can go green with a real terminator / carrier health projection (later) / LAND THE STACK.
 
+**12O-2bc (DONE)** — NODE_AGENT credential PROVISIONING (ADR-0020 — closes the provisioning gap). `POST /v1/telecom/nodes/:id/credential`
+(PLATFORM + telecom.manage, @HttpCode(200)) attaches/rotates: body `{certificate PEM, label?}` = node's **PUBLIC** client cert (private
+key NEVER sent); server `certFingerprint()` via `node:crypto` X509Certificate → normalized lowercase-no-colons SHA-256 (matches 2ba
+authenticator format), vaults the PEM as NODE_AGENT (vault.create, scope platform→system/null cred), sets node.credentialId; **rotation**
+soft-deletes the prior cred (one active identity). `DELETE /v1/telecom/nodes/:id/credential` (@HttpCode(204)) detaches idempotent +
+soft-deletes. Invalid PEM → 400. **Node read now exposes a safe `credential` ref** {id,type,label,hint(=fingerprint),scope}|null —
+NEVER secretEnc (NODE_INCLUDE select omits it); added to list/get/create/update views. NodesService now injects TelecomCredentialService.
+Audited credential_attached/_detached (fingerprint non-secret, no secret). Contract: `AttachNodeCredential` + `NodeCredentialRef` +
+`Node.credential` + 2 paths; gen:contracts. **NO schema change** (reuses 2az credentialId), **NO web source change** (schema.ts additive,
+web tsc✓; NOC NodesView does not yet show the credential — optional FE follow-up). New files: nodes.service.test (baked throwaway cert
+fixture, fingerprint computed in-test via X509Certificate not hardcoded). +6 API unit (attach: fingerprint+vault+link / invalid-PEM-400 /
+rotate-soft-deletes-old / 404; detach: clears+soft-deletes / no-op) → node 29 / telecom 210 / full 242; e2e attach→200+credential/rotate/
+400/detach→204 added to telecom-infra (CI-only NOT-run). API tsc✓ eslint✓ web tsc✓. GOTCHA: openssl IS on the box (/ucrt64/bin) — mint
+test certs into the scratchpad (cd into a temp dir resets the shell); MSYS needs `//CN=` (double slash) in -subj. **NODE LIVENESS NOW
+FULLY WIRED IN SOFTWARE: schema(2az)→ingest(2ba)→evaluator(2bb)→provisioning(2bc)** — only a real inbound mTLS terminator (ops/infra,
+not code) stands between here and node health going green. (55th commit; feature tip now <2bc>; integration branch @5fcd64e now 36 behind.)
+Next = carrier health projection (later ADR-0020, needs engine/media or CDR — not buildable now) / optional NOC FE: show node credential +
+a "rotate cert" affordance / LAND THE STACK (owner remote; refresh stale phase-12o-PR.md — predates 2ad-2bc + ADR-0020 branch).
+
 ### (superseded) sub-phase plan
 
 **Phase 12M — real engine adapter (Kamailio first), built in additive review-gated sub-phases.** A disposable Kamailio 6.1.5 test engine is provisioned

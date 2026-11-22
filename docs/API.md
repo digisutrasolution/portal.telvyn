@@ -68,6 +68,8 @@ the existing `AuditService`. None of these resources hold secrets.
 | `GET /v1/telecom/nodes/:id/health-events` (health history; cursor pagination) | `telecom.health.read` |
 | `POST /v1/telecom/nodes/:id/heartbeat` (node-agent ingest) | **node-agent mTLS** (no JWT/permission) |
 | `POST /v1/telecom/nodes/health/evaluate` (dead-man's-switch tick) | `telecom.manage` |
+| `POST /v1/telecom/nodes/:id/credential` (attach/rotate node-agent cert) | `telecom.manage` |
+| `DELETE /v1/telecom/nodes/:id/credential` (detach) | `telecom.manage` |
 | `POST/PUT/DELETE /v1/telecom/nodes[/:id]` | `telecom.manage` |
 
 Engine GET is enriched with honest adapter metadata (ADR-0007): `implemented`
@@ -143,6 +145,21 @@ per-node detail lives in `HealthEvent`. **End-to-end today node health still rea
 `UNKNOWN`** until a heartbeat is actually accepted (which needs the `NODE_AGENT`
 provisioning path + a real inbound mTLS terminator); a `DISABLED` node, however, already
 transitions correctly.
+
+**Node-agent credential provisioning (Phase 12O-2bc, ADR-0020).** `POST
+:id/credential` (PLATFORM + `telecom.manage`) attaches — or rotates — a node's
+`NODE_AGENT` mTLS identity. The body carries the node's **public** client certificate
+(`{certificate: <PEM>, label?}`); the **private key stays on the node** and is never
+sent. The server parses the cert (invalid → 400), derives its SHA-256 **fingerprint**
+(stored as the credential's non-secret `hint` — exactly what the heartbeat ingest
+matches), and vaults the certificate (ADR-0009); a prior node-agent credential is
+rotated (soft-deleted) so a node has one active identity. `DELETE :id/credential`
+detaches (idempotent; the credential row is soft-deleted). The `Node` read now carries a
+safe `credential` reference — `{id, type: NODE_AGENT, label, hint (the fingerprint),
+scope}` or `null` — **never** the secret. This closes the provisioning gap: once a real
+inbound mTLS terminator is wired, a node whose agent presents the matching certificate
+can be accepted and (via a heartbeat + the evaluator) reach `HEALTHY`. Audited
+(`telecom.node.credential_attached` / `_detached`; the fingerprint is non-secret).
 
 **Engine foundation (Phase 12K, ADR-0007 addendum).** `GET :id/status` returns a
 normalized `EngineStatus` — `provider`, `implemented`, an explicit

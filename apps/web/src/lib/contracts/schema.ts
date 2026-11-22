@@ -550,6 +550,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/nodes/{id}/credential": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach / rotate a node-agent mTLS credential (platform)
+         * @description Provision the node's NODE_AGENT mTLS identity (ADR-0020). Submit the node's PUBLIC client certificate (PEM) — the private key stays on the node and is never sent. The server derives the certificate's SHA-256 fingerprint (stored as the non-secret credential `hint`, the matcher the heartbeat ingest uses) and vaults the certificate. If the node already has a node-agent credential it is rotated (the prior one is soft-deleted). Requires PLATFORM + `telecom.manage`.
+         */
+        post: operations["attachNodeCredential"];
+        /**
+         * Detach the node-agent credential (platform)
+         * @description Remove the node's NODE_AGENT credential (the credential row is soft-deleted). Idempotent. Requires PLATFORM + `telecom.manage`.
+         */
+        delete: operations["detachNodeCredential"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/telecom/engines/{id}/health-check": {
         parameters: {
             query?: never;
@@ -1220,10 +1244,30 @@ export interface components {
             maxCps?: number | null;
             maxConcurrentCalls?: number | null;
             health: components["schemas"]["NodeHealth"];
+            /** @description The node-agent mTLS credential reference (non-secret), or null if none is attached. */
+            credential?: components["schemas"]["NodeCredentialRef"] | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        /** @description Non-secret vault reference to a node's NODE_AGENT mTLS credential — never the secret. */
+        NodeCredentialRef: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            type: "NODE_AGENT";
+            label: string;
+            /** @description The client certificate's SHA-256 fingerprint (non-secret). */
+            hint?: string | null;
+            /** @enum {string} */
+            scope: "SYSTEM" | "TENANT";
+        };
+        /** @description Attach/rotate a node-agent mTLS credential. The node's PUBLIC client certificate (PEM); the private key stays on the node. */
+        AttachNodeCredential: {
+            /** @description PEM-encoded X.509 client certificate. */
+            certificate: string;
+            label?: string;
         };
         /** @description Outcome of an operator node health probe (honest posture; never fabricated HEALTHY until a connector exists). */
         NodeHealthReport: {
@@ -2664,6 +2708,59 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    attachNodeCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachNodeCredential"];
+            };
+        };
+        responses: {
+            /** @description The node with its node-agent credential reference */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Node"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    detachNodeCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Credential detached */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     checkEngineHealth: {
