@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { SipTrunk, SipTrunkPage } from "@/lib/contracts";
+import type { SipTrunk, SipTrunkPage, CreateSipTrunk, UpdateSipTrunk } from "@/lib/contracts";
 
 /**
  * Read-only SIP trunk API calls (tenant-scoped; `sip_trunk.read`). Trunks are
@@ -34,4 +34,19 @@ export function listSipTrunks(params: ListSipTrunksParams = {}, signal?: AbortSi
   if (params.q) qs.set("q", params.q);
   const query = qs.toString();
   return api.get<SipTrunkPage>(`/v1/telecom/sip-trunks${query ? `?${query}` : ""}`, { signal });
+}
+
+/** Create a SIP trunk (`sip_trunk.create`); ownership is server-derived. Returns the created trunk. */
+export function createSipTrunk(body: CreateSipTrunk): Promise<SipTrunk> {
+  return api.post<SipTrunk>("/v1/telecom/sip-trunks", body);
+}
+
+/** Partially update a SIP trunk (`sip_trunk.update`). Returns the updated trunk; 404 if foreign/removed. */
+export function updateSipTrunk(id: string, body: UpdateSipTrunk): Promise<SipTrunk> {
+  return api.patch<SipTrunk>(`/v1/telecom/sip-trunks/${id}`, body);
+}
+
+/** Soft-delete a SIP trunk (`sip_trunk.delete`); 204 No Content. 404 if foreign/removed. */
+export function deleteSipTrunk(id: string): Promise<void> {
+  return api.delete<void>(`/v1/telecom/sip-trunks/${id}`);
 }

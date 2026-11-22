@@ -80,6 +80,12 @@ export type SipTrunk = Schemas["SipTrunk"];
 /** Cursor-paginated page of SIP trunks. */
 export type SipTrunkPage = Schemas["SipTrunkPage"];
 
+/** Create-SIP-trunk request body (POST /v1/telecom/sip-trunks). */
+export type CreateSipTrunk = Schemas["CreateSipTrunk"];
+
+/** Partial update-SIP-trunk request body (PATCH /v1/telecom/sip-trunks/{id}). */
+export type UpdateSipTrunk = Schemas["UpdateSipTrunk"];
+
 /** A DID (phone number); related resources are reference ids only. */
 export type Did = Schemas["Did"];
 

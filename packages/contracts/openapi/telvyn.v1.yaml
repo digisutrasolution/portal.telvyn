@@ -612,6 +612,36 @@ paths:
               schema: { $ref: "#/components/schemas/SipTrunkPage" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [telecom]
+      summary: Create a SIP trunk
+      description: >-
+        Create a tenant-owned SIP trunk (control-plane configuration only — this
+        establishes no live connectivity). Ownership (tenantId) is derived
+        server-side and is never a client field (mass-assignment protection).
+        `carrierId` must reference a carrier accessible in the caller's scope
+        (own or system) or the request is rejected. Endpoint values (host /
+        sipUri / allowedIps) are validated as attacker-controlled input (no
+        control characters, no CRLF, no arbitrary schemes). A credential may be
+        attached by referencing an existing vault credential (`credentialId`) OR
+        created inline (`credential`), never both; the secret goes straight to
+        the vault and is never stored on or returned from the trunk. Requires
+        `sip_trunk.create`.
+      operationId: createSipTrunk
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSipTrunk" }
+      responses:
+        "201":
+          description: SIP trunk created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SipTrunk" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
   /v1/telecom/sip-trunks/{id}:
     get:
       tags: [telecom]
@@ -631,6 +661,49 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SipTrunk" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [telecom]
+      summary: Update a SIP trunk
+      description: >-
+        Partially update a tenant-owned SIP trunk (only the supplied fields
+        change). Ownership/scope are immutable and never taken from the client; a
+        foreign tenant's trunk is reported as 404 (IDOR-safe). A changed
+        `carrierId` is re-checked for scope accessibility. Credential rules match
+        create (`credentialId` or inline `credential`, never both); secrets are
+        vaulted and never returned. Requires `sip_trunk.update`.
+      operationId: updateSipTrunk
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSipTrunk" }
+      responses:
+        "200":
+          description: SIP trunk updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SipTrunk" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [telecom]
+      summary: Delete a SIP trunk (soft delete)
+      description: >-
+        Soft-delete a tenant-owned SIP trunk (sets deletedAt; the row is retained
+        for audit and history). A foreign tenant's trunk is 404 (IDOR-safe).
+        Requires `sip_trunk.delete`.
+      operationId: deleteSipTrunk
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: SIP trunk deleted }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -1232,6 +1305,83 @@ components:
           type: array
           items: { $ref: "#/components/schemas/SipTrunk" }
         nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next page; null when exhausted." }
+    InlineSipCredentialInput:
+      type: object
+      required: [label, secret]
+      description: >-
+        A SIP credential to create and attach in the same request. The type is
+        forced to SIP_PASSWORD server-side; the secret is written straight to the
+        encrypted vault and is never stored on or returned from the trunk.
+        Write-only.
+      properties:
+        label: { type: string, minLength: 1, maxLength: 120 }
+        hint: { type: string, maxLength: 120 }
+        secret: { type: string, minLength: 1, maxLength: 4096, description: "Write-only secret material (vaulted immediately)." }
+    CreateSipTrunk:
+      type: object
+      required: [name, carrierId]
+      description: >-
+        Create-SIP-trunk body (control-plane configuration only). Ownership
+        (tenantId) is server-derived — never a client field. `carrierId` must be
+        accessible in the caller's scope. Endpoint values are validated as
+        attacker-controlled input. Attach a credential by `credentialId` OR inline
+        `credential`, never both.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        carrierId: { type: string, format: uuid, description: "A carrier accessible in the caller's scope (own or system)." }
+        direction: { type: string, enum: [INBOUND, OUTBOUND, BIDIRECTIONAL] }
+        sipUri: { type: string, maxLength: 512, description: "A sip: or sips: URI (no control characters / whitespace)." }
+        host: { type: string, maxLength: 253, description: "Hostname or IPv4/IPv6 (no control characters / whitespace)." }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        transport: { type: string, enum: [UDP, TCP, TLS] }
+        tls: { type: boolean }
+        authMode: { type: string, enum: [IP, CREDENTIALS] }
+        allowedIps:
+          type: array
+          maxItems: 64
+          items: { type: string, description: "IPv4/IPv6 address or CIDR." }
+        codecs:
+          type: array
+          maxItems: 32
+          items: { type: string, enum: [PCMU, PCMA, G722, G729, OPUS, AMR, AMR_WB] }
+        srtp: { type: boolean }
+        dtmfMode: { type: string, enum: [rfc2833, info, inband] }
+        maxCps: { type: integer, minimum: 0, maximum: 1000000 }
+        maxConcurrentCalls: { type: integer, minimum: 0, maximum: 10000000 }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED] }
+        credentialId: { type: string, format: uuid, description: "Attach an existing SIP vault credential." }
+        credential: { $ref: "#/components/schemas/InlineSipCredentialInput" }
+    UpdateSipTrunk:
+      type: object
+      description: >-
+        Partial SIP-trunk update — only supplied fields change. Ownership/scope
+        are never changed from the client. Same credential rules as create
+        (`credentialId` or inline `credential`, never both).
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        carrierId: { type: string, format: uuid, description: "A carrier accessible in the caller's scope (own or system)." }
+        direction: { type: string, enum: [INBOUND, OUTBOUND, BIDIRECTIONAL] }
+        sipUri: { type: string, maxLength: 512 }
+        host: { type: string, maxLength: 253 }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        transport: { type: string, enum: [UDP, TCP, TLS] }
+        tls: { type: boolean }
+        authMode: { type: string, enum: [IP, CREDENTIALS] }
+        allowedIps:
+          type: array
+          maxItems: 64
+          items: { type: string, description: "IPv4/IPv6 address or CIDR." }
+        codecs:
+          type: array
+          maxItems: 32
+          items: { type: string, enum: [PCMU, PCMA, G722, G729, OPUS, AMR, AMR_WB] }
+        srtp: { type: boolean }
+        dtmfMode: { type: string, enum: [rfc2833, info, inband] }
+        maxCps: { type: integer, minimum: 0, maximum: 1000000 }
+        maxConcurrentCalls: { type: integer, minimum: 0, maximum: 10000000 }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED] }
+        credentialId: { type: string, format: uuid }
+        credential: { $ref: "#/components/schemas/InlineSipCredentialInput" }
     DidHealth:
       type: object
       required: [status, detail]

@@ -3,10 +3,37 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiError } from "@/lib/api/problem";
 import type { SipTrunk } from "@/lib/contracts";
 
-vi.mock("@/lib/telecom/sip-trunks-actions", () => ({ listSipTrunks: vi.fn(), getSipTrunk: vi.fn() }));
+vi.mock("@/lib/telecom/sip-trunks-actions", () => ({
+  listSipTrunks: vi.fn(),
+  getSipTrunk: vi.fn(),
+  createSipTrunk: vi.fn(),
+  updateSipTrunk: vi.fn(),
+  deleteSipTrunk: vi.fn(),
+}));
+// The create/edit form loads carriers for its (required) carrier picker.
+vi.mock("@/lib/telecom/carriers-actions", () => ({ listCarriers: vi.fn() }));
 
-import { getSipTrunk, listSipTrunks } from "@/lib/telecom/sip-trunks-actions";
+import { createSipTrunk, deleteSipTrunk, getSipTrunk, listSipTrunks } from "@/lib/telecom/sip-trunks-actions";
+import { listCarriers } from "@/lib/telecom/carriers-actions";
+import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { SipTrunksView } from "./sip-trunks-view";
+
+// Full trunk permissions so the create/edit/delete affordances render.
+const allPermsLoader: SessionLoader = async () => ({
+  userId: "u",
+  tenantId: "t",
+  tenantType: "RESELLER",
+  roles: [],
+  permissions: ["sip_trunk.read", "sip_trunk.create", "sip_trunk.update", "sip_trunk.delete", "carrier.read"],
+});
+
+function renderView(loader: SessionLoader = allPermsLoader) {
+  return render(
+    <SessionProvider loader={loader}>
+      <SipTrunksView />
+    </SessionProvider>,
+  );
+}
 
 function trunk(overrides: Partial<SipTrunk> = {}): SipTrunk {
   return {
@@ -44,7 +71,7 @@ describe("SipTrunksView", () => {
       items: [trunk({ name: "Primary trunk", transport: "TLS", tls: true })],
       nextCursor: null,
     });
-    render(<SipTrunksView />);
+    renderView();
 
     expect(await screen.findByText("Primary trunk")).toBeInTheDocument();
     expect(screen.getByText("Acme SIP")).toBeInTheDocument();
@@ -57,7 +84,7 @@ describe("SipTrunksView", () => {
     const row = trunk({ name: "Primary trunk", authMode: "IP", allowedIps: ["203.0.113.10"] });
     vi.mocked(listSipTrunks).mockResolvedValue({ items: [row], nextCursor: null });
     vi.mocked(getSipTrunk).mockResolvedValue(trunk({ id: row.id, name: "Primary trunk", authMode: "IP", allowedIps: ["203.0.113.10"] }));
-    render(<SipTrunksView />);
+    renderView();
 
     fireEvent.click(await screen.findByRole("button", { name: "View Primary trunk" }));
 
@@ -69,13 +96,13 @@ describe("SipTrunksView", () => {
 
   it("shows the empty state when there are no trunks", async () => {
     vi.mocked(listSipTrunks).mockResolvedValue({ items: [], nextCursor: null });
-    render(<SipTrunksView />);
+    renderView();
     expect(await screen.findByText(/No SIP trunks are configured yet/i)).toBeInTheDocument();
   });
 
   it("filters by status, refetching with the status query param", async () => {
     vi.mocked(listSipTrunks).mockResolvedValue({ items: [trunk({ name: "Primary trunk" })], nextCursor: null });
-    render(<SipTrunksView />);
+    renderView();
     expect(await screen.findByText("Primary trunk")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Filter by status" }), { target: { value: "ACTIVE" } });
@@ -84,7 +111,7 @@ describe("SipTrunksView", () => {
 
   it("filters by direction, refetching with the direction query param", async () => {
     vi.mocked(listSipTrunks).mockResolvedValue({ items: [trunk({ name: "Primary trunk" })], nextCursor: null });
-    render(<SipTrunksView />);
+    renderView();
     expect(await screen.findByText("Primary trunk")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Filter by direction" }), { target: { value: "OUTBOUND" } });
@@ -93,7 +120,7 @@ describe("SipTrunksView", () => {
 
   it("debounces the search box, then refetches with the q param", async () => {
     vi.mocked(listSipTrunks).mockResolvedValue({ items: [trunk({ name: "Primary trunk" })], nextCursor: null });
-    render(<SipTrunksView />);
+    renderView();
     const box = await screen.findByRole("searchbox", { name: "Search SIP trunks" });
 
     fireEvent.change(box, { target: { value: "primary" } });
@@ -104,7 +131,7 @@ describe("SipTrunksView", () => {
     vi.mocked(listSipTrunks)
       .mockResolvedValueOnce({ items: [trunk({ name: "Primary trunk" })], nextCursor: null })
       .mockResolvedValue({ items: [], nextCursor: null });
-    render(<SipTrunksView />);
+    renderView();
     expect(await screen.findByText("Primary trunk")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Filter by transport" }), { target: { value: "TLS" } });
@@ -114,7 +141,7 @@ describe("SipTrunksView", () => {
 
   it("shows an error state (RFC 7807 title) when the load fails", async () => {
     vi.mocked(listSipTrunks).mockRejectedValue(new ApiError({ title: "Forbidden", status: 403 }));
-    render(<SipTrunksView />);
+    renderView();
     expect(await screen.findByRole("alert")).toHaveTextContent("Forbidden");
   });
 
@@ -122,7 +149,7 @@ describe("SipTrunksView", () => {
     vi.mocked(listSipTrunks)
       .mockResolvedValueOnce({ items: [trunk({ name: "Trunk One" })], nextCursor: "cur-2" })
       .mockResolvedValueOnce({ items: [trunk({ name: "Trunk Two" })], nextCursor: null });
-    render(<SipTrunksView />);
+    renderView();
 
     expect(await screen.findByText("Trunk One")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));
@@ -131,5 +158,47 @@ describe("SipTrunksView", () => {
     expect(await screen.findByText("Trunk Two")).toBeInTheDocument();
     expect(screen.getByText("Trunk One")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+
+  it("creates a trunk from the New-trunk form (carrier picked) and reloads the list", async () => {
+    const carrierId = crypto.randomUUID();
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(listCarriers).mockResolvedValue({ items: [{ id: carrierId, name: "Acme SIP" }], nextCursor: null } as never);
+    vi.mocked(createSipTrunk).mockResolvedValue(trunk({ name: "New Trunk", carrierId }));
+    renderView();
+    await screen.findByText(/No SIP trunks are configured yet/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "New trunk" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "New Trunk" } });
+    // Carrier picker is required — wait for the loaded option, then select it.
+    await screen.findByRole("option", { name: "Acme SIP" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Carrier" }), { target: { value: carrierId } });
+    fireEvent.click(screen.getByRole("button", { name: "Create trunk" }));
+
+    await waitFor(() => expect(createSipTrunk).toHaveBeenCalledWith(expect.objectContaining({ name: "New Trunk", carrierId })));
+    // list refetched (first-page call on mount + after the save)
+    await waitFor(() => expect(vi.mocked(listSipTrunks).mock.calls.length).toBeGreaterThanOrEqual(2));
+  });
+
+  it("hides New trunk without sip_trunk.create permission", async () => {
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [], nextCursor: null });
+    renderView(async () => ({ userId: "u", tenantId: "t", tenantType: "RESELLER", roles: [], permissions: ["sip_trunk.read"] }));
+    await screen.findByText(/No SIP trunks are configured yet/i);
+    expect(screen.queryByRole("button", { name: "New trunk" })).toBeNull();
+  });
+
+  it("deletes a trunk via the detail drawer after confirmation", async () => {
+    const row = trunk({ name: "Primary trunk" });
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getSipTrunk).mockResolvedValue(row);
+    vi.mocked(deleteSipTrunk).mockResolvedValue(undefined);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Primary trunk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" })); // drawer footer → opens confirm
+    const confirm = await screen.findByRole("button", { name: "Delete" }); // confirm dialog's Delete
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(deleteSipTrunk).toHaveBeenCalledWith(row.id));
   });
 });

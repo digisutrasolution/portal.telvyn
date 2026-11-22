@@ -803,3 +803,28 @@ Format: Keep a Changelog; SemVer once releases begin.
   `next build` ✓ (/carriers 5.69 kB); eslint ✓. **No backend change** (endpoints + audit + tenant-scoping
   pre-existed, e2e-covered). `API.md` updated. Next: roll the write pattern to the other resources (one per
   sub-phase), or land the stack.
+- 2026-11-22 — **Phase 12O-2af — SIP trunk create / edit / delete (second write slice, contract-first).**
+  Rolls the 12O-2ae carrier mutation pattern to SIP trunks. The trunk POST/PATCH/DELETE endpoints already
+  existed (`sip-trunks.controller.ts`, perms `sip_trunk.create` / `sip_trunk.update` / `sip_trunk.delete`;
+  ownership server-derived, `carrierId` scope-validated, endpoint values SSRF-validated, mutations audited
+  with credential **reference** only); this phase **authored them into the contract** (new `CreateSipTrunk`,
+  `UpdateSipTrunk`, `InlineSipCredentialInput` schemas + POST on the collection and PATCH/DELETE on the item
+  path in `telvyn.v1.yaml`), regenerated `schema.ts` (additive — `post/patch/delete: never` placeholders
+  became real operations) and added `CreateSipTrunk` / `UpdateSipTrunk` aliases. New `createSipTrunk` /
+  `updateSipTrunk` / `deleteSipTrunk` actions. New `<SipTrunkForm>` modal (create + edit): name, **carrier
+  picker** (required FK — loaded from the first page of `listCarriers`, seeded in edit with the trunk's
+  current carrier so it always shows), direction, host, SIP URI, port (1–65535, client-validated), transport,
+  TLS/SRTP checkboxes, auth mode, allowed-IPs textarea (newline/comma → list; server validates IP/CIDR), max
+  CPS / max concurrent calls, DTMF mode, codec checkboxes. The detail drawer gained **Edit** / **Delete**
+  footer actions (gated on `sip_trunk.update` / `sip_trunk.delete` via `useSession`); sip-trunks-view gained
+  a **New trunk** button (gated on `sip_trunk.create`) and a soft-delete confirm dialog; every mutation
+  reloads the list. **Scope deliberately bounded:** credential attachment (`credentialId` / inline
+  `credential` secret) is **deferred** to a later secret-handling slice — both stay optional + fully
+  available on the API, and `authMode` can still be set. All gating is UX-only; the API re-checks
+  `sip_trunk.*`, re-validates every field, and stays tenant/scope-authoritative. +3 web unit tests
+  (186 → 189; full web suite 189 ✓, 34 files — create-with-carrier-picker-and-reload, New-trunk hidden
+  without `sip_trunk.create`, delete-via-drawer-after-confirm; existing trunk tests now wrap
+  `SessionProvider`). `next build` ✓ (/sip-trunks 7.08 kB); eslint ✓. **No backend change** (endpoints +
+  audit + tenant-scoping + SSRF validation pre-existed, e2e-covered). `API.md` updated. Next: roll the
+  pattern to numbers / routing / LCR / member management (one per sub-phase), the deferred carrier/trunk
+  credential slice, or land the stack.

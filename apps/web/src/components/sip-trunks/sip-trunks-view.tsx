@@ -5,12 +5,18 @@ import { Cable } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Status } from "@/components/ui/status";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { SipTrunk } from "@/lib/contracts";
-import { listSipTrunks, type ListSipTrunksParams } from "@/lib/telecom/sip-trunks-actions";
+import { listSipTrunks, deleteSipTrunk, type ListSipTrunksParams } from "@/lib/telecom/sip-trunks-actions";
 import { isApiError } from "@/lib/api/problem";
+import { messageFor } from "@/components/auth/auth-message";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useSession } from "@/lib/session/session-context";
 import { ListFilters } from "@/components/telecom/list-filters";
 import { SipTrunkDetailDrawer } from "./sip-trunk-detail-drawer";
+import { SipTrunkForm } from "./sip-trunk-form";
+
+type FormState = { mode: "create" } | { mode: "edit"; trunk: SipTrunk } | null;
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<SipTrunk["status"], Tone> = { ACTIVE: "ok", SUSPENDED: "warn", DISABLED: "neutral" };
@@ -56,6 +62,14 @@ export function SipTrunksView() {
   const [error, setError] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
   const [detailId, setDetailId] = React.useState<string | null>(null);
+
+  // Mutations (Phase 12O-2af). Gating is UX-only; the API re-checks every call.
+  const { hasPermission } = useSession();
+  const canCreate = hasPermission("sip_trunk.create");
+  const [form, setForm] = React.useState<FormState>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<SipTrunk | null>(null);
+  const [deletePending, setDeletePending] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
 
   // Filters (mapped to the already-contracted list query params; "" = no filter).
   const [search, setSearch] = React.useState("");
@@ -126,6 +140,21 @@ export function SipTrunksView() {
     setReloadKey((k) => k + 1);
   }
 
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeletePending(true);
+    setDeleteError(null);
+    try {
+      await deleteSipTrunk(deleteTarget.id);
+      setDeleteTarget(null);
+      refresh();
+    } catch (err) {
+      setDeleteError(messageFor(err));
+    } finally {
+      setDeletePending(false);
+    }
+  }
+
   return (
     <section aria-labelledby="sip-trunks-heading">
       <header className="mb-4 flex items-center justify-between gap-3">
@@ -133,7 +162,12 @@ export function SipTrunksView() {
           <h1 id="sip-trunks-heading" className="font-display text-[19px] font-semibold text-ink">SIP trunks</h1>
           <p className="text-[13px] text-muted">Connectivity configuration for your workspace. No live connectivity — health is reported once probes exist.</p>
         </div>
-        <Button variant="secondary" size="sm" onClick={refresh} disabled={loading}>Refresh</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={refresh} disabled={loading}>Refresh</Button>
+          {canCreate && (
+            <Button variant="primary" size="sm" onClick={() => setForm({ mode: "create" })}>New trunk</Button>
+          )}
+        </div>
       </header>
 
       {(items.length > 0 || hasActiveFilters) && (
@@ -209,7 +243,47 @@ export function SipTrunksView() {
         </>
       )}
 
-      {detailId && <SipTrunkDetailDrawer key={detailId} trunkId={detailId} onClose={() => setDetailId(null)} />}
+      {detailId && (
+        <SipTrunkDetailDrawer
+          key={detailId}
+          trunkId={detailId}
+          onClose={() => setDetailId(null)}
+          onEdit={(trunk) => {
+            setDetailId(null);
+            setForm({ mode: "edit", trunk });
+          }}
+          onDelete={(trunk) => {
+            setDetailId(null);
+            setDeleteError(null);
+            setDeleteTarget(trunk);
+          }}
+        />
+      )}
+
+      {form && (
+        <SipTrunkForm {...form} onClose={() => setForm(null)} onSaved={refresh} />
+      )}
+
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && !deletePending && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle>Delete SIP trunk</DialogTitle>
+          <DialogDescription className="text-[13px] text-ink-2">
+            Delete <span className="font-medium text-ink">{deleteTarget?.name}</span>? It is removed from your
+            workspace (soft-deleted and retained for audit). This changes configuration only — no live calls are affected.
+          </DialogDescription>
+          {deleteError && (
+            <p role="alert" className="mt-3 rounded-md border border-danger bg-danger-soft px-3 py-2 text-[12px] text-danger">
+              {deleteError}
+            </p>
+          )}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteTarget(null)} disabled={deletePending}>Cancel</Button>
+            <Button type="button" variant="danger" size="sm" onClick={confirmDelete} disabled={deletePending}>
+              {deletePending ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

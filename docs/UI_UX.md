@@ -584,3 +584,23 @@ and credential attachment (entering or linking a vault secret) — editing a car
 here never changes them. In edit mode, clearing an optional numeric field leaves it
 unchanged (the API has no "unset" for those). Verified: 186/186 web Vitest · `next
 build` clean (/carriers 5.69 kB).
+
+SIP trunk management — create / edit / delete — EXISTING (Phase 12O-2af, 2026-11-22):
+the 12O-2ae carrier write pattern rolled to SIP trunks. The SIP trunks screen gains a
+"New trunk" button (shown only with `sip_trunk.create`); the trunk detail drawer gains
+Edit and Delete footer actions (shown only with `sip_trunk.update` / `sip_trunk.delete`).
+`<SipTrunkForm>` is a modal for both create and edit. Because a trunk's carrier is a
+required field, the form includes a **carrier picker** — it loads the first page of the
+tenant's carriers (own + system) and, when editing, seeds the list with the trunk's
+current carrier so the selection always shows even if it falls outside that page; the
+server re-validates that the chosen carrier is accessible in scope. Other fields:
+direction, host, SIP URI, port (1–65535), transport, TLS and SRTP toggles, auth mode,
+an allowed-IPs textarea (one IPv4/IPv6 address or CIDR per line — the server validates
+each as attacker-controlled input), max CPS, max concurrent calls, DTMF mode, and codec
+checkboxes. Validation is client-side with per-field errors; the server re-validates and
+re-checks permission on every call (UI gating is convenience only). Delete is a soft
+delete behind a confirm dialog that notes configuration-only impact (no live calls are
+affected). Every successful mutation reloads the list. Credential attachment (entering or
+linking a vault secret) is deliberately deferred to a later secret-handling slice — it
+stays optional on the API, and the auth mode can still be set here. Verified: 189/189 web
+Vitest · `next build` clean (/sip-trunks 7.08 kB).

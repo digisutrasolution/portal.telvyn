@@ -362,10 +362,24 @@ API):** `regionId` (no picker) + credential attachment (secret handling). UX-onl
 re-validates + re-checks every call. **web 183 → 186 (full suite ✓, 34 files): +3. `next build` ✓
 (/carriers 5.69 kB); eslint ✓. No backend change** (endpoints + audit + tenant-scoping pre-existed,
 e2e-covered). `API.md` updated. Sets the write pattern for the other resources.
-Next (await owner go): roll the write pattern to the other resources (SIP trunks / numbers / routing /
-LCR / member mgmt), one per sub-phase; or land the stack (owner provides GitHub remote → push
-`integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps
-(HealthEvent/config-version history) stay separately approval-gated.
+**12O-2af (DONE)** — SIP trunk create / edit / delete (SECOND WRITE SLICE, contract-first). Rolls the 2ae
+pattern to SIP trunks. The trunk POST/PATCH/DELETE endpoints already existed (`sip_trunk.create`/`update`/
+`delete`; ownership server-derived, `carrierId` scope-validated, endpoint values SSRF-validated, audited
+with a credential reference only); this phase **authored them into the contract** (`CreateSipTrunk` /
+`UpdateSipTrunk` / `InlineSipCredentialInput` + POST/PATCH/DELETE paths), regenerated `schema.ts` (additive),
+added aliases + `createSipTrunk`/`updateSipTrunk`/`deleteSipTrunk`. New `<SipTrunkForm>` modal (create+edit:
+name, **required carrier picker** via `listCarriers` first page — seeded with the current carrier in edit,
+direction, host, SIP URI, port, transport, TLS/SRTP, auth mode, allowed-IPs textarea, maxCps/maxConcurrent,
+DTMF, codecs; client range validation). Detail drawer got Edit/Delete (gated `sip_trunk.update`/`delete`);
+sip-trunks-view got a New-trunk button (gated `sip_trunk.create`) + soft-delete confirm; mutations reload
+the list. **Deferred (optional, still on the API):** credential attachment (secret handling); `authMode`
+still settable. UX-only gating; server re-validates + re-checks every call + stays tenant/scope-authoritative.
+**web 186 → 189 (full suite ✓, 34 files): +3. `next build` ✓ (/sip-trunks 7.08 kB); eslint ✓. No backend
+change** (endpoints + audit + tenant-scoping + SSRF validation pre-existed, e2e-covered). `API.md` updated.
+Next (await owner go): roll the write pattern to the remaining resources (numbers / routing / LCR / member
+mgmt), one per sub-phase; the deferred carrier/trunk credential slice; or land the stack (owner provides
+GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend
+read gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

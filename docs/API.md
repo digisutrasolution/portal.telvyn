@@ -171,8 +171,18 @@ references only — never secrets).
 | `DELETE /v1/telecom/sip-trunks/:id` (soft delete) | `sip_trunk.delete` |
 
 Response is a safe DTO (config + carrier summary + safe credential metadata +
-honest `health: UNKNOWN`) — never `secretEnc`/passwords. OpenAPI YAML still
-covers `/v1/auth` only (tracked debt) — endpoints documented here.
+honest `health: UNKNOWN`) — never `secretEnc`/passwords.
+
+As of **Phase 12O-2af** the full SIP trunk surface — list, get, **create, update,
+delete** — is authored into the OpenAPI contract (`CreateSipTrunk` / `UpdateSipTrunk`
+/ `InlineSipCredentialInput` schemas in `telvyn.v1.yaml`) and the frontend SIP trunk
+management screen (create / edit / soft-delete) consumes the generated types. The
+POST/PATCH/DELETE handlers themselves are unchanged since Phase 12F — no backend
+change. `carrierId` is a required create field and is re-validated server-side for
+scope accessibility; the UI drives it with a carrier picker (first page of
+`listCarriers`). The UI defers credential attachment (`credentialId` / inline
+`credential` secret) to a later secret-handling slice — both remain fully available
+on the API, and `authMode` can still be set in the form.
 
 > **OpenAPI debt — partial closure (Phase 12O-2f/2g/2h, 2026-11-18):** the
 > contract now also covers `GET /v1/me/context`, `GET /v1/telecom/engines`,

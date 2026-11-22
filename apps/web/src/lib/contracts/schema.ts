@@ -555,7 +555,11 @@ export interface paths {
          */
         get: operations["listSipTrunks"];
         put?: never;
-        post?: never;
+        /**
+         * Create a SIP trunk
+         * @description Create a tenant-owned SIP trunk (control-plane configuration only — this establishes no live connectivity). Ownership (tenantId) is derived server-side and is never a client field (mass-assignment protection). `carrierId` must reference a carrier accessible in the caller's scope (own or system) or the request is rejected. Endpoint values (host / sipUri / allowedIps) are validated as attacker-controlled input (no control characters, no CRLF, no arbitrary schemes). A credential may be attached by referencing an existing vault credential (`credentialId`) OR created inline (`credential`), never both; the secret goes straight to the vault and is never stored on or returned from the trunk. Requires `sip_trunk.create`.
+         */
+        post: operations["createSipTrunk"];
         delete?: never;
         options?: never;
         head?: never;
@@ -576,10 +580,18 @@ export interface paths {
         get: operations["getSipTrunk"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a SIP trunk (soft delete)
+         * @description Soft-delete a tenant-owned SIP trunk (sets deletedAt; the row is retained for audit and history). A foreign tenant's trunk is 404 (IDOR-safe). Requires `sip_trunk.delete`.
+         */
+        delete: operations["deleteSipTrunk"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a SIP trunk
+         * @description Partially update a tenant-owned SIP trunk (only the supplied fields change). Ownership/scope are immutable and never taken from the client; a foreign tenant's trunk is reported as 404 (IDOR-safe). A changed `carrierId` is re-checked for scope accessibility. Credential rules match create (`credentialId` or inline `credential`, never both); secrets are vaulted and never returned. Requires `sip_trunk.update`.
+         */
+        patch: operations["updateSipTrunk"];
         trace?: never;
     };
     "/v1/telecom/dids": {
@@ -1164,6 +1176,80 @@ export interface components {
              * @description Pass as `cursor` to fetch the next page; null when exhausted.
              */
             nextCursor: string | null;
+        };
+        /** @description A SIP credential to create and attach in the same request. The type is forced to SIP_PASSWORD server-side; the secret is written straight to the encrypted vault and is never stored on or returned from the trunk. Write-only. */
+        InlineSipCredentialInput: {
+            label: string;
+            hint?: string;
+            /** @description Write-only secret material (vaulted immediately). */
+            secret: string;
+        };
+        /** @description Create-SIP-trunk body (control-plane configuration only). Ownership (tenantId) is server-derived — never a client field. `carrierId` must be accessible in the caller's scope. Endpoint values are validated as attacker-controlled input. Attach a credential by `credentialId` OR inline `credential`, never both. */
+        CreateSipTrunk: {
+            name: string;
+            /**
+             * Format: uuid
+             * @description A carrier accessible in the caller's scope (own or system).
+             */
+            carrierId: string;
+            /** @enum {string} */
+            direction?: "INBOUND" | "OUTBOUND" | "BIDIRECTIONAL";
+            /** @description A sip: or sips: URI (no control characters / whitespace). */
+            sipUri?: string;
+            /** @description Hostname or IPv4/IPv6 (no control characters / whitespace). */
+            host?: string;
+            port?: number;
+            /** @enum {string} */
+            transport?: "UDP" | "TCP" | "TLS";
+            tls?: boolean;
+            /** @enum {string} */
+            authMode?: "IP" | "CREDENTIALS";
+            allowedIps?: string[];
+            codecs?: ("PCMU" | "PCMA" | "G722" | "G729" | "OPUS" | "AMR" | "AMR_WB")[];
+            srtp?: boolean;
+            /** @enum {string} */
+            dtmfMode?: "rfc2833" | "info" | "inband";
+            maxCps?: number;
+            maxConcurrentCalls?: number;
+            /** @enum {string} */
+            status?: "ACTIVE" | "SUSPENDED" | "DISABLED";
+            /**
+             * Format: uuid
+             * @description Attach an existing SIP vault credential.
+             */
+            credentialId?: string;
+            credential?: components["schemas"]["InlineSipCredentialInput"];
+        };
+        /** @description Partial SIP-trunk update — only supplied fields change. Ownership/scope are never changed from the client. Same credential rules as create (`credentialId` or inline `credential`, never both). */
+        UpdateSipTrunk: {
+            name?: string;
+            /**
+             * Format: uuid
+             * @description A carrier accessible in the caller's scope (own or system).
+             */
+            carrierId?: string;
+            /** @enum {string} */
+            direction?: "INBOUND" | "OUTBOUND" | "BIDIRECTIONAL";
+            sipUri?: string;
+            host?: string;
+            port?: number;
+            /** @enum {string} */
+            transport?: "UDP" | "TCP" | "TLS";
+            tls?: boolean;
+            /** @enum {string} */
+            authMode?: "IP" | "CREDENTIALS";
+            allowedIps?: string[];
+            codecs?: ("PCMU" | "PCMA" | "G722" | "G729" | "OPUS" | "AMR" | "AMR_WB")[];
+            srtp?: boolean;
+            /** @enum {string} */
+            dtmfMode?: "rfc2833" | "info" | "inband";
+            maxCps?: number;
+            maxConcurrentCalls?: number;
+            /** @enum {string} */
+            status?: "ACTIVE" | "SUSPENDED" | "DISABLED";
+            /** Format: uuid */
+            credentialId?: string;
+            credential?: components["schemas"]["InlineSipCredentialInput"];
         };
         /** @description Honest DID health; UNKNOWN (no live SIP-path check exists), never fabricated. */
         DidHealth: {
@@ -2145,6 +2231,33 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    createSipTrunk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSipTrunk"];
+            };
+        };
+        responses: {
+            /** @description SIP trunk created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SipTrunk"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
     getSipTrunk: {
         parameters: {
             query?: never;
@@ -2165,6 +2278,59 @@ export interface operations {
                     "application/json": components["schemas"]["SipTrunk"];
                 };
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteSipTrunk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SIP trunk deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateSipTrunk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSipTrunk"];
+            };
+        };
+        responses: {
+            /** @description SIP trunk updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SipTrunk"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

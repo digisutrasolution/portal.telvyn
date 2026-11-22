@@ -2,11 +2,13 @@
 
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Status } from "@/components/ui/status";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { SipTrunk } from "@/lib/contracts";
 import { getSipTrunk } from "@/lib/telecom/sip-trunks-actions";
 import { useResource } from "@/lib/use-resource";
+import { useSession } from "@/lib/session/session-context";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<SipTrunk["status"], Tone> = { ACTIVE: "ok", SUSPENDED: "warn", DISABLED: "neutral" };
@@ -34,10 +36,28 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
  * health — no live connectivity; credential shown as a non-secret reference).
  * Read-only; `sip_trunk.read` is re-checked server-side. Mounted keyed by id so
  * each open refetches; a foreign/removed trunk surfaces the API's 404 inline.
+ * Edit / Delete appear only with the matching permission (UX gating; the API
+ * re-checks) and hand the loaded trunk back to the parent.
  */
-export function SipTrunkDetailDrawer({ trunkId, onClose }: { trunkId: string; onClose: () => void }) {
+export function SipTrunkDetailDrawer({
+  trunkId,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  trunkId: string;
+  onClose: () => void;
+  /** Open the edit form for this trunk (shown only with `sip_trunk.update`). */
+  onEdit?: (trunk: SipTrunk) => void;
+  /** Request deletion of this trunk (shown only with `sip_trunk.delete`). */
+  onDelete?: (trunk: SipTrunk) => void;
+}) {
+  const { hasPermission } = useSession();
   const fetchTrunk = React.useCallback((s: AbortSignal) => getSipTrunk(trunkId, s), [trunkId]);
   const { data, loading, error } = useResource<SipTrunk>(fetchTrunk);
+
+  const canEdit = Boolean(onEdit) && hasPermission("sip_trunk.update");
+  const canDelete = Boolean(onDelete) && hasPermission("sip_trunk.delete");
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -87,6 +107,17 @@ export function SipTrunkDetailDrawer({ trunkId, onClose }: { trunkId: string; on
             <Row label="Created">{data.createdAt.slice(0, 10)}</Row>
             <Row label="Updated">{data.updatedAt.slice(0, 10)}</Row>
           </dl>
+        )}
+
+        {data && (canEdit || canDelete) && (
+          <div className="mt-4 flex justify-end gap-2">
+            {canDelete && (
+              <Button variant="danger" size="sm" onClick={() => onDelete!(data)}>Delete</Button>
+            )}
+            {canEdit && (
+              <Button variant="primary" size="sm" onClick={() => onEdit!(data)}>Edit</Button>
+            )}
+          </div>
         )}
       </DialogContent>
     </Dialog>
