@@ -485,9 +485,17 @@ had InlineSipCredentialInput + credential (2af); createSipTrunk/updateSipTrunk c
 (create-with-inline-cred asserts {label,secret} + NO type key + Secret type=password / secret-required blocks /
 edit-without-touching omits credential+credentialId) → web **213** (34 files); isolated `next build` REAL_EXIT=0
 FIRST try (/sip-trunks 7.08→7.88 kB); eslint 0. 2 files (form+test), NO apps/api, NO contracts.
-Next (await owner go): the remaining deferred slices (DID region; routing-rule failover/schedule editing; LCR
-per-route trunk/effective-date editing; friendlier LCR decimal cost); or land the stack (owner provides GitHub
-remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps
+**12O-2ao (DONE)** — DID REGION picker (FRONTEND ONLY — no contract/backend change; fills the regionId 2ag
+deferred). 4th relationship picker ("Region") on `<NumberForm>` via same useOptions pattern, loaded from
+`listRegions` (plain array `GET /v1/telecom/regions`), labelled `name (code)`, edit seeded by DID's current
+region id (shown by id until list loads). Create sends selected region; edit sends regionId id-or-null (clear =
+detach, matches other refs). regionId authored into CreateDid/UpdateDid in 2ag → pure UI, no contract/action.
++2 tests (create-with-region asserts regionId in body / edit-clears-region sends regionId:null) → web **215**
+(34 files); isolated `next build` REAL_EXIT=0 FIRST try (/numbers 5.61→6.21 kB); eslint 0. 2 files (form+test),
+NO apps/api, NO contracts.
+Next (await owner go): the remaining deferred slices (routing-rule failover/schedule editing; LCR per-route
+trunk/effective-date editing; friendlier LCR decimal cost); or land the stack (owner provides GitHub remote →
+push `integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps
 (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan

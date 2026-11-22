@@ -1022,3 +1022,15 @@ Format: Keep a Changelog; SemVer once releases begin.
   `next build` ✓ (/sip-trunks 7.08 → 7.88 kB); eslint ✓. **No backend change.** `API.md` updated. Remaining
   deferred slices: DID region, routing-rule failover/schedule editing, LCR per-route trunk/effective-date
   editing, friendlier LCR decimal cost — or land the stack.
+- 2026-11-22 — **Phase 12O-2ao — DID region picker (frontend only, no contract/backend change).** Adds the
+  `regionId` reference that 12O-2ag deferred to the number form. A fourth relationship picker ("Region") joins
+  carrier / SIP trunk / routing-profile, using the same `useOptions` pattern — loaded from `listRegions` (a
+  plain array, `GET /v1/telecom/regions`), labelled `name (code)`, and in edit seeded by the DID's current
+  region id (shown by id until the list loads, since the DID API returns ids only). On create a selected region
+  is sent; on edit the region is sent as id-or-null so clearing it detaches (matching the other refs). No
+  contract change — `regionId` was authored into `CreateDid`/`UpdateDid` in 12O-2ag (`string?` on create,
+  `string|null?` on update); no new action; pure UI. +2 web unit tests (213 → 215; full web suite 215 ✓, 34
+  files — create-with-selected-region asserting `regionId` in the body, edit-clears-region sends
+  `regionId: null`). `next build` ✓ (/numbers 5.61 → 6.21 kB); eslint ✓. **No backend change.** `API.md`
+  updated. Remaining deferred slices: routing-rule failover/schedule editing, LCR per-route trunk/effective-date
+  editing, friendlier LCR decimal cost — or land the stack.

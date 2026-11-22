@@ -14,11 +14,13 @@ vi.mock("@/lib/telecom/dids-actions", () => ({
 vi.mock("@/lib/telecom/carriers-actions", () => ({ listCarriers: vi.fn() }));
 vi.mock("@/lib/telecom/sip-trunks-actions", () => ({ listSipTrunks: vi.fn() }));
 vi.mock("@/lib/telecom/routing-actions", () => ({ listRoutingProfiles: vi.fn() }));
+vi.mock("@/lib/telecom/telecom-actions", () => ({ listRegions: vi.fn() }));
 
-import { createDid, deleteDid, getDid, listDids } from "@/lib/telecom/dids-actions";
+import { createDid, deleteDid, getDid, listDids, updateDid } from "@/lib/telecom/dids-actions";
 import { listCarriers } from "@/lib/telecom/carriers-actions";
 import { listSipTrunks } from "@/lib/telecom/sip-trunks-actions";
 import { listRoutingProfiles } from "@/lib/telecom/routing-actions";
+import { listRegions } from "@/lib/telecom/telecom-actions";
 import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { NumbersView } from "./numbers-view";
 
@@ -159,6 +161,7 @@ describe("NumbersView", () => {
     vi.mocked(listCarriers).mockResolvedValue(emptyPage);
     vi.mocked(listSipTrunks).mockResolvedValue(emptyPage);
     vi.mocked(listRoutingProfiles).mockResolvedValue(emptyPage);
+    vi.mocked(listRegions).mockResolvedValue([]);
     vi.mocked(createDid).mockResolvedValue(did({ e164: "+14155559999" }));
     renderView();
     await screen.findByText(/No numbers in your inventory yet/i);
@@ -169,6 +172,52 @@ describe("NumbersView", () => {
 
     await waitFor(() => expect(createDid).toHaveBeenCalledWith(expect.objectContaining({ number: "+14155559999" })));
     await waitFor(() => expect(vi.mocked(listDids).mock.calls.length).toBeGreaterThanOrEqual(2));
+  });
+
+  it("creates a number with a selected region", async () => {
+    const regionId = crypto.randomUUID();
+    vi.mocked(listDids).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(listCarriers).mockResolvedValue(emptyPage);
+    vi.mocked(listSipTrunks).mockResolvedValue(emptyPage);
+    vi.mocked(listRoutingProfiles).mockResolvedValue(emptyPage);
+    vi.mocked(listRegions).mockResolvedValue([
+      { id: regionId, code: "us-east", name: "US East", country: "US", timezone: "America/New_York" } as never,
+    ]);
+    vi.mocked(createDid).mockResolvedValue(did({ e164: "+14155550100", regionId }));
+    renderView();
+    await screen.findByText(/No numbers in your inventory yet/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "New number" }));
+    fireEvent.change(await screen.findByLabelText("Number"), { target: { value: "+14155550100" } });
+    await screen.findByRole("option", { name: "US East (us-east)" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Region" }), { target: { value: regionId } });
+    fireEvent.click(screen.getByRole("button", { name: "Create number" }));
+
+    await waitFor(() => expect(createDid).toHaveBeenCalledWith(expect.objectContaining({ number: "+14155550100", regionId })));
+  });
+
+  it("edit sends regionId as null when the region is cleared (detach)", async () => {
+    const regionId = crypto.randomUUID();
+    const row = did({ e164: "+14155550100", regionId });
+    vi.mocked(listDids).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getDid).mockResolvedValue(row);
+    vi.mocked(listCarriers).mockResolvedValue(emptyPage);
+    vi.mocked(listSipTrunks).mockResolvedValue(emptyPage);
+    vi.mocked(listRoutingProfiles).mockResolvedValue(emptyPage);
+    // Region list doesn't include the current id; it's seeded by id so the picker still shows + can be cleared.
+    vi.mocked(listRegions).mockResolvedValue([]);
+    vi.mocked(updateDid).mockResolvedValue(row);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View +14155550100" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const region = await screen.findByRole("combobox", { name: "Region" });
+    expect((region as HTMLSelectElement).value).toBe(regionId); // seeded to the current region
+    fireEvent.change(region, { target: { value: "" } }); // clear → detach
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(updateDid).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateDid).mock.calls[0][1].regionId).toBeNull();
   });
 
   it("hides New number without did.manage permission", async () => {

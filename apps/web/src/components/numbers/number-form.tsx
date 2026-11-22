@@ -11,6 +11,7 @@ import { createDid, updateDid } from "@/lib/telecom/dids-actions";
 import { listCarriers } from "@/lib/telecom/carriers-actions";
 import { listSipTrunks } from "@/lib/telecom/sip-trunks-actions";
 import { listRoutingProfiles } from "@/lib/telecom/routing-actions";
+import { listRegions } from "@/lib/telecom/telecom-actions";
 
 type Status = NonNullable<CreateDid["status"]>;
 type Opt = { id: string; name: string };
@@ -65,6 +66,8 @@ function useOptions(loader: (signal: AbortSignal) => Promise<Opt[]>, seedId: str
 const loadCarriers = (s: AbortSignal) => listCarriers({ limit: 100 }, s).then((p) => p.items.map((c) => ({ id: c.id, name: c.name })));
 const loadTrunks = (s: AbortSignal) => listSipTrunks({ limit: 100 }, s).then((p) => p.items.map((t) => ({ id: t.id, name: t.name })));
 const loadRouting = (s: AbortSignal) => listRoutingProfiles({ limit: 100 }, s).then((p) => p.items.map((r) => ({ id: r.id, name: r.name })));
+// Regions are platform-scoped and returned as a plain array (no pagination).
+const loadRegions = (s: AbortSignal) => listRegions(s).then((rs) => rs.map((r) => ({ id: r.id, name: `${r.name} (${r.code})` })));
 
 function PickerField({
   id,
@@ -92,13 +95,12 @@ function PickerField({
 }
 
 /**
- * Create / edit a DID (number) (Phase 12O-2ag). Create takes a raw phone number
- * (normalized to canonical E.164 server-side; `country` is derived there, never
- * sent) plus an optional administrative status and optional carrier / SIP trunk /
- * routing-profile references. Edit covers status and the same references (clearing
- * a picker detaches it via an explicit null); the number itself is immutable and
- * shown read-only. The `regionId` reference is deferred to a later slice — it stays
- * optional on the API and editing here never changes it. All writes go through a
+ * Create / edit a DID (number) (Phase 12O-2ag; region added in 12O-2ao). Create
+ * takes a raw phone number (normalized to canonical E.164 server-side; `country` is
+ * derived there, never sent) plus an optional administrative status and optional
+ * carrier / SIP trunk / routing-profile / region references. Edit covers status and
+ * the same references (clearing a picker detaches it via an explicit null); the
+ * number itself is immutable and shown read-only. All writes go through a
  * single `did.manage` permission; the server re-checks it, re-normalizes the
  * number, and re-validates every relationship (including the carrier/trunk
  * consistency rule) on each call. NOTE: the backend does not yet enforce
@@ -113,10 +115,12 @@ export function NumberForm(props: Mode & { onClose: () => void; onSaved: () => v
   const [carrierId, setCarrierId] = React.useState(existing?.carrierId ?? "");
   const [sipTrunkId, setSipTrunkId] = React.useState(existing?.sipTrunkId ?? "");
   const [routingProfileId, setRoutingProfileId] = React.useState(existing?.routingProfileId ?? "");
+  const [regionId, setRegionId] = React.useState(existing?.regionId ?? "");
 
   const carriers = useOptions(loadCarriers, existing?.carrierId ?? null);
   const trunks = useOptions(loadTrunks, existing?.sipTrunkId ?? null);
   const routing = useOptions(loadRouting, existing?.routingProfileId ?? null);
+  const regions = useOptions(loadRegions, existing?.regionId ?? null);
 
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -138,11 +142,12 @@ export function NumberForm(props: Mode & { onClose: () => void; onSaved: () => v
     setPending(true);
     try {
       if (existing) {
-        // Edit: number immutable. A cleared picker sends null to detach. regionId is left untouched.
+        // Edit: number immutable. A cleared picker sends null to detach.
         const body: UpdateDid = {
           carrierId: carrierId || null,
           sipTrunkId: sipTrunkId || null,
           routingProfileId: routingProfileId || null,
+          regionId: regionId || null,
         };
         if (status) body.status = status;
         await updateDid(existing.id, body);
@@ -152,6 +157,7 @@ export function NumberForm(props: Mode & { onClose: () => void; onSaved: () => v
         if (carrierId) body.carrierId = carrierId;
         if (sipTrunkId) body.sipTrunkId = sipTrunkId;
         if (routingProfileId) body.routingProfileId = routingProfileId;
+        if (regionId) body.regionId = regionId;
         await createDid(body);
       }
       onSaved();
@@ -208,6 +214,7 @@ export function NumberForm(props: Mode & { onClose: () => void; onSaved: () => v
           <PickerField id="number-carrier" label="Carrier" value={carrierId} onChange={setCarrierId} state={carriers} />
           <PickerField id="number-trunk" label="SIP trunk" value={sipTrunkId} onChange={setSipTrunkId} state={trunks} />
           <PickerField id="number-routing" label="Routing profile" value={routingProfileId} onChange={setRoutingProfileId} state={routing} />
+          <PickerField id="number-region" label="Region" value={regionId} onChange={setRegionId} state={regions} />
 
           {error && (
             <p role="alert" className="rounded-md border border-danger bg-danger-soft px-3 py-2 text-[12px] text-danger">

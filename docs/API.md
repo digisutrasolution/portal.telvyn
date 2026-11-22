@@ -243,10 +243,10 @@ unchanged since Phase 12G — no backend change. All three mutations gate on the
 single `did.manage` permission. `number` is write-once (create only; normalized to
 E.164, `country` derived — neither is a client-trusted field) and immutable on
 update; `UpdateDid` relationship refs are nullable (null detaches). The UI drives
-carrier / SIP trunk / routing-profile with pickers (first page of each list; in edit
-the current id is shown even when its name isn't loaded, since the DID API returns
-ids only). **The `regionId` reference is deferred** to a later slice (optional on the
-API; editing never changes it). **Known gap (not introduced here):** the 12G service
+carrier / SIP trunk / routing-profile / region (added in **Phase 12O-2ao**) with
+pickers (first page of each list — regions via `GET /v1/telecom/regions`; in edit the
+current id is shown even when its name isn't loaded, since the DID API returns ids
+only, and clearing a picker detaches via an explicit null). **Known gap (not introduced here):** the 12G service
 does not enforce status-*transition* rules — `status` is a free administrative field,
 so the UI exposes it as a plain select rather than a guarded state machine.
 
