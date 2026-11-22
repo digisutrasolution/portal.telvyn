@@ -87,3 +87,40 @@ describe("CarrierHealthService.probe", () => {
     await expect(service.probe(ctx, "missing", "corr-1")).rejects.toThrow(/not found/i);
   });
 });
+
+/** A raw CARRIER HealthEvent row as Prisma returns it (includes fields the view must NOT echo). */
+function eventRow(id: string, fromStatus: HealthStatus | null, toStatus: HealthStatus) {
+  return { id, entityType: HealthEntityType.CARRIER, entityId: "c1", tenantId: "t1", fromStatus, toStatus, reason: "posture", correlationId: "c1", createdAt: new Date("2026-01-01T00:00:00.000Z") };
+}
+
+function makeHistoryService(rows: ReturnType<typeof eventRow>[]) {
+  const findMany = vi.fn().mockResolvedValue(rows);
+  const prisma = { healthEvent: { findMany } } as unknown as ConstructorParameters<typeof CarrierHealthService>[0];
+  return { service: new CarrierHealthService(prisma), findMany };
+}
+
+describe("CarrierHealthService.history", () => {
+  it("scopes to the carrier's CARRIER events (newest-first cursor args) and returns a safe view", async () => {
+    const { service, findMany } = makeHistoryService([eventRow("1", null, HealthStatus.UNKNOWN)]);
+    const page = await service.history("c1", { limit: 25 });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { entityType: HealthEntityType.CARRIER, entityId: "c1" }, take: 26, orderBy: { id: "desc" } }),
+    );
+    expect(page.items[0]).toEqual({ id: "1", fromStatus: null, toStatus: HealthStatus.UNKNOWN, reason: "posture", correlationId: "c1", createdAt: new Date("2026-01-01T00:00:00.000Z") });
+    expect(page.items[0]).not.toHaveProperty("entityType");
+    expect(page.items[0]).not.toHaveProperty("tenantId");
+    expect(page.nextCursor).toBeNull();
+  });
+
+  it("emits a nextCursor on a full (limit+1) page and passes the cursor through", async () => {
+    const { service } = makeHistoryService([eventRow("a", null, HealthStatus.UNKNOWN), eventRow("b", HealthStatus.UNKNOWN, HealthStatus.DISABLED)]);
+    const page = await service.history("c1", { limit: 1 });
+    expect(page.items).toHaveLength(1);
+    expect(page.nextCursor).toBe("a");
+
+    const { service: s2, findMany } = makeHistoryService([]);
+    await s2.history("c1", { limit: 25, cursor: "cur-5" });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ cursor: { id: "cur-5" }, skip: 1 }));
+  });
+});

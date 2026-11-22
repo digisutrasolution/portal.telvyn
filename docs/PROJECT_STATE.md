@@ -623,6 +623,28 @@ from the Carriers list) / a real node OR carrier reachability connector or heart
 remote → push `integration/phase-12o-complete` FF'd to feature tip → CI → PR). **NOTE: stack now spans frontend + FIVE backend
 endpoints (2as/2at/2au/2av + 2aw carrier health-check write); refresh the PR draft accordingly.**
 
+**12O-2ax (DONE)** — carrier HEALTH-EVENT HISTORY (read; consumes the CARRIER events 2aw produces — completes the carrier
+health pair, mirror of node 2av). `GET /v1/telecom/carriers/:id/health-events` (`telecom.health.read`; controller
+scope-gate `await carriers.get(ctx, id)` → 404 foreign/unknown, then `health.history(id, query)`). New
+`CarrierHealthService.history(carrierId, {limit, cursor})` — scoped `where {entityType: CARRIER, entityId}`, shared
+`cursorArgs`/`toPage`, same safe view `{id, fromStatus, toStatus, reason, correlationId, createdAt}` (NEVER echoes
+entityType/entityId/tenantId). **Identical shape+semantics to node 2av / engine 2as**, newest-first, cursor-paginated
+(`HealthEventPage`). **NO schema change, NO new contract schema** — reuses the `HealthEvent` model + `HealthEventPage`
+(aliases already existed from the node slices, so contracts/index.ts untouched); contract adds the path only. Frontend:
+`listCarrierHealthEvents` + `<CarrierHealthHistoryDialog>` (carriers have NO detail page → dialog from the Carriers list),
+per-row `telecom.health.read`-gated **"History"** button beside "Check" on `<CarriersView>`. +2 API unit (183→185:
+history scoped-query + safe-view-no-leak + nextCursor/cursor pass-through) + 5 web (dialog renders/empty/load-more/error +
+carriers-view History-opens-dialog; hidden test now asserts both Check & History hidden w/o perm) (238→243) + e2e added to
+telecom-carrier.e2e (empty-before-probe, reads-back-transition safe-view, 404 — **CI-only, NOT run here**, tsc-compiled).
+API tsc✓ eslint✓ telecom unit 185✓; web build✓ eslint✓ suite 243✓ (38 files). 9 files + 2 new (dialog + its test), NO
+prisma. (50th commit; feature tip now <2ax>; integration branch @5fcd64e now 31 behind.) **Carrier health pair COMPLETE
+(2aw probe writes CARRIER events, 2ax reads them back).**
+Next (await owner go): a real node OR carrier reachability connector or heartbeat/dead-man's-switch (ADR — no node/carrier
+auth surface today) / align node 2au health-check to 200 (@HttpCode) — pre-existing 201-vs-contract drift / LAND THE STACK
+(owner provides GitHub remote → push `integration/phase-12o-complete` FF'd to feature tip → CI → PR). **NOTE: stack now
+spans frontend + SIX backend endpoints (2as/2at/2au/2av/2aw + 2ax carrier health-events read); refresh the PR draft
+accordingly — it predates 2ad-2ax.**
+
 ### (superseded) sub-phase plan
 
 **Phase 12M — real engine adapter (Kamailio first), built in additive review-gated sub-phases.** A disposable Kamailio 6.1.5 test engine is provisioned

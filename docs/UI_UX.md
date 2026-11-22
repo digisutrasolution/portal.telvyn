@@ -814,3 +814,13 @@ is administratively disabled, unconfigured when it has no SIP endpoint, and othe
 "UNKNOWN" placeholder, now reflects the result of the latest probe, so it stops being a
 permanent placeholder and starts showing real operator checks. Verified: 238/238 web
 Vitest · `next build` clean.
+
+Carrier health history — EXISTING (Phase 12O-2ax, 2026-11-23): the Carriers list gained a
+per-row "History" action (shown only with the health-read permission, beside "Check")
+that opens a dialog with that carrier's health timeline — the record of its status
+transitions (produced by the operator probe above), newest first, as "from → to" with
+the reason and the time, with a "Load more" button that pages through older entries.
+Carriers have no detail page of their own, so the history lives in a dialog opened from
+the list — the same pattern as the node health history, and unlike the engine health
+history, which sits on the engine detail page. Read-only. Verified: 243/243 web Vitest ·
+`next build` clean.

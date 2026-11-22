@@ -16,6 +16,7 @@ import type { Request } from "express";
 import { randomUUID } from "node:crypto";
 import { requestContext } from "@/common/request-context";
 import { ZodPipe } from "@/common/zod.pipe";
+import { PaginationQuery, type PaginationInput } from "@/common/pagination";
 import { JwtAuthGuard } from "@/auth/jwt-auth.guard";
 import { TenantGuard } from "@/authz/tenant.guard";
 import { PermissionGuard } from "@/authz/permission.guard";
@@ -66,6 +67,18 @@ export class CarriersController {
    * health snapshot). No egress occurs. The carrier is scope-resolved (own + system);
    * a foreign/unknown id is 404. Audited.
    */
+  /** Append-only carrier health-event history (newest first, cursor-paginated). Read-only. */
+  @Get(":id/health-events")
+  @RequirePermissions("telecom.health.read")
+  async healthEvents(
+    @CurrentTenant() ctx: TenantContext,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Query(new ZodPipe(PaginationQuery)) query: PaginationInput,
+  ) {
+    await this.carriers.get(ctx, id); // 404 if foreign/unknown (scope-resolved: own + system)
+    return this.health.history(id, query);
+  }
+
   @Post(":id/health-check")
   @HttpCode(200)
   @RequirePermissions("telecom.health.read")

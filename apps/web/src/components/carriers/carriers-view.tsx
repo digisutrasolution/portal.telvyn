@@ -15,6 +15,7 @@ import { ListFilters } from "@/components/telecom/list-filters";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CarrierDetailDrawer } from "./carrier-detail-drawer";
 import { CarrierForm } from "./carrier-form";
+import { CarrierHealthHistoryDialog } from "./carrier-health-history-dialog";
 
 type FormState = { mode: "create" } | { mode: "edit"; carrier: Carrier } | null;
 
@@ -70,6 +71,7 @@ export function CarriersView() {
   // Operator health probe (Phase 12O-2aw). Gating is UX-only; the API re-checks.
   const [checkingId, setCheckingId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
+  const [historyCarrier, setHistoryCarrier] = React.useState<Carrier | null>(null); // Phase 12O-2ax
 
   // Filters (mapped to the already-contracted list query params; "" = no filter).
   const [search, setSearch] = React.useState("");
@@ -232,9 +234,12 @@ export function CarriersView() {
                     <td className="px-3 py-2 text-right">
                       <span className="inline-flex gap-1">
                         {canCheckHealth && (
-                          <Button variant="ghost" size="sm" onClick={() => checkHealth(c.id)} disabled={checkingId === c.id} aria-label={`Check health of ${c.name}`}>
-                            {checkingId === c.id ? "Checking…" : "Check"}
-                          </Button>
+                          <>
+                            <Button variant="ghost" size="sm" onClick={() => setHistoryCarrier(c)} aria-label={`Health history of ${c.name}`}>History</Button>
+                            <Button variant="ghost" size="sm" onClick={() => checkHealth(c.id)} disabled={checkingId === c.id} aria-label={`Check health of ${c.name}`}>
+                              {checkingId === c.id ? "Checking…" : "Check"}
+                            </Button>
+                          </>
                         )}
                         <Button variant="ghost" size="sm" onClick={() => setDetailId(c.id)} aria-label={`View ${c.name}`}>View</Button>
                       </span>
@@ -282,6 +287,10 @@ export function CarriersView() {
 
       {form && (
         <CarrierForm {...form} onClose={() => setForm(null)} onSaved={refresh} />
+      )}
+
+      {historyCarrier && (
+        <CarrierHealthHistoryDialog key={historyCarrier.id} carrier={historyCarrier} onClose={() => setHistoryCarrier(null)} />
       )}
 
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && !deletePending && setDeleteTarget(null)}>

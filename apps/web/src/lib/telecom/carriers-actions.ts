@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { Carrier, CarrierPage, CarrierHealthReport, CreateCarrier, UpdateCarrier } from "@/lib/contracts";
+import type { Carrier, CarrierPage, CarrierHealthReport, CreateCarrier, HealthEventPage, UpdateCarrier } from "@/lib/contracts";
 
 /**
  * Read-only carrier API calls (tenant-scoped; `carrier.read`). The server scopes
@@ -56,4 +56,17 @@ export function deleteCarrier(id: string): Promise<void> {
  */
 export function checkCarrierHealth(id: string): Promise<CarrierHealthReport> {
   return api.post<CarrierHealthReport>(`/v1/telecom/carriers/${id}/health-check`);
+}
+
+/**
+ * The carrier's health-event history (newest first), cursor-paginated
+ * (`telecom.health.read`). Same shape as the node/engine history. 404 if
+ * foreign/removed.
+ */
+export function listCarrierHealthEvents(id: string, params: { limit?: number; cursor?: string } = {}, signal?: AbortSignal): Promise<HealthEventPage> {
+  const qs = new URLSearchParams();
+  if (params.limit !== undefined) qs.set("limit", String(params.limit));
+  if (params.cursor) qs.set("cursor", params.cursor);
+  const query = qs.toString();
+  return api.get<HealthEventPage>(`/v1/telecom/carriers/${id}/health-events${query ? `?${query}` : ""}`, { signal });
 }

@@ -6,6 +6,16 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-23 — Phase 12O-2ax — carrier **health-event history** (read). `GET
+  /v1/telecom/carriers/:id/health-events` (`telecom.health.read`) returns the
+  append-only, cursor-paginated history of the carrier's health-status transitions (the
+  CARRIER `HealthEvent` rows produced by the 12O-2aw probe), newest first — identical
+  shape/semantics to the node (12O-2av) and engine (12O-2as) histories, the same safe
+  `HealthEvent` view that never echoes `entityType`/`entityId`/`tenantId`, carrier
+  scope-resolved (own + system) → 404 for foreign/unknown. No schema change (reuses the
+  `HealthEvent` model + `HealthEventPage` contract schema); adds `CarrierHealthService.
+  history` only. NOC Carriers list gains a per-row **"History"** dialog (same gate),
+  since carriers have no detail page. Contract-first; +2 API unit + 5 web tests + e2e.
 - 2026-11-23 — Phase 12O-2aw — carrier **health probe** (write; event-only). `POST
   /v1/telecom/carriers/:id/health-check` (`telecom.health.read`) — the operator-driven
   foundation of carrier health, mirroring the node probe (12O-2au). Carriers have no

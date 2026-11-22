@@ -3,6 +3,7 @@ import { HealthEntityType, HealthStatus, TelecomStatus } from "@prisma/client";
 import { PrismaService } from "@/infra/prisma.service";
 import type { TenantContext } from "@/authz/tenant-context";
 import { systemOrTenantWhere } from "@/authz/tenant-scope";
+import { cursorArgs, toPage } from "@/common/pagination";
 
 /** Normalized reachability posture for a carrier probe (never leaks internals). */
 export type CarrierReachability = "UNCONFIGURED" | "DISABLED" | "UNVERIFIED";
@@ -56,6 +57,32 @@ export class CarrierHealthService {
 
     this.logger.log(JSON.stringify({ carrierId, operation: "carrier.health.probe", correlationId, reachability, status }));
     return { carrierId, status, reachability, detail, correlationId, checkedAt: new Date() };
+  }
+
+  /**
+   * The carrier's append-only health-event history, newest first, cursor-paginated.
+   * A safe view only (no entityType/entityId/tenantId echo) — the same shape as the
+   * node and engine health histories (Phase 12O-2ax). Ordering + cursor use the
+   * uuidv7 id (time-ordered). The caller's scope/404 gate is enforced upstream (the
+   * controller resolves the carrier through CarriersService.get first).
+   */
+  async history(carrierId: string, page: { limit: number; cursor?: string }) {
+    const rows = await this.prisma.healthEvent.findMany({
+      where: { entityType: HealthEntityType.CARRIER, entityId: carrierId },
+      ...cursorArgs(page.limit, page.cursor),
+    });
+    const { items, nextCursor } = toPage(rows, page.limit);
+    return {
+      items: items.map((e) => ({
+        id: e.id,
+        fromStatus: e.fromStatus,
+        toStatus: e.toStatus,
+        reason: e.reason,
+        correlationId: e.correlationId,
+        createdAt: e.createdAt,
+      })),
+      nextCursor,
+    };
   }
 
   /** Append a CARRIER HealthEvent only when the status actually changed since the last one. */

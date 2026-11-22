@@ -200,6 +200,7 @@ reference only, never the secret).
 | `PATCH /v1/telecom/carriers/:id` | `carrier.update` |
 | `DELETE /v1/telecom/carriers/:id` (soft delete) | `carrier.delete` |
 | `POST /v1/telecom/carriers/:id/health-check` (operator probe; records a transition) | `telecom.health.read` |
+| `GET /v1/telecom/carriers/:id/health-events` (health history; cursor pagination) | `telecom.health.read` |
 
 Response is a safe DTO: `scope` (SYSTEM/TENANT, computed), config fields, a safe
 `credential` summary (`id`, type, label, hint, scope — never the secret), and
@@ -225,6 +226,21 @@ egress occurs; audited `telecom.carrier.health_checked`. Returns `CarrierHealthR
 schema change — reuses the `HealthEvent` model (`CARRIER` entity). A real reachability
 connector can later replace the posture resolution without changing this contract; the
 carrier health-event history read is the follow-up slice (12O-2ax, mirroring node 2av).
+
+**Carrier health-event history (Phase 12O-2ax).** `GET :id/health-events`
+(`telecom.health.read`) returns the append-only history of the carrier's health-status
+transitions — the CARRIER `HealthEvent` rows produced by the operator probe
+(`POST :id/health-check`, Phase 12O-2aw), recorded only on a genuine status change.
+Identical shape and semantics to the node (12O-2av) and engine (12O-2as) histories:
+newest first, cursor-paginated (`HealthEventPage` = `{items, nextCursor}`, uuidv7 id is
+the cursor); each item is the same safe `HealthEvent` view — `{id, fromStatus (null on
+the first event), toStatus, reason, correlationId, createdAt}` — and never echoes
+`entityType`/`entityId`/`tenantId`. The carrier is scope-resolved (own + system) via the
+same gate as `get`, so a foreign/unknown id is **404** (IDOR-safe). No schema change —
+reuses the `HealthEvent` model and the `HealthEventPage` contract schema; this adds the
+read endpoint (`CarrierHealthService.history`) only. Carriers have no detail page, so the
+NOC Carriers list surfaces it as a per-row "History" dialog (same `telecom.health.read`
+gate).
 
 As of **Phase 12O-2ae** the full carrier surface — list, get, **create, update,
 delete** — is authored into the OpenAPI contract (`CreateCarrier` / `UpdateCarrier`

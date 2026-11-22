@@ -10,9 +10,10 @@ vi.mock("@/lib/telecom/carriers-actions", () => ({
   updateCarrier: vi.fn(),
   deleteCarrier: vi.fn(),
   checkCarrierHealth: vi.fn(),
+  listCarrierHealthEvents: vi.fn(),
 }));
 
-import { checkCarrierHealth, createCarrier, deleteCarrier, getCarrier, listCarriers, updateCarrier } from "@/lib/telecom/carriers-actions";
+import { checkCarrierHealth, createCarrier, deleteCarrier, getCarrier, listCarrierHealthEvents, listCarriers, updateCarrier } from "@/lib/telecom/carriers-actions";
 import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { CarriersView } from "./carriers-view";
 
@@ -246,11 +247,27 @@ describe("CarriersView", () => {
     await waitFor(() => expect(vi.mocked(listCarriers).mock.calls.length).toBeGreaterThanOrEqual(2));
   });
 
-  it("hides the Check button without telecom.health.read (carrier perms alone don't grant it)", async () => {
+  it("hides the Check and History buttons without telecom.health.read (carrier perms alone don't grant it)", async () => {
     vi.mocked(listCarriers).mockResolvedValue({ items: [carrier({ name: "Acme SIP" })], nextCursor: null });
     renderView(); // allPermsLoader has carrier.* but NOT telecom.health.read
     await screen.findByText("Acme SIP");
     expect(screen.queryByRole("button", { name: /Check health of/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Health history of/ })).toBeNull();
+  });
+
+  it("opens the health-history dialog from the History button", async () => {
+    vi.mocked(listCarriers).mockResolvedValue({ items: [carrier({ name: "Acme SIP" })], nextCursor: null });
+    vi.mocked(listCarrierHealthEvents).mockResolvedValue({
+      items: [{ id: "h1", fromStatus: null, toStatus: "UNKNOWN", reason: "posture unverified", correlationId: "c1", createdAt: "2026-11-20T09:30:00.000Z" }],
+      nextCursor: null,
+    });
+    renderView(healthLoader);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Health history of Acme SIP" }));
+
+    expect(await screen.findByText(/Health history — Acme SIP/)).toBeInTheDocument();
+    await waitFor(() => expect(listCarrierHealthEvents).toHaveBeenCalledWith(expect.any(String), {}, expect.anything()));
+    expect(await screen.findByText("posture unverified")).toBeInTheDocument();
   });
 
   it("edits a carrier without touching its credential (credential omitted from the body)", async () => {

@@ -682,6 +682,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/carriers/{id}/health-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Carrier health-event history (tenant + system)
+         * @description The append-only history of this carrier's health-status transitions (recorded by the carrier health probe; a new event only on a genuine change). Newest first, cursor-paginated. Each event carries the from/to status, a safe reason and a correlation id — the same shape as the node and engine health histories. The carrier is scope-resolved (own + system); a foreign/unknown id is 404. Requires `telecom.health.read`.
+         */
+        get: operations["listCarrierHealthEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/telecom/sip-trunks": {
         parameters: {
             query?: never;
@@ -2816,6 +2836,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CarrierHealthReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listCarrierHealthEvents: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Health events (newest first) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthEventPage"];
                 };
             };
             401: components["responses"]["Problem"];

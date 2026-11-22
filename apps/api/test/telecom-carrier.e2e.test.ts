@@ -226,3 +226,28 @@ describe("operator health probe (Phase 12O-2aw)", () => {
     await request(http).post("/v1/telecom/carriers/00000000-0000-7000-8000-000000000000/health-check").set(auth(a.token)).expect(404);
   });
 });
+
+describe("health-event history (Phase 12O-2ax)", () => {
+  it("reads back the transitions a probe records (newest first), and is empty before any probe", async () => {
+    const a = await provision("ca", TenantType.CUSTOMER, "owner");
+    const created = await request(http).post("/v1/telecom/carriers").set(auth(a.token)).send(carrierBody("hist")).expect(201);
+    const id = created.body.id as string;
+
+    const before = await request(http).get(`/v1/telecom/carriers/${id}/health-events`).set(auth(a.token)).expect(200);
+    expect(before.body.items).toEqual([]);
+    expect(before.body.nextCursor).toBeNull();
+
+    await request(http).post(`/v1/telecom/carriers/${id}/health-check`).set(auth(a.token)).expect(200);
+    const after = await request(http).get(`/v1/telecom/carriers/${id}/health-events`).set(auth(a.token)).expect(200);
+    expect(after.body.items.length).toBe(1);
+    expect(after.body.items[0]).toMatchObject({ fromStatus: null, toStatus: "UNKNOWN" });
+    // Safe view: never echoes the entity/tenant linkage.
+    expect(after.body.items[0]).not.toHaveProperty("entityType");
+    expect(after.body.items[0]).not.toHaveProperty("tenantId");
+  });
+
+  it("404s on history for a foreign/unknown carrier (scope-resolved, IDOR-safe)", async () => {
+    const a = await provision("ca", TenantType.CUSTOMER, "owner");
+    await request(http).get("/v1/telecom/carriers/00000000-0000-7000-8000-000000000000/health-events").set(auth(a.token)).expect(404);
+  });
+});

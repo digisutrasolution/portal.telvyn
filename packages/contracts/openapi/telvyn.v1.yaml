@@ -760,6 +760,31 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/carriers/{id}/health-events:
+    get:
+      tags: [telecom]
+      summary: Carrier health-event history (tenant + system)
+      description: >-
+        The append-only history of this carrier's health-status transitions (recorded
+        by the carrier health probe; a new event only on a genuine change). Newest
+        first, cursor-paginated. Each event carries the from/to status, a safe reason
+        and a correlation id — the same shape as the node and engine health histories.
+        The carrier is scope-resolved (own + system); a foreign/unknown id is 404.
+        Requires `telecom.health.read`.
+      operationId: listCarrierHealthEvents
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: cursor, in: query, required: false, schema: { type: string, format: uuid }, description: "nextCursor from a prior page." }
+      responses:
+        "200":
+          description: Health events (newest first)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthEventPage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /v1/telecom/sip-trunks:
     get:
       tags: [telecom]
