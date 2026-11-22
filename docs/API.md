@@ -349,8 +349,11 @@ preserves it). Edit (policy form) sends `expectedVersion` for optimistic concurr
 **Phase 12O-2ak** shipped the dedicated routes editor (frontend only — no contract
 change; it consumes the `LcrRouteInput` schema already authored above). It loads a
 policy's full route set, edits the core per-route fields, and PATCHes the **complete**
-`routes` array (replace semantics) with `expectedVersion`. **`costMicros` is entered
-as a raw non-negative integer in millionths of a currency unit — no floating point.**
+`routes` array (replace semantics) with `expectedVersion`. **Cost is entered as a
+decimal per-minute amount (e.g. 0.012) and converted to the integer `costMicros` with
+exact string math — ≤6 decimal places, no floating point (Phase 12O-2ar); a live hint
+shows the resulting micro count, and an existing route's micros are shown back as the
+decimal.**
 Each route needs a carrier (chosen from the tenant's carriers via a picker — the LCR
 API returns ids only, so an unknown current id shows by id until the list loads), a
 prefix, a cost and a currency; priority, weight, country and enabled are optional.

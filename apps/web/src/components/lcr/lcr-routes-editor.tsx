@@ -15,7 +15,33 @@ import { listSipTrunks } from "@/lib/telecom/sip-trunks-actions";
 type Currency = LcrRouteInput["currency"];
 const CURRENCIES: readonly Currency[] = ["USD", "EUR", "GBP", "INR", "AUD", "CAD", "JPY"];
 const MAX_COST_MICROS = 1_000_000_000_000;
+const MICROS_PER_UNIT = 1_000_000;
 const PREFIX_RE = /^\+?[0-9]{1,15}$/;
+
+/**
+ * An integer count of micros → a decimal amount in currency units, EXACTLY, via
+ * string slicing (no floating-point division). e.g. 12000 → "0.012", 1500000 → "1.5".
+ */
+function microsToDecimal(micros: number): string {
+  const s = String(micros).padStart(7, "0"); // ≥1 integer digit + 6 fractional
+  const intPart = s.slice(0, -6).replace(/^0+(?=\d)/, "");
+  const fracPart = s.slice(-6).replace(/0+$/, "");
+  return fracPart ? `${intPart}.${fracPart}` : intPart;
+}
+const INVALID_COST = "__invalid_cost__";
+/**
+ * A decimal amount in currency units → integer micros, EXACTLY (no float): parse the
+ * whole and up-to-6 fractional digits as integers and combine. "" → null; anything
+ * that isn't a plain non-negative decimal with ≤6 fraction digits → INVALID_COST.
+ */
+function decimalToMicros(v: string): number | null | typeof INVALID_COST {
+  const t = v.trim();
+  if (t === "") return null;
+  const m = /^(\d+)(?:\.(\d{1,6}))?$/.exec(t);
+  if (!m) return INVALID_COST;
+  const frac = (m[2] ?? "").padEnd(6, "0");
+  return Number(m[1]) * MICROS_PER_UNIT + Number(frac);
+}
 
 const selectClass =
   "h-8 w-full rounded-md border border-line-strong bg-surface px-2 text-[13px] text-ink outline-none disabled:cursor-not-allowed disabled:opacity-45";
@@ -51,7 +77,7 @@ type EditRoute = {
   carrierId: string;
   prefix: string;
   country: string;
-  costMicros: string;
+  cost: string; // decimal amount in currency units (e.g. "0.012"); converted to integer micros on save
   currency: Currency;
   priority: string;
   weight: string;
@@ -70,7 +96,7 @@ function fromRoute(r: LcrRoute): EditRoute {
     carrierId: r.carrierId,
     prefix: r.prefix,
     country: r.country ?? "",
-    costMicros: String(r.costMicros),
+    cost: microsToDecimal(r.costMicros),
     currency: r.currency,
     priority: String(r.priority),
     weight: r.weight != null ? String(r.weight) : "",
@@ -87,7 +113,7 @@ function blankRoute(priority: number): EditRoute {
     carrierId: "",
     prefix: "",
     country: "",
-    costMicros: "",
+    cost: "",
     currency: "USD",
     priority: String(priority),
     weight: "",
@@ -112,11 +138,13 @@ function buildRoute(e: EditRoute, index: number): LcrRouteInput | { error: RowEr
   if (e.carrierId === "") return err("Carrier is required.");
   if (!PREFIX_RE.test(e.prefix.trim())) return err("Prefix must be up to 15 digits (optional leading +).");
 
-  // costMicros: a required non-negative integer in millionths (no float).
-  const cost = parseIntField(e.costMicros);
-  if (cost === null) return err("Cost (micros) is required.");
-  if (!Number.isInteger(cost) || cost < 0 || cost > MAX_COST_MICROS) {
-    return err(`Cost must be a whole number of micros between 0 and ${MAX_COST_MICROS.toLocaleString()}.`);
+  // Cost: a required decimal amount in currency units, converted to integer micros
+  // with exact string math (no float). ≤6 decimal places; bounded.
+  const cost = decimalToMicros(e.cost);
+  if (cost === null) return err("Cost is required.");
+  if (cost === INVALID_COST) return err("Cost must be a number with at most 6 decimal places.");
+  if (cost > MAX_COST_MICROS) {
+    return err(`Cost must be at most ${(MAX_COST_MICROS / MICROS_PER_UNIT).toLocaleString()} per minute.`);
   }
 
   const country = e.country.trim().toUpperCase();
@@ -154,9 +182,11 @@ function buildRoute(e: EditRoute, index: number): LcrRouteInput | { error: RowEr
  * LCR routes editor (Phase 12O-2ak; SIP trunk + effective dates made editable in
  * 12O-2aq). Edits a policy's route candidates and saves them via PATCH, which
  * REPLACES the whole set — so the editor loads every current route and sends them
- * all back, and `expectedVersion` guards a concurrent change (409). `costMicros` is
- * entered as a RAW INTEGER in millionths of a currency unit (no floating point, per
- * the money rule). Each route needs a carrier (chosen from the tenant's carriers), a
+ * all back, and `expectedVersion` guards a concurrent change (409). Cost is entered
+ * as a DECIMAL amount per currency unit (e.g. 0.012) and converted to the integer
+ * `costMicros` with EXACT string math (≤6 decimal places, no floating point, per the
+ * money rule); a live hint shows the resulting micro count. Each route needs a
+ * carrier (chosen from the tenant's carriers), a
  * prefix, a cost and a currency; an optional SIP trunk (its own picker), priority,
  * weight, country, an effective-from/to window (datetime-local, entered in the
  * viewer's tz and converted to ISO instants), and enabled are optional. Both pickers
@@ -273,8 +303,8 @@ export function LcrRoutesEditor({
       <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
         <DialogTitle>Edit routes — {policy.name}</DialogTitle>
         <DialogDescription className="text-[13px] text-ink-2">
-          Declarative route selection only; nothing is dialled or rated. Cost is entered in micros (millionths
-          of a currency unit) — e.g. 12000 = 0.012 per minute. Effective dates are entered in your local time.
+          Declarative route selection only; nothing is dialled or rated. Cost is a per-minute amount in the
+          chosen currency (e.g. 0.012) — stored exactly, to the millionth. Effective dates are in your local time.
         </DialogDescription>
 
         {carriersError && (
@@ -322,8 +352,15 @@ export function LcrRoutesEditor({
                     <Field id={`${r._key}-prefix`} label="Prefix" hint="e.g. 44, 9198">
                       <Input id={`${r._key}-prefix`} value={r.prefix} maxLength={16} onChange={(ev) => patchRoute(r._key, { prefix: ev.target.value })} className="font-mono" />
                     </Field>
-                    <Field id={`${r._key}-cost`} label="Cost (micros)" hint="integer millionths">
-                      <Input id={`${r._key}-cost`} inputMode="numeric" value={r.costMicros} onChange={(ev) => patchRoute(r._key, { costMicros: ev.target.value })} className="font-num" />
+                    <Field
+                      id={`${r._key}-cost`}
+                      label="Cost / min"
+                      hint={(() => {
+                        const m = decimalToMicros(r.cost);
+                        return typeof m === "number" ? `= ${m.toLocaleString()} micros` : "per currency unit";
+                      })()}
+                    >
+                      <Input id={`${r._key}-cost`} inputMode="decimal" value={r.cost} onChange={(ev) => patchRoute(r._key, { cost: ev.target.value })} className="font-num" placeholder="0.012" />
                     </Field>
                     <Field id={`${r._key}-currency`} label="Currency">
                       <select id={`${r._key}-currency`} className={selectClass} value={r.currency} onChange={(ev) => patchRoute(r._key, { currency: ev.target.value as Currency })}>

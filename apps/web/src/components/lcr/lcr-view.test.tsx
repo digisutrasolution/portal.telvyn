@@ -253,8 +253,8 @@ describe("LcrView", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "View UK least cost" }));
     fireEvent.click(await screen.findByRole("button", { name: "Edit routes" }));
-    const cost = await screen.findByLabelText("Cost (micros)");
-    fireEvent.change(cost, { target: { value: "9999" } }); // raw integer micros
+    const cost = await screen.findByLabelText("Cost / min");
+    fireEvent.change(cost, { target: { value: "0.012" } }); // decimal → exact integer micros
     fireEvent.click(screen.getByRole("button", { name: "Save routes" }));
 
     await waitFor(() => expect(updateLcrPolicy).toHaveBeenCalledTimes(1));
@@ -262,7 +262,7 @@ describe("LcrView", () => {
     expect(id).toBe(row.id);
     expect(body.expectedVersion).toBe(5);
     expect(body.routes).toHaveLength(1);
-    expect(body.routes![0].costMicros).toBe(9999); // integer, no float
+    expect(body.routes![0].costMicros).toBe(12000); // 0.012 → 12000 micros (exact, no float)
     expect(body.routes![0].carrierId).toBe(carrierId);
     expect(body.routes![0].sipTrunkId).toBe(trunkId); // loaded (seeded by id) + round-tripped
     expect(body.routes![0].effectiveFrom).toBe("2026-01-01T00:00:00.000Z"); // round-tripped (minute precision)
@@ -319,13 +319,59 @@ describe("LcrView", () => {
     await screen.findByRole("option", { name: "Acme" });
     fireEvent.change(screen.getByLabelText("Carrier"), { target: { value: carrierId } });
     fireEvent.change(screen.getByLabelText("Prefix"), { target: { value: "44" } });
-    fireEvent.change(screen.getByLabelText("Cost (micros)"), { target: { value: "5000" } });
+    fireEvent.change(screen.getByLabelText("Cost / min"), { target: { value: "0.05" } });
     fireEvent.click(screen.getByRole("button", { name: "Save routes" }));
 
     await waitFor(() => expect(updateLcrPolicy).toHaveBeenCalledTimes(1));
     const body = vi.mocked(updateLcrPolicy).mock.calls[0][1];
     expect(body.routes).toHaveLength(1);
-    expect(body.routes![0]).toEqual(expect.objectContaining({ carrierId, prefix: "44", costMicros: 5000 }));
+    expect(body.routes![0]).toEqual(expect.objectContaining({ carrierId, prefix: "44", costMicros: 50000 })); // 0.05 → 50000 micros
+  });
+
+  it("rejects a cost with more than 6 decimal places", async () => {
+    const carrierId = crypto.randomUUID();
+    const row = policy({
+      name: "UK least cost",
+      version: 2,
+      candidates: [route({ carrierId, costMicros: 1200, prefix: "44", currency: "GBP" })],
+    });
+    vi.mocked(listLcrPolicies).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getLcrPolicy).mockResolvedValue(row);
+    vi.mocked(listCarriers).mockResolvedValue({ items: [{ id: carrierId, name: "Acme" }], nextCursor: null } as never);
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [], nextCursor: null } as never);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View UK least cost" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit routes" }));
+    fireEvent.change(await screen.findByLabelText("Cost / min"), { target: { value: "0.1234567" } }); // 7 dp
+    fireEvent.click(screen.getByRole("button", { name: "Save routes" }));
+
+    expect(await screen.findByText("Cost must be a number with at most 6 decimal places.")).toBeInTheDocument();
+    expect(updateLcrPolicy).not.toHaveBeenCalled();
+  });
+
+  it("hydrates an existing route's cost as a decimal and round-trips it exactly", async () => {
+    const carrierId = crypto.randomUUID();
+    const row = policy({
+      name: "UK least cost",
+      version: 6,
+      candidates: [route({ carrierId, costMicros: 1500, prefix: "44", currency: "GBP" })], // 1500 micros = 0.0015
+    });
+    vi.mocked(listLcrPolicies).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getLcrPolicy).mockResolvedValue(row);
+    vi.mocked(listCarriers).mockResolvedValue({ items: [{ id: carrierId, name: "Acme" }], nextCursor: null } as never);
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [], nextCursor: null } as never);
+    vi.mocked(updateLcrPolicy).mockResolvedValue(row);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View UK least cost" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit routes" }));
+    // The micros are shown back as a decimal in the input.
+    expect((await screen.findByLabelText("Cost / min") as HTMLInputElement).value).toBe("0.0015");
+    fireEvent.click(screen.getByRole("button", { name: "Save routes" }));
+
+    await waitFor(() => expect(updateLcrPolicy).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateLcrPolicy).mock.calls[0][1].routes![0].costMicros).toBe(1500); // exact round-trip
   });
 
   it("hides Edit routes without routing.manage permission", async () => {

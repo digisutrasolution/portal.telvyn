@@ -1073,3 +1073,20 @@ Format: Keep a Changelog; SemVer once releases begin.
   trunk/date now loaded into the editable fields). `next build` ✓ (/lcr 7.45 → 8.16 kB); eslint ✓. **No backend
   change.** `API.md` updated. **The LCR routes editor is now fully editable (no preserved fields).** Remaining
   deferred slice: friendlier LCR decimal cost entry — or land the stack.
+- 2026-11-22 — **Phase 12O-2ar — friendlier LCR decimal cost entry (frontend only, no contract/backend
+  change).** The LCR routes editor's cost field changes from a raw integer-micros box to a decimal "Cost / min"
+  input: users type a per-minute amount in the chosen currency (e.g. `0.012`) and it is converted to the integer
+  `costMicros` with **exact string math — no floating point**. `decimalToMicros` parses the whole part and up to
+  six fractional digits as integers and combines them (`Number(whole) * 1_000_000 + Number(fracPaddedTo6)`);
+  more than six decimal places, or any non-decimal input, is rejected with a clear message. `microsToDecimal`
+  does the inverse by string slicing (pad to ≥7 digits, split the last six, trim trailing zeros) so an existing
+  route's stored micros are shown back as the decimal and round-trip exactly (e.g. 1500 ⇄ "0.0015"). A live hint
+  under the field shows the resulting micro count ("= 12,000 micros") so the exact stored integer stays visible.
+  The stored/validated value is unchanged — still an integer `costMicros`, still bounded — so the money handling
+  remains exact; this is purely a friendlier input over it. No contract change — pure UI. +2 web unit tests
+  (218 → 220; full web suite 220 ✓, 34 files — >6-decimal-places rejected + not saved, existing-micros-hydrate-
+  as-decimal-and-round-trip-exactly; the two prior cost tests updated to enter decimals asserting the exact
+  micros, e.g. 0.012 → 12000, 0.05 → 50000). `next build` ✓ (/lcr 8.16 → 8.37 kB; the first attempt hit the
+  known `next/font` fetch flake and passed on retry); eslint ✓. **No backend change.** `API.md` updated. **This
+  is the last of the deferred Phase 12O enhancement slices — the NOC/admin frontend write surface and all its
+  polish are now complete.** Next: land the stack.

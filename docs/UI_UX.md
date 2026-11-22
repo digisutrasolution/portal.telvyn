@@ -739,6 +739,15 @@ before the end. With these in place the editor no longer carries anything throug
 unseen, so the "advanced preserved" marker is gone. Verified: 218/218 web Vitest ·
 `next build` clean (/lcr 8.16 kB).
 
+LCR route decimal cost — EXISTING (Phase 12O-2ar, 2026-11-22): the route cost is now
+entered the natural way — a per-minute amount in the chosen currency, like 0.012 —
+rather than as a raw count of millionths. As you type, a small hint shows exactly how
+many millionths that becomes ("= 12,000 micros"), and an existing route's stored value
+is shown back as the same decimal, so what you see always matches what is stored. The
+conversion is done with exact whole-number arithmetic (up to six decimal places; more
+than that is rejected), so no rounding can creep into a rate. Verified: 220/220 web
+Vitest · `next build` clean (/lcr 8.37 kB).
+
 Member management — role assignment — EXISTING (Phase 12O-2al, 2026-11-22): the
 member write surface on Admin → Members. The only member change the backend supports
 is assigning roles, so that is the only affordance — there is no invite, suspend or

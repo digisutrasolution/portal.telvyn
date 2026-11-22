@@ -518,9 +518,19 @@ avoided: test mocks `sip-trunks-actions.listSipTrunks` (editor now loads it). +1
 asserts sipTrunkId + local→ISO via tz-robust `new Date(local).toISOString()`; round-trip test still green) → web
 **218** (34 files); isolated `next build` REAL_EXIT=0 FIRST try (/lcr 7.45→8.16 kB); eslint 0. 2 files
 (editor+test), NO apps/api, NO contracts.
-Next (await owner go): the remaining deferred slice (friendlier LCR decimal cost entry); or land the stack
-(owner provides GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip → CI →
-PR). Backend read gaps (HealthEvent/config-version history) stay
+**12O-2ar (DONE)** — friendlier LCR DECIMAL COST entry (FRONTEND ONLY — no contract/backend; LAST deferred
+slice). Cost field raw-integer-micros → decimal "Cost / min" (currency units, e.g. 0.012). **EXACT string math,
+NO float: `decimalToMicros` = Number(whole)*1_000_000 + Number(fracPaddedTo6) [regex `^(\d+)(?:\.(\d{1,6}))?$`,
+>6 dp or non-decimal → INVALID_COST error]; `microsToDecimal` inverse via string slicing (padStart 7, split last
+6, trim trailing zeros) → existing micros shown back as decimal, round-trips exactly e.g. 1500⇄"0.0015".** Live
+hint "= N micros" keeps the stored integer visible. Stored/validated value unchanged (integer costMicros,
+bounded ≤1e12). EditRoute `costMicros:string` → `cost:string`. Pure UI. +2 tests (>6-dp rejected+not-saved /
+hydrate-as-decimal+round-trip-exact; 2 prior cost tests updated to decimals asserting exact micros 0.012→12000,
+0.05→50000) → web **220** (34 files); isolated `next build` REAL_EXIT=0 (one next/font retry) (/lcr 8.16→8.37
+kB); eslint 0. 2 files (editor+test), NO apps/api, NO contracts.
+**🎉 ALL Phase 12O deferred enhancement slices COMPLETE — NOC/admin frontend write surface + all polish done.**
+Next (await owner go): LAND THE STACK (owner provides GitHub remote → push `integration/phase-12o-complete`
+fast-forwarded to the feature tip → CI → PR). Backend read gaps (HealthEvent/config-version history) stay
 separately approval-gated.
 
 ### (superseded) sub-phase plan
