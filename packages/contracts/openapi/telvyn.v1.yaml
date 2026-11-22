@@ -482,6 +482,30 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/nodes/{id}/health-events:
+    get:
+      tags: [telecom]
+      summary: Node health-event history (platform)
+      description: >-
+        The append-only history of this node's health-status transitions (recorded
+        by the node health probe; a new event only on a genuine change). Newest
+        first, cursor-paginated. Each event carries the from/to status, a safe
+        reason and a correlation id — the same shape as the engine health history. A
+        foreign/unknown node id is 404. Requires PLATFORM + `telecom.health.read`.
+      operationId: listNodeHealthEvents
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: cursor, in: query, required: false, schema: { type: string, format: uuid }, description: "nextCursor from a prior page." }
+      responses:
+        "200":
+          description: Health events (newest first)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthEventPage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /v1/telecom/engines/{id}/health-check:
     post:
       tags: [telecom]

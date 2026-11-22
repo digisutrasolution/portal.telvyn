@@ -6,6 +6,15 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-23 — Phase 12O-2av — node **health-event history** (read). `GET
+  /v1/telecom/nodes/:id/health-events` (`telecom.health.read`, platform) returns the
+  append-only, cursor-paginated history of the node's honest health-status transitions
+  (the NODE `HealthEvent` rows produced by the 12O-2au operator probe), newest first —
+  identical shape/semantics to the engine history (12O-2as), the same safe `HealthEvent`
+  view that never echoes `entityType`/`entityId`/`tenantId`, unknown node → 404. No
+  schema change (reuses the `HealthEvent` model + `HealthEventPage` contract schema);
+  adds `NodeHealthService.history` only. NOC Nodes list gains a per-row **"History"**
+  dialog (same gate) since nodes have no detail page. Contract-first; API + web tests.
 - 2026-08-26 — Project inception: documentation skeleton (`docs/`), ADR-0001
   (fully independent product/codebase).
 - 2026-08-26 — Root `CLAUDE.md`: PROMAX Enterprise Engineering Constitution +

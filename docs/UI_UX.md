@@ -793,3 +793,13 @@ UNKNOWN). The result is written to the node's health and the change is recorded,
 node's health stops being a permanent placeholder and starts reflecting real operator
 checks. Verified: 230/230 web Vitest · `next build` clean (/infrastructure/nodes
 5.36 kB).
+
+Node health history — EXISTING (Phase 12O-2av, 2026-11-23): the Nodes list gained a
+per-row "History" action (shown only with the health-read permission) that opens a
+dialog with that node's health timeline — the record of its status transitions
+(produced by the operator probe above), newest first, as "from → to" with the reason
+and the time, with a "Load more" button that pages through older entries. Nodes have
+no detail page of their own, so the history lives in a dialog opened from the list
+rather than a section on a page (unlike the engine health history, which sits on the
+engine detail page). Read-only; the same list surface, just the stored transitions
+read back. Verified: 236/236 web Vitest · `next build` clean.

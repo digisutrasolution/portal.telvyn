@@ -55,6 +55,15 @@ export function checkNodeHealth(id: string): Promise<NodeHealthReport> {
   return api.post<NodeHealthReport>(`/v1/telecom/nodes/${id}/health-check`);
 }
 
+/** The node's health-event history (newest first), cursor-paginated (`telecom.health.read`). Same shape as the engine history. */
+export function listNodeHealthEvents(id: string, params: { limit?: number; cursor?: string } = {}, signal?: AbortSignal): Promise<HealthEventPage> {
+  const qs = new URLSearchParams();
+  if (params.limit !== undefined) qs.set("limit", String(params.limit));
+  if (params.cursor) qs.set("cursor", params.cursor);
+  const query = qs.toString();
+  return api.get<HealthEventPage>(`/v1/telecom/nodes/${id}/health-events${query ? `?${query}` : ""}`, { signal });
+}
+
 // ---- mutating engine actions (platform; state-changing, never auto-retried) ----
 
 /** Actively probe engine health (telecom.health.read). Non-destructive. */

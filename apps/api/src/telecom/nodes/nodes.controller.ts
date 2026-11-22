@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import { requestContext } from "@/common/request-context";
 import { ZodPipe } from "@/common/zod.pipe";
+import { PaginationQuery, type PaginationInput } from "@/common/pagination";
 import { JwtAuthGuard } from "@/auth/jwt-auth.guard";
 import { TenantGuard } from "@/authz/tenant.guard";
 import { PlatformGuard } from "@/authz/platform.guard";
@@ -40,6 +41,14 @@ export class NodesController {
   @RequirePermissions("telecom.health.read")
   getHealth(@Param("id", ParseUUIDPipe) id: string) {
     return this.nodes.getHealth(id);
+  }
+
+  /** Append-only node health-event history (newest first, cursor-paginated). Read-only. */
+  @Get(":id/health-events")
+  @RequirePermissions("telecom.health.read")
+  async healthEvents(@Param("id", ParseUUIDPipe) id: string, @Query(new ZodPipe(PaginationQuery)) query: PaginationInput) {
+    await this.nodes.get(id); // 404 if not found; platform-scoped
+    return this.health.history(id, query);
   }
 
   /**

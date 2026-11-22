@@ -10,6 +10,7 @@ import { listNodes, checkNodeHealth } from "@/lib/telecom/telecom-actions";
 import { useResource } from "@/lib/use-resource";
 import { useSession } from "@/lib/session/session-context";
 import { messageFor } from "@/components/auth/auth-message";
+import { NodeHealthHistoryDialog } from "./node-health-history-dialog";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<Node["status"], Tone> = { ACTIVE: "ok", SUSPENDED: "warn", DISABLED: "neutral" };
@@ -30,6 +31,7 @@ export function NodesView() {
   const canCheck = hasPermission("telecom.health.read");
   const [checkingId, setCheckingId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
+  const [historyNode, setHistoryNode] = React.useState<Node | null>(null);
 
   async function check(nodeId: string) {
     setCheckingId(nodeId);
@@ -88,9 +90,12 @@ export function NodesView() {
                   <td className="font-num px-3 py-2 text-ink-2">{node.version ?? "—"}</td>
                   {canCheck && (
                     <td className="px-3 py-2 text-right">
-                      <Button variant="ghost" size="sm" onClick={() => check(node.id)} disabled={checkingId === node.id} aria-label={`Check health of ${node.name}`}>
-                        {checkingId === node.id ? "Checking…" : "Check"}
-                      </Button>
+                      <span className="inline-flex gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => setHistoryNode(node)} aria-label={`Health history of ${node.name}`}>History</Button>
+                        <Button variant="ghost" size="sm" onClick={() => check(node.id)} disabled={checkingId === node.id} aria-label={`Check health of ${node.name}`}>
+                          {checkingId === node.id ? "Checking…" : "Check"}
+                        </Button>
+                      </span>
                     </td>
                   )}
                 </tr>
@@ -101,6 +106,10 @@ export function NodesView() {
       )}
 
       {actionError && <p role="alert" className="mt-3 text-[12px] text-danger">{actionError}</p>}
+
+      {historyNode && (
+        <NodeHealthHistoryDialog key={historyNode.id} node={historyNode} onClose={() => setHistoryNode(null)} />
+      )}
     </section>
   );
 }

@@ -578,6 +578,25 @@ provides GitHub remote → push `integration/phase-12o-complete` FF'd to feature
 frontend + THREE backend endpoints (2as health-events read, 2at config-versions read, 2au node health-check write);
 refresh the PR draft accordingly.**
 
+**12O-2av (DONE)** — node HEALTH-EVENT HISTORY (read; consumes the NODE events the 2au probe now produces → the
+follow-up promised in 2au). `GET /v1/telecom/nodes/:id/health-events` (platform + `telecom.health.read`; nodes.get→404
+then history). New `NodeHealthService.history(nodeId, {limit, cursor})` — scoped `where {entityType: NODE, entityId}`,
+shared `cursorArgs`/`toPage`, same safe view `{id, fromStatus, toStatus, reason, correlationId, createdAt}` (NEVER
+echoes entityType/entityId/tenantId) as the engine history. **Identical shape+semantics to 12O-2as**, newest-first,
+cursor-paginated (`HealthEventPage`). **NO schema change, NO new contract schema** — reuses the `HealthEvent` model +
+`HealthEventPage`; contract adds the path only. Frontend: `listNodeHealthEvents` + `<NodeHealthHistoryDialog>` (nodes
+have NO detail page → shown as a dialog from the Nodes list), per-row `telecom.health.read`-gated **"History"** button on
+`<NodesView>`. +3 API unit (203→206, node-health.service.test: scoped-query + safe-view-no-leak + nextCursor/cursor
+pass-through) + 4 web (dialog: renders/empty/load-more/error) + 2 web (nodes-view: History opens dialog, hidden w/o perm)
+(230→236). API tsc✓ eslint✓ telecom 173✓; web build✓ eslint✓ suite 236✓ (37 files). e2e CI-only. 8 files + 2 new (dialog
++ its test), NO prisma. (48th commit; feature tip now <2av>; integration branch @5fcd64e now 29 behind.) **Node health
+history now REAL — the probe writes NODE events, this reads them back.**
+Next (await owner go): carrier health history still has NO writer (would need a carrier probe first, mirroring 2au→2av);
+a real node reachability connector or heartbeat/dead-man's-switch (ADR); or LAND THE STACK (owner provides GitHub remote
+→ push `integration/phase-12o-complete` FF'd to feature tip → CI → PR). **NOTE: stack now spans frontend + FOUR backend
+endpoints (2as health-events read, 2at config-versions read, 2au node health-check write, 2av node health-events read);
+refresh the PR draft accordingly.**
+
 ### (superseded) sub-phase plan
 
 **Phase 12M — real engine adapter (Kamailio first), built in additive review-gated sub-phases.** A disposable Kamailio 6.1.5 test engine is provisioned

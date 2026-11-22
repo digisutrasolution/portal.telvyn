@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { HealthEntityType, HealthStatus, TelecomStatus } from "@prisma/client";
 import { PrismaService } from "@/infra/prisma.service";
+import { cursorArgs, toPage } from "@/common/pagination";
 
 /** Normalized reachability posture for a node probe (never leaks internals). */
 export type NodeReachability = "UNCONFIGURED" | "DISABLED" | "UNVERIFIED";
@@ -49,6 +50,30 @@ export class NodeHealthService {
 
     this.logger.log(JSON.stringify({ nodeId, operation: "node.health.probe", correlationId, reachability, status }));
     return { nodeId, status, reachability, detail, correlationId, checkedAt: new Date() };
+  }
+
+  /**
+   * The node's append-only health-event history, newest first, cursor-paginated.
+   * A safe view only (no entityType/entityId/tenantId echo) — the same shape as the
+   * engine health history. Ordering + cursor use the uuidv7 id (time-ordered).
+   */
+  async history(nodeId: string, page: { limit: number; cursor?: string }) {
+    const rows = await this.prisma.healthEvent.findMany({
+      where: { entityType: HealthEntityType.NODE, entityId: nodeId },
+      ...cursorArgs(page.limit, page.cursor),
+    });
+    const { items, nextCursor } = toPage(rows, page.limit);
+    return {
+      items: items.map((e) => ({
+        id: e.id,
+        fromStatus: e.fromStatus,
+        toStatus: e.toStatus,
+        reason: e.reason,
+        correlationId: e.correlationId,
+        createdAt: e.createdAt,
+      })),
+      nextCursor,
+    };
   }
 
   /** Append a NODE HealthEvent only when the status actually changed since the last one. */

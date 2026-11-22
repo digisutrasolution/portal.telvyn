@@ -65,6 +65,7 @@ the existing `AuditService`. None of these resources hold secrets.
 | `GET /v1/telecom/nodes` · `GET /v1/telecom/nodes/:id` | `telecom.read` |
 | `GET /v1/telecom/nodes/:id/health` | `telecom.health.read` |
 | `POST /v1/telecom/nodes/:id/health-check` (operator probe; records a transition) | `telecom.health.read` |
+| `GET /v1/telecom/nodes/:id/health-events` (health history; cursor pagination) | `telecom.health.read` |
 | `POST/PUT/DELETE /v1/telecom/nodes[/:id]` | `telecom.manage` |
 
 Engine GET is enriched with honest adapter metadata (ADR-0007): `implemented`
@@ -84,8 +85,21 @@ only on a genuine transition. No egress occurs; unknown node → 404; audited
 `telecom.node.health_checked`. Returns `NodeHealthReport` `{nodeId, status,
 reachability, detail, correlationId, checkedAt}`. A real reachability connector (or
 the designed heartbeat/dead-man's-switch ingest) can later replace the posture
-resolution without changing this contract; the history read endpoint over the NODE
-events it now produces is a follow-up slice.
+resolution without changing this contract; the history read over the NODE events it
+now produces is the next slice (12O-2av).
+
+**Node health-event history (Phase 12O-2av).** `GET :id/health-events`
+(`telecom.health.read`, platform) returns the append-only history of the node's
+honest health-status transitions — the NODE `HealthEvent` rows produced by the
+operator probe (`POST :id/health-check`, Phase 12O-2au), recorded only on a genuine
+status change. Identical shape and semantics to the engine history (12O-2as): newest
+first, cursor-paginated (`HealthEventPage` = `{items, nextCursor}`, uuidv7 id is the
+cursor); each item is the same safe `HealthEvent` view — `{id, fromStatus (null on
+the first event), toStatus, reason, correlationId, createdAt}` — and never echoes
+`entityType`/`entityId`/`tenantId`. An unknown node id is **404**. No schema change —
+reuses the `HealthEvent` model and the `HealthEventPage` contract schema; this adds
+the read endpoint (`NodeHealthService.history`) only. Nodes have no detail page, so
+the NOC Nodes list surfaces it as a per-row "History" dialog (same gate).
 
 **Engine foundation (Phase 12K, ADR-0007 addendum).** `GET :id/status` returns a
 normalized `EngineStatus` — `provider`, `implemented`, an explicit

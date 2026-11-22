@@ -3,9 +3,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Node } from "@/lib/contracts";
 import { ApiError } from "@/lib/api/problem";
 
-vi.mock("@/lib/telecom/telecom-actions", () => ({ listNodes: vi.fn(), checkNodeHealth: vi.fn() }));
+vi.mock("@/lib/telecom/telecom-actions", () => ({ listNodes: vi.fn(), checkNodeHealth: vi.fn(), listNodeHealthEvents: vi.fn() }));
 
-import { listNodes, checkNodeHealth } from "@/lib/telecom/telecom-actions";
+import { listNodes, checkNodeHealth, listNodeHealthEvents } from "@/lib/telecom/telecom-actions";
 import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { NodesView } from "./nodes-view";
 
@@ -87,5 +87,27 @@ describe("NodesView", () => {
     renderView(async () => ({ userId: "u", tenantId: "t", tenantType: "PLATFORM", roles: [], permissions: ["telecom.read"] }));
     await screen.findByText("node-a");
     expect(screen.queryByRole("button", { name: /Check health of/ })).toBeNull();
+  });
+
+  it("opens the health-history dialog from the History button", async () => {
+    vi.mocked(listNodes).mockResolvedValue([node()]);
+    vi.mocked(listNodeHealthEvents).mockResolvedValue({
+      items: [{ id: "h1", fromStatus: null, toStatus: "UNKNOWN", reason: "posture unverified", correlationId: "c1", createdAt: "2026-11-20T09:30:00.000Z" }],
+      nextCursor: null,
+    });
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Health history of node-a" }));
+
+    expect(await screen.findByText(/Health history — node-a/)).toBeInTheDocument();
+    await waitFor(() => expect(listNodeHealthEvents).toHaveBeenCalledWith("n1", {}, expect.anything()));
+    expect(await screen.findByText("posture unverified")).toBeInTheDocument();
+  });
+
+  it("hides the History button without telecom.health.read", async () => {
+    vi.mocked(listNodes).mockResolvedValue([node()]);
+    renderView(async () => ({ userId: "u", tenantId: "t", tenantType: "PLATFORM", roles: [], permissions: ["telecom.read"] }));
+    await screen.findByText("node-a");
+    expect(screen.queryByRole("button", { name: /Health history of/ })).toBeNull();
   });
 });
