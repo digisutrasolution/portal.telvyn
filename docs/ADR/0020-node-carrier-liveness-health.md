@@ -1,8 +1,9 @@
 # ADR-0020 — Node & carrier liveness health: heartbeat vs reachability probe
 
-- **Status:** Proposed
-- **Date:** 2026-11-23
-- **Deciders:** Architect / Telecom / Security (Phase 12O) — *awaiting review*
+- **Status:** Accepted
+- **Date:** 2026-11-23 (proposed); accepted 2026-11-23 with the four review
+  questions resolved (see "Resolved decisions" below)
+- **Deciders:** Architect / Telecom / Security (Phase 12O)
 - **Related:** ADR-0006 (control plane vs data plane), ADR-0007 (engine
   abstraction), ADR-0009 (credential vault), ADR-0010 (node + health model),
   ADR-0011 (engine runtime integration boundary); builds on Phase 12O-2au
@@ -57,9 +58,12 @@ dead-man's-switch, not a control-plane pull:
   (node build/version, uptime, optional self-reported load); never dialplans,
   credentials, or call content.
 - **Identity & auth (additive, vault).** A heartbeat is authenticated by a
-  **per-node credential** — a new `TelecomCredentialType.NODE_AGENT` (bearer
-  token or, preferably, an mTLS client cert) held in the vault (ADR-0009), with
-  an additive nullable `TelecomNode.credentialId` FK (`ON DELETE SET NULL`) —
+  **per-node credential** — a new `TelecomCredentialType.NODE_AGENT` holding an
+  **mTLS client certificate** (*decided: mTLS, not a bearer token* — it matches
+  the Kamailio management plane's existing mTLS posture, is not replayable, and
+  binds identity to the key, not a copyable string) — held in the vault
+  (ADR-0009), with an additive nullable `TelecomNode.credentialId` FK
+  (`ON DELETE SET NULL`) —
   exactly mirroring the engine's Phase 12M-1 `ENGINE_API` addition. The secret
   is decrypted only at the ingest-auth boundary (`revealForAdapter`), never
   stored on or returned from the node row. A node can only report **its own**
@@ -67,18 +71,30 @@ dead-man's-switch, not a control-plane pull:
   forgery).
 - **Freshness is the source of truth.** `NodeHealth.lastHeartbeatAt` (which
   **already exists**, ADR-0010) is stamped on each accepted heartbeat. A
-  **periodic evaluator** (a cron sweep, like the existing sweeps) compares
-  `lastHeartbeatAt` to a configured TTL and records a transition on change:
-  fresh → `HEALTHY`; within a grace window → `DEGRADED`; past the dead-man's
-  threshold → `UNHEALTHY` **or** `UNKNOWN` (see honesty rule below). Transitions
-  are appended to the existing `HealthEvent` model (the same rows 2au/2av/2ax
-  already read) — **no new health tables**.
+  **new, dedicated periodic evaluator** (*decided: its own cron, not folded into
+  an existing sweep* — distinct cadence and failure domain from the storage/
+  backup sweeps) compares `lastHeartbeatAt` to a configured TTL and records a
+  transition on change, using exactly **two** states plus the administrative one:
+  - **within TTL since the last heartbeat → `HEALTHY`** (the agent is alive and
+    can reach us — genuine, self-reported liveness);
+  - **beyond TTL → `UNKNOWN`** ("no recent heartbeat — liveness unverified"), the
+    dead-man's-switch (*decided: caps at `UNKNOWN`* — see honesty rule);
+  - a `DISABLED` node is `DISABLED` regardless.
+  **Defaults (platform-configurable env, not hard-coded):** heartbeat interval
+  `30s`; staleness TTL `90s` — the TTL is deliberately `≥ 2×` the interval so a
+  single dropped beat (a network blip) does **not** flip a node to `UNKNOWN`; the
+  grace window is simply this TTL slack, so no separate `DEGRADED` tier is
+  invented from silence. Transitions are appended to the existing `HealthEvent`
+  model (the same rows 2au/2av/2ax already read) — **no new health tables**.
 - **Honesty of silence.** Loss of heartbeats means *we stopped hearing from the
-  node*, which is not proof the node is down. The dead-man's-switch demotes to
-  the **weakest honest** state: `UNKNOWN` ("no recent heartbeat") by default,
-  and `UNHEALTHY` only when a second, corroborating signal (e.g. an engine
-  health probe on the same host, ADR-0011) also fails. Never `HEALTHY` on
-  stale data. A `DISABLED` node is `DISABLED` regardless.
+  node*, which is **not** proof the node is down. The dead-man's-switch therefore
+  **caps at `UNKNOWN`** and never, on silence alone, asserts `DEGRADED` or
+  `UNHEALTHY` — those are claims of a *known* impairment we have not observed.
+  `UNHEALTHY`/`DEGRADED` remain reachable only from a signal that genuinely
+  reports impairment (a future agent self-report, or an independent corroborating
+  probe such as the optional engine health probe below) — recorded by that
+  signal's own path, never manufactured by the dead-man's-switch. Never `HEALTHY`
+  on stale data.
 - **Optional pull augmentation.** Where a node also exposes a management API
   (e.g. our Kamailio nodes behind the WireGuard+mTLS gateway), the existing
   `EngineConnector` health probe (ADR-0011) MAY corroborate the heartbeat. Any
@@ -148,12 +164,26 @@ additive sub-phase, after this ADR is Accepted):
    `TelecomNode.credentialId` (migration), vault-backed; no behaviour change yet.
 2. **Heartbeat ingest** — authenticated `POST …/heartbeat`, stamps
    `lastHeartbeatAt`; rate-limited, identity-bound, audited.
-3. **Dead-man's-switch evaluator** — cron sweep comparing `lastHeartbeatAt` to a
-   TTL, recording honest transitions into `HealthEvent`.
+3. **Dead-man's-switch evaluator** — a **new dedicated cron** comparing
+   `lastHeartbeatAt` to the TTL, recording honest `HEALTHY`/`UNKNOWN` transitions
+   into `HealthEvent`.
 4. **(Later, separate phases)** engine-reported carrier reachability projection;
    CDR-derived carrier health.
 
-Open questions for review: heartbeat TTL / grace-window defaults; bearer token
-vs mTLS for `NODE_AGENT`; whether the dead-man's-switch ever reaches `UNHEALTHY`
-without a corroborating signal, or caps at `UNKNOWN`; whether the evaluator is a
-new cron or folds into an existing sweep.
+## Resolved decisions (2026-11-23)
+
+The four review questions are settled; this ADR is **Accepted** with them folded
+into the Decision above:
+
+1. **Dead-man's-switch caps at `UNKNOWN`.** Prolonged heartbeat silence yields
+   `UNKNOWN`, never `UNHEALTHY`/`DEGRADED` on its own — silence is absence of
+   evidence, not evidence of a fault. Impairment states come only from a signal
+   that actually reports impairment.
+2. **`NODE_AGENT` = mTLS client certificate** (not a bearer token) — matches the
+   Kamailio management plane, non-replayable, identity bound to the key.
+3. **A new dedicated cron** runs the evaluator — its own cadence and failure
+   domain, not folded into the storage/backup sweeps.
+4. **TTL defaults:** heartbeat interval `30s`, staleness TTL `90s` (≥ 2× the
+   interval so one dropped beat does not flip a node to `UNKNOWN`); both
+   platform-configurable env, no separate `DEGRADED`-from-silence tier. These are
+   starting defaults, tunable per deployment without a contract change.
