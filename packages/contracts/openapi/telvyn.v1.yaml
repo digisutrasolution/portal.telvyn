@@ -854,6 +854,35 @@ paths:
               schema: { $ref: "#/components/schemas/RoutingProfilePage" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [telecom]
+      summary: Create a routing profile
+      description: >-
+        Create a tenant-owned routing profile. DECLARATIVE CONFIGURATION ONLY —
+        nothing is executed (no SIP, webhooks, failover or LCR). Ownership
+        (tenantId) is server-derived and never a client field. The flat policy
+        fields configure selection + failover; a failover-enabled policy must
+        declare at least one condition. `rules` is optional — when omitted the
+        profile is created with an empty rule set; each supplied rule's
+        destination is validated per type (SSRF-safe webhooks, canonical E.164,
+        owned trunk ids) and self-failover is rejected. A duplicate name is a 409.
+        Requires `routing.manage`.
+      operationId: createRoutingProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRoutingProfile" }
+      responses:
+        "201":
+          description: Routing profile created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoutingProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /v1/telecom/routing-profiles/{id}:
     get:
       tags: [telecom]
@@ -873,6 +902,51 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RoutingProfile" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [telecom]
+      summary: Update a routing profile
+      description: >-
+        Partially update a tenant-owned routing profile. DECLARATIVE CONFIGURATION
+        ONLY — nothing is executed. Only supplied fields change; ownership is never
+        taken from the client, and a foreign tenant's profile is 404 (IDOR-safe).
+        If `rules` is present it REPLACES the entire rule set atomically; when
+        omitted the existing rules are left untouched. Pass `expectedVersion` for
+        optimistic concurrency — a version mismatch is a 409. A duplicate name is a
+        409. Requires `routing.manage`.
+      operationId: updateRoutingProfile
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateRoutingProfile" }
+      responses:
+        "200":
+          description: Routing profile updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoutingProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [telecom]
+      summary: Delete a routing profile (soft delete)
+      description: >-
+        Soft-delete a tenant-owned routing profile (sets deletedAt; the row is
+        retained for audit and history). A foreign tenant's profile is 404
+        (IDOR-safe). Requires `routing.manage`.
+      operationId: deleteRoutingProfile
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Routing profile deleted }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -1571,6 +1645,93 @@ components:
           type: array
           items: { $ref: "#/components/schemas/RoutingProfile" }
         nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next page; null when exhausted." }
+    RoutingScheduleInput:
+      type: object
+      required: [timezone, daysOfWeek, startMinute, endMinute]
+      description: Optional declarative time-of-day schedule for a rule (never executed). startMinute must be before endMinute.
+      properties:
+        timezone: { type: string, minLength: 1, maxLength: 64, description: "IANA timezone, validated server-side." }
+        daysOfWeek:
+          type: array
+          minItems: 1
+          maxItems: 7
+          items: { type: integer, minimum: 0, maximum: 6, description: "0=Sunday … 6=Saturday." }
+        startMinute: { type: integer, minimum: 0, maximum: 1439 }
+        endMinute: { type: integer, minimum: 0, maximum: 1439 }
+    RoutingRuleInput:
+      type: object
+      required: [destinationType, destination]
+      description: >-
+        A single declarative routing rule to create (config only — nothing is
+        dialled). The destination is validated per type server-side (canonical
+        E.164, 1–10-digit extension, an owned SIP trunk id, a simple voicemail
+        identifier, or an https webhook to a public host). A typed failover
+        destination requires its type; a rule may not fail over to its own
+        destination.
+      properties:
+        destinationType: { type: string, enum: [SIP_TRUNK, PHONE_NUMBER, EXTENSION, VOICEMAIL, WEBHOOK] }
+        destination: { type: string, minLength: 1, maxLength: 2048 }
+        priority: { type: integer, minimum: 0, maximum: 100000, description: "Deterministic order, ascending." }
+        weight: { type: integer, minimum: 1, maximum: 1000, description: "For the WEIGHTED strategy." }
+        enabled: { type: boolean }
+        timeoutSeconds: { type: integer, minimum: 1, maximum: 600 }
+        retryCount: { type: integer, minimum: 0, maximum: 10 }
+        carrierId: { type: string, format: uuid, description: "A carrier accessible in the caller's scope." }
+        failoverDestination: { type: string, minLength: 1, maxLength: 2048 }
+        failoverDestinationType: { type: string, enum: [SIP_TRUNK, PHONE_NUMBER, EXTENSION, VOICEMAIL, WEBHOOK] }
+        failoverAfterSeconds: { type: integer, minimum: 1, maximum: 600 }
+        schedule: { $ref: "#/components/schemas/RoutingScheduleInput" }
+    CreateRoutingProfile:
+      type: object
+      required: [name]
+      description: >-
+        Create-routing-profile body. DECLARATIVE CONFIGURATION ONLY. Ownership
+        (tenantId) is server-derived. The flat policy fields configure selection +
+        failover; `failoverEnabled: true` requires at least one failoverCondition.
+        `rules` is optional (omitted = empty rule set).
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        direction: { type: string, enum: [INBOUND, OUTBOUND] }
+        description: { type: string, maxLength: 500 }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED] }
+        selectionStrategy: { type: string, enum: [PRIORITY, WEIGHTED, ROUND_ROBIN, SIMULTANEOUS] }
+        failoverEnabled: { type: boolean }
+        failoverConditions:
+          type: array
+          maxItems: 5
+          items: { type: string, enum: [NO_ANSWER, BUSY, FAILED, UNREACHABLE, TIMEOUT] }
+        maxAttempts: { type: integer, minimum: 1, maximum: 20, description: "Bounded attempt cap (loop protection)." }
+        overallTimeoutSeconds: { type: integer, minimum: 1, maximum: 3600 }
+        rules:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/RoutingRuleInput" }
+    UpdateRoutingProfile:
+      type: object
+      description: >-
+        Partial routing-profile update. DECLARATIVE CONFIGURATION ONLY. Only
+        supplied fields change; `failoverEnabled: true` still requires at least one
+        failoverCondition. If `rules` is present it REPLACES the whole rule set;
+        when omitted the existing rules are untouched. `expectedVersion` enables
+        optimistic concurrency (mismatch → 409).
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        direction: { type: string, enum: [INBOUND, OUTBOUND] }
+        description: { type: string, maxLength: 500, nullable: true, description: "null clears the description." }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, DISABLED] }
+        selectionStrategy: { type: string, enum: [PRIORITY, WEIGHTED, ROUND_ROBIN, SIMULTANEOUS] }
+        failoverEnabled: { type: boolean }
+        failoverConditions:
+          type: array
+          maxItems: 5
+          items: { type: string, enum: [NO_ANSWER, BUSY, FAILED, UNREACHABLE, TIMEOUT] }
+        maxAttempts: { type: integer, minimum: 1, maximum: 20 }
+        overallTimeoutSeconds: { type: integer, minimum: 1, maximum: 3600 }
+        rules:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/RoutingRuleInput" }
+        expectedVersion: { type: integer, minimum: 0, description: "If set, the update applies only when the profile's current version matches." }
     LcrRoute:
       type: object
       required: [id, carrierId, sipTrunkId, prefix, country, costMicros, currency, priority, weight, enabled, effectiveFrom, effectiveTo]

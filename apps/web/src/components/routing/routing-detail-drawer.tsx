@@ -2,10 +2,12 @@
 
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { RoutingProfile, RoutingRule } from "@/lib/contracts";
 import { getRoutingProfile } from "@/lib/telecom/routing-actions";
 import { useResource } from "@/lib/use-resource";
+import { useSession } from "@/lib/session/session-context";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 const STATUS_TONE: Record<RoutingProfile["status"], Tone> = { ACTIVE: "ok", SUSPENDED: "warn", DISABLED: "neutral" };
@@ -50,11 +52,30 @@ function RuleCard({ rule }: { rule: RoutingRule }) {
  * summarizes: the full selection/failover policy and the complete ordered rule
  * set (priority ASC). Declarative config only — nothing is executed. Read-only;
  * `routing.read` is re-checked server-side. Mounted keyed by id so each open
- * refetches; a foreign/removed profile surfaces the API's 404 inline.
+ * refetches; a foreign/removed profile surfaces the API's 404 inline. Edit /
+ * Delete appear only with `routing.manage` (UX gating; the API re-checks) and hand
+ * the loaded profile back to the parent; editing never touches the rule set.
  */
-export function RoutingDetailDrawer({ profileId, onClose }: { profileId: string; onClose: () => void }) {
+export function RoutingDetailDrawer({
+  profileId,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  profileId: string;
+  onClose: () => void;
+  /** Open the edit form for this profile (shown only with `routing.manage`). */
+  onEdit?: (profile: RoutingProfile) => void;
+  /** Request deletion of this profile (shown only with `routing.manage`). */
+  onDelete?: (profile: RoutingProfile) => void;
+}) {
+  const { hasPermission } = useSession();
   const fetchProfile = React.useCallback((s: AbortSignal) => getRoutingProfile(profileId, s), [profileId]);
   const { data, loading, error } = useResource<RoutingProfile>(fetchProfile);
+
+  const canManage = hasPermission("routing.manage");
+  const canEdit = Boolean(onEdit) && canManage;
+  const canDelete = Boolean(onDelete) && canManage;
 
   const rules = React.useMemo(
     () => (data ? [...data.rules].sort((a, b) => a.priority - b.priority) : []),
@@ -100,6 +121,17 @@ export function RoutingDetailDrawer({ profileId, onClose }: { profileId: string;
                   <RuleCard key={r.id} rule={r} />
                 ))}
               </ol>
+            )}
+          </div>
+        )}
+
+        {data && (canEdit || canDelete) && (
+          <div className="mt-4 flex justify-end gap-2">
+            {canDelete && (
+              <Button variant="danger" size="sm" onClick={() => onDelete!(data)}>Delete</Button>
+            )}
+            {canEdit && (
+              <Button variant="primary" size="sm" onClick={() => onEdit!(data)}>Edit</Button>
             )}
           </div>
         )}

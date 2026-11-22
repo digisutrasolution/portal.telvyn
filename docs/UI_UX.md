@@ -627,3 +627,22 @@ select (any value), not a guarded lifecycle stepper — the guard is a future ba
 concern, and the UI does not pretend otherwise. Validation is client-side with a per-field
 message on the number; the server re-checks permission, re-normalizes, and re-validates
 every reference. Verified: 192/192 web Vitest · `next build` clean (/numbers 5.61 kB).
+
+Routing profile management — profile + policy (create / edit / delete) — EXISTING
+(Phase 12O-2ah, 2026-11-22): the write pattern rolled to Routing, deliberately bounded
+to the profile envelope and its selection/failover policy — the ordered rules editor is
+a separate later slice. All three affordances gate on the single `routing.manage`
+permission: a "New profile" button on the Routing screen, and Edit / Delete footer
+actions on the routing detail drawer. `<RoutingForm>` is a modal for create and edit,
+with the profile fields (name, direction, description, status) and a Policy fieldset:
+selection strategy, an Enable-failover checkbox, failover-condition checkboxes, max
+attempts (1–20) and overall timeout (1–3600s). The UI mirrors the backend's rule that
+enabling failover requires at least one condition, and the server stays authoritative.
+The rule set is never touched here: creating a profile starts it with no rules, and
+editing leaves the existing rules exactly as they were — the backend only replaces rules
+when a rule set is sent, and this form never sends one. Edit carries the profile's
+version for optimistic concurrency, so if someone else changed it meanwhile the save is
+rejected with a clear "modified concurrently" message rather than silently clobbering.
+Delete is a soft delete behind a confirm dialog that notes the profile's rules are
+removed with it; every successful mutation reloads the list. Verified: 195/195 web
+Vitest · `next build` clean (/routing 6.25 kB).

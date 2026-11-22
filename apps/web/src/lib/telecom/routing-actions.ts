@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { RoutingProfile, RoutingProfilePage } from "@/lib/contracts";
+import type { RoutingProfile, RoutingProfilePage, CreateRoutingProfile, UpdateRoutingProfile } from "@/lib/contracts";
 
 /**
  * Read-only routing-profile API calls (tenant-scoped; `routing.read`). Profiles
@@ -31,4 +31,19 @@ export function listRoutingProfiles(params: ListRoutingProfilesParams = {}, sign
   if (params.q) qs.set("q", params.q);
   const query = qs.toString();
   return api.get<RoutingProfilePage>(`/v1/telecom/routing-profiles${query ? `?${query}` : ""}`, { signal });
+}
+
+/** Create a routing profile (`routing.manage`); ownership is server-derived. Omitting `rules` creates an empty rule set. Returns the created profile. */
+export function createRoutingProfile(body: CreateRoutingProfile): Promise<RoutingProfile> {
+  return api.post<RoutingProfile>("/v1/telecom/routing-profiles", body);
+}
+
+/** Partially update a routing profile (`routing.manage`). Omitting `rules` preserves the rule set; `expectedVersion` enables optimistic concurrency. Returns the updated profile; 404 if foreign/removed. */
+export function updateRoutingProfile(id: string, body: UpdateRoutingProfile): Promise<RoutingProfile> {
+  return api.patch<RoutingProfile>(`/v1/telecom/routing-profiles/${id}`, body);
+}
+
+/** Soft-delete a routing profile (`routing.manage`); 204 No Content. 404 if foreign/removed. */
+export function deleteRoutingProfile(id: string): Promise<void> {
+  return api.delete<void>(`/v1/telecom/routing-profiles/${id}`);
 }

@@ -110,6 +110,15 @@ export type RoutingRule = Schemas["RoutingRule"];
 /** Cursor-paginated page of routing profiles. */
 export type RoutingProfilePage = Schemas["RoutingProfilePage"];
 
+/** Create-routing-profile request body (POST /v1/telecom/routing-profiles). */
+export type CreateRoutingProfile = Schemas["CreateRoutingProfile"];
+
+/** Partial update-routing-profile request body (PATCH /v1/telecom/routing-profiles/{id}). */
+export type UpdateRoutingProfile = Schemas["UpdateRoutingProfile"];
+
+/** A single declarative routing rule input (create/replace). */
+export type RoutingRuleInput = Schemas["RoutingRuleInput"];
+
 /** An LCR policy (tenant) with its ordered route candidates. */
 export type LcrPolicy = Schemas["LcrPolicy"];
 

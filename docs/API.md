@@ -251,8 +251,23 @@ SSRF-checked, never called), `priority` (deterministic order), `enabled`,
 `timeoutSeconds`, `retryCount`, `carrierId`, `failoverDestination`,
 `failoverAfterSeconds`, `schedule {timezone, daysOfWeek[], startMinute,
 endMinute}`. Duplicate name per tenant → 409. RBAC reuses `routing.read`/
-`routing.manage` (12B — not `routing_profile.*`). OpenAPI YAML still `/v1/auth`
-only (tracked debt).
+`routing.manage` (12B — not `routing_profile.*`).
+
+As of **Phase 12O-2ah** the full routing-profile surface — list, get, **create,
+update, delete** — is authored into the OpenAPI contract (`CreateRoutingProfile` /
+`UpdateRoutingProfile` + `RoutingRuleInput` / `RoutingScheduleInput` schemas in
+`telvyn.v1.yaml`, so the contract fully describes the `rules[]` body too) and the
+frontend Routing management screen consumes the generated types. The
+POST/PATCH/DELETE handlers are unchanged since Phase 12H/12I — no backend change.
+All three mutations gate on `routing.manage`. **This slice's UI covers the profile
+envelope + the selection/failover policy only; it deliberately does NOT send
+`rules`** — so create starts a profile with an empty rule set and edit omits `rules`
+(the backend replaces the set only when `rules` is present, otherwise preserves it).
+A dedicated rules editor is the next slice (12O-2ai). Edit sends `expectedVersion`
+for optimistic concurrency (mismatch → 409), and the "failover enabled ⇒ ≥1
+condition" rule is mirrored client-side and authoritative server-side.
+
+OpenAPI YAML still `/v1/auth` only (tracked debt) for the surfaces not yet closed.
 
 ## Routing policy fields — EXISTING (Phase 12I, 2026-08-29)
 

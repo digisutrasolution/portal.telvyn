@@ -3,10 +3,34 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiError } from "@/lib/api/problem";
 import type { RoutingProfile } from "@/lib/contracts";
 
-vi.mock("@/lib/telecom/routing-actions", () => ({ listRoutingProfiles: vi.fn(), getRoutingProfile: vi.fn() }));
+vi.mock("@/lib/telecom/routing-actions", () => ({
+  listRoutingProfiles: vi.fn(),
+  getRoutingProfile: vi.fn(),
+  createRoutingProfile: vi.fn(),
+  updateRoutingProfile: vi.fn(),
+  deleteRoutingProfile: vi.fn(),
+}));
 
-import { getRoutingProfile, listRoutingProfiles } from "@/lib/telecom/routing-actions";
+import { createRoutingProfile, deleteRoutingProfile, getRoutingProfile, listRoutingProfiles } from "@/lib/telecom/routing-actions";
+import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { RoutingView } from "./routing-view";
+
+// `routing.manage` present so the create/edit/delete affordances render.
+const allPermsLoader: SessionLoader = async () => ({
+  userId: "u",
+  tenantId: "t",
+  tenantType: "RESELLER",
+  roles: [],
+  permissions: ["routing.read", "routing.manage"],
+});
+
+function renderView(loader: SessionLoader = allPermsLoader) {
+  return render(
+    <SessionProvider loader={loader}>
+      <RoutingView />
+    </SessionProvider>,
+  );
+}
 
 function profile(overrides: Partial<RoutingProfile> = {}): RoutingProfile {
   return {
@@ -41,7 +65,7 @@ describe("RoutingView", () => {
       items: [profile({ name: "Inbound default", version: 3 })],
       nextCursor: null,
     });
-    render(<RoutingView />);
+    renderView();
 
     expect(await screen.findByText("Inbound default")).toBeInTheDocument();
     expect(screen.getByText("PRIORITY")).toBeInTheDocument();
@@ -55,7 +79,7 @@ describe("RoutingView", () => {
     const row = profile({ name: "Inbound default" });
     vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [row], nextCursor: null });
     vi.mocked(getRoutingProfile).mockResolvedValue(profile({ id: row.id, name: "Inbound default" }));
-    render(<RoutingView />);
+    renderView();
 
     fireEvent.click(await screen.findByRole("button", { name: "View Inbound default" }));
 
@@ -68,13 +92,13 @@ describe("RoutingView", () => {
 
   it("shows the empty state when there are no profiles", async () => {
     vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [], nextCursor: null });
-    render(<RoutingView />);
+    renderView();
     expect(await screen.findByText(/No routing profiles are configured yet/i)).toBeInTheDocument();
   });
 
   it("filters by status, refetching with the status query param", async () => {
     vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [profile({ name: "Inbound default" })], nextCursor: null });
-    render(<RoutingView />);
+    renderView();
     expect(await screen.findByText("Inbound default")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Filter by status" }), { target: { value: "ACTIVE" } });
@@ -83,7 +107,7 @@ describe("RoutingView", () => {
 
   it("filters by strategy, refetching with the strategy query param", async () => {
     vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [profile({ name: "Inbound default" })], nextCursor: null });
-    render(<RoutingView />);
+    renderView();
     expect(await screen.findByText("Inbound default")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Filter by strategy" }), { target: { value: "WEIGHTED" } });
@@ -92,7 +116,7 @@ describe("RoutingView", () => {
 
   it("debounces the search box, then refetches with the q param", async () => {
     vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [profile({ name: "Inbound default" })], nextCursor: null });
-    render(<RoutingView />);
+    renderView();
     const box = await screen.findByRole("searchbox", { name: "Search routing profiles" });
 
     fireEvent.change(box, { target: { value: "inbound" } });
@@ -103,7 +127,7 @@ describe("RoutingView", () => {
     vi.mocked(listRoutingProfiles)
       .mockResolvedValueOnce({ items: [profile({ name: "Inbound default" })], nextCursor: null })
       .mockResolvedValue({ items: [], nextCursor: null });
-    render(<RoutingView />);
+    renderView();
     expect(await screen.findByText("Inbound default")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Filter by direction" }), { target: { value: "OUTBOUND" } });
@@ -113,7 +137,7 @@ describe("RoutingView", () => {
 
   it("shows an error state (RFC 7807 title) when the load fails", async () => {
     vi.mocked(listRoutingProfiles).mockRejectedValue(new ApiError({ title: "Forbidden", status: 403 }));
-    render(<RoutingView />);
+    renderView();
     expect(await screen.findByRole("alert")).toHaveTextContent("Forbidden");
   });
 
@@ -121,7 +145,7 @@ describe("RoutingView", () => {
     vi.mocked(listRoutingProfiles)
       .mockResolvedValueOnce({ items: [profile({ name: "Profile One" })], nextCursor: "cur-2" })
       .mockResolvedValueOnce({ items: [profile({ name: "Profile Two" })], nextCursor: null });
-    render(<RoutingView />);
+    renderView();
 
     expect(await screen.findByText("Profile One")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));
@@ -130,5 +154,43 @@ describe("RoutingView", () => {
     expect(await screen.findByText("Profile Two")).toBeInTheDocument();
     expect(screen.getByText("Profile One")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+
+  it("creates a profile (policy only, no rules) from the New-profile form and reloads", async () => {
+    vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(createRoutingProfile).mockResolvedValue(profile({ name: "Outbound A" }));
+    renderView();
+    await screen.findByText(/No routing profiles are configured yet/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "New profile" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Outbound A" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
+
+    // Body carries the name and does NOT send `rules` (rules editor is a later slice).
+    await waitFor(() => expect(createRoutingProfile).toHaveBeenCalledWith(expect.objectContaining({ name: "Outbound A" })));
+    expect(vi.mocked(createRoutingProfile).mock.calls[0][0]).not.toHaveProperty("rules");
+    await waitFor(() => expect(vi.mocked(listRoutingProfiles).mock.calls.length).toBeGreaterThanOrEqual(2));
+  });
+
+  it("hides New profile without routing.manage permission", async () => {
+    vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [], nextCursor: null });
+    renderView(async () => ({ userId: "u", tenantId: "t", tenantType: "RESELLER", roles: [], permissions: ["routing.read"] }));
+    await screen.findByText(/No routing profiles are configured yet/i);
+    expect(screen.queryByRole("button", { name: "New profile" })).toBeNull();
+  });
+
+  it("deletes a profile via the detail drawer after confirmation", async () => {
+    const row = profile({ name: "Inbound default" });
+    vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getRoutingProfile).mockResolvedValue(row);
+    vi.mocked(deleteRoutingProfile).mockResolvedValue(undefined);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Inbound default" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" })); // drawer footer → opens confirm
+    const confirm = await screen.findByRole("button", { name: "Delete" }); // confirm dialog's Delete
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(deleteRoutingProfile).toHaveBeenCalledWith(row.id));
   });
 });

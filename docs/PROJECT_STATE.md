@@ -392,10 +392,26 @@ slice). UX-only gating; server re-checks + re-normalizes + re-validates relation
 192 (full suite ✓, 34 files): +3. `next build` ✓ (/numbers 5.61 kB); eslint ✓. No backend change** (endpoints +
 audit + tenant-scoping + E.164 normalization + relationship validation pre-existed, e2e-covered). `API.md`
 updated.
-Next (await owner go): roll the write pattern to the remaining resources (routing / LCR / member mgmt), one per
-sub-phase; the deferred carrier/trunk credential + DID region slice; or land the stack (owner provides GitHub
-remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps
-(HealthEvent/config-version history) stay separately approval-gated.
+**12O-2ah (DONE)** — routing profile create / edit / delete, PROFILE + POLICY ONLY (FOURTH WRITE SLICE,
+contract-first; owner chose the bounded scope). Manages the profile envelope (name/direction/description/status)
++ selection/failover policy; the ordered RULES EDITOR is a dedicated later slice (12O-2ai). POST/PATCH/DELETE
+pre-existed (12H/12I, single `routing.manage` perm; declarative config only — nothing executed; dup name → 409;
+atomic optimistic concurrency via `expectedVersion`; destinations SSRF/E.164/owned-trunk validated). Authored
+into contract: `CreateRoutingProfile`/`UpdateRoutingProfile` + `RoutingRuleInput`/`RoutingScheduleInput` (full
+`rules[]` described even though this UI omits it); regenerated schema.ts (additive); aliases +
+`createRoutingProfile`/`updateRoutingProfile`/`deleteRoutingProfile`. New `<RoutingForm>` (profile fields +
+Policy fieldset; client range validation + "failover ⇒ ≥1 condition"). **CRITICAL safety: rules never sent —
+create omits → empty set; edit omits → backend PRESERVES existing rules (only replaces when `rules` present), so
+a policy edit can't wipe rules.** Edit sends `expectedVersion` → concurrent change = 409. Detail drawer got
+Edit/Delete (gated `routing.manage`); routing-view got New-profile button (gated `routing.manage`) +
+soft-delete confirm (notes rules go with it); mutations reload. UX-only gating; server re-checks + re-validates
+every call. **web 192 → 195 (full suite ✓, 34 files): +3. `next build` ✓ (/routing 6.25 kB; one `next/font`
+fetch-flake retry); eslint ✓. No backend change** (endpoints + audit + tenant-scoping + optimistic concurrency +
+destination validation pre-existed, e2e-covered). `API.md` updated.
+Next (await owner go): the routing RULES EDITOR (12O-2ai); roll the write pattern to the remaining resources
+(LCR / member mgmt), one per sub-phase; the deferred carrier/trunk credential + DID region slice; or land the
+stack (owner provides GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip →
+CI → PR). Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

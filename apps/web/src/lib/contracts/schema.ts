@@ -659,7 +659,11 @@ export interface paths {
          */
         get: operations["listRoutingProfiles"];
         put?: never;
-        post?: never;
+        /**
+         * Create a routing profile
+         * @description Create a tenant-owned routing profile. DECLARATIVE CONFIGURATION ONLY — nothing is executed (no SIP, webhooks, failover or LCR). Ownership (tenantId) is server-derived and never a client field. The flat policy fields configure selection + failover; a failover-enabled policy must declare at least one condition. `rules` is optional — when omitted the profile is created with an empty rule set; each supplied rule's destination is validated per type (SSRF-safe webhooks, canonical E.164, owned trunk ids) and self-failover is rejected. A duplicate name is a 409. Requires `routing.manage`.
+         */
+        post: operations["createRoutingProfile"];
         delete?: never;
         options?: never;
         head?: never;
@@ -680,10 +684,18 @@ export interface paths {
         get: operations["getRoutingProfile"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a routing profile (soft delete)
+         * @description Soft-delete a tenant-owned routing profile (sets deletedAt; the row is retained for audit and history). A foreign tenant's profile is 404 (IDOR-safe). Requires `routing.manage`.
+         */
+        delete: operations["deleteRoutingProfile"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a routing profile
+         * @description Partially update a tenant-owned routing profile. DECLARATIVE CONFIGURATION ONLY — nothing is executed. Only supplied fields change; ownership is never taken from the client, and a foreign tenant's profile is 404 (IDOR-safe). If `rules` is present it REPLACES the entire rule set atomically; when omitted the existing rules are left untouched. Pass `expectedVersion` for optimistic concurrency — a version mismatch is a 409. A duplicate name is a 409. Requires `routing.manage`.
+         */
+        patch: operations["updateRoutingProfile"];
         trace?: never;
     };
     "/v1/telecom/lcr-policies": {
@@ -1410,6 +1422,73 @@ export interface components {
              * @description Pass as `cursor` to fetch the next page; null when exhausted.
              */
             nextCursor: string | null;
+        };
+        /** @description Optional declarative time-of-day schedule for a rule (never executed). startMinute must be before endMinute. */
+        RoutingScheduleInput: {
+            /** @description IANA timezone, validated server-side. */
+            timezone: string;
+            daysOfWeek: number[];
+            startMinute: number;
+            endMinute: number;
+        };
+        /** @description A single declarative routing rule to create (config only — nothing is dialled). The destination is validated per type server-side (canonical E.164, 1–10-digit extension, an owned SIP trunk id, a simple voicemail identifier, or an https webhook to a public host). A typed failover destination requires its type; a rule may not fail over to its own destination. */
+        RoutingRuleInput: {
+            /** @enum {string} */
+            destinationType: "SIP_TRUNK" | "PHONE_NUMBER" | "EXTENSION" | "VOICEMAIL" | "WEBHOOK";
+            destination: string;
+            /** @description Deterministic order, ascending. */
+            priority?: number;
+            /** @description For the WEIGHTED strategy. */
+            weight?: number;
+            enabled?: boolean;
+            timeoutSeconds?: number;
+            retryCount?: number;
+            /**
+             * Format: uuid
+             * @description A carrier accessible in the caller's scope.
+             */
+            carrierId?: string;
+            failoverDestination?: string;
+            /** @enum {string} */
+            failoverDestinationType?: "SIP_TRUNK" | "PHONE_NUMBER" | "EXTENSION" | "VOICEMAIL" | "WEBHOOK";
+            failoverAfterSeconds?: number;
+            schedule?: components["schemas"]["RoutingScheduleInput"];
+        };
+        /** @description Create-routing-profile body. DECLARATIVE CONFIGURATION ONLY. Ownership (tenantId) is server-derived. The flat policy fields configure selection + failover; `failoverEnabled: true` requires at least one failoverCondition. `rules` is optional (omitted = empty rule set). */
+        CreateRoutingProfile: {
+            name: string;
+            /** @enum {string} */
+            direction?: "INBOUND" | "OUTBOUND";
+            description?: string;
+            /** @enum {string} */
+            status?: "ACTIVE" | "SUSPENDED" | "DISABLED";
+            /** @enum {string} */
+            selectionStrategy?: "PRIORITY" | "WEIGHTED" | "ROUND_ROBIN" | "SIMULTANEOUS";
+            failoverEnabled?: boolean;
+            failoverConditions?: ("NO_ANSWER" | "BUSY" | "FAILED" | "UNREACHABLE" | "TIMEOUT")[];
+            /** @description Bounded attempt cap (loop protection). */
+            maxAttempts?: number;
+            overallTimeoutSeconds?: number;
+            rules?: components["schemas"]["RoutingRuleInput"][];
+        };
+        /** @description Partial routing-profile update. DECLARATIVE CONFIGURATION ONLY. Only supplied fields change; `failoverEnabled: true` still requires at least one failoverCondition. If `rules` is present it REPLACES the whole rule set; when omitted the existing rules are untouched. `expectedVersion` enables optimistic concurrency (mismatch → 409). */
+        UpdateRoutingProfile: {
+            name?: string;
+            /** @enum {string} */
+            direction?: "INBOUND" | "OUTBOUND";
+            /** @description null clears the description. */
+            description?: string | null;
+            /** @enum {string} */
+            status?: "ACTIVE" | "SUSPENDED" | "DISABLED";
+            /** @enum {string} */
+            selectionStrategy?: "PRIORITY" | "WEIGHTED" | "ROUND_ROBIN" | "SIMULTANEOUS";
+            failoverEnabled?: boolean;
+            failoverConditions?: ("NO_ANSWER" | "BUSY" | "FAILED" | "UNREACHABLE" | "TIMEOUT")[];
+            maxAttempts?: number;
+            overallTimeoutSeconds?: number;
+            rules?: components["schemas"]["RoutingRuleInput"][];
+            /** @description If set, the update applies only when the profile's current version matches. */
+            expectedVersion?: number;
         };
         /** @description A single LCR route candidate. Config only — never dialled or rated. */
         LcrRoute: {
@@ -2560,6 +2639,34 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    createRoutingProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRoutingProfile"];
+            };
+        };
+        responses: {
+            /** @description Routing profile created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingProfile"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
     getRoutingProfile: {
         parameters: {
             query?: never;
@@ -2583,6 +2690,60 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    deleteRoutingProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Routing profile deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateRoutingProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRoutingProfile"];
+            };
+        };
+        responses: {
+            /** @description Routing profile updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingProfile"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     listLcrPolicies: {

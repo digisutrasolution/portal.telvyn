@@ -854,3 +854,34 @@ Format: Keep a Changelog; SemVer once releases begin.
   (endpoints + audit + tenant-scoping + E.164 normalization + relationship validation pre-existed, e2e-covered).
   `API.md` updated. Next: roll the pattern to routing / LCR / member management (one per sub-phase), the deferred
   carrier/trunk credential + DID region slice, or land the stack.
+- 2026-11-22 — **Phase 12O-2ah — routing profile create / edit / delete, PROFILE + POLICY only (fourth write
+  slice, contract-first).** Rolls the write pattern to Routing — but bounded (owner-chosen): this slice manages
+  the profile envelope (name, direction, description, status) + the selection/failover POLICY
+  (selectionStrategy, failoverEnabled, failoverConditions, maxAttempts, overallTimeoutSeconds); the ordered
+  rules editor is a dedicated later slice (12O-2ai). The POST/PATCH/DELETE endpoints already existed (Phase
+  12H/12I, `routing.controller.ts`, all gated by the single `routing.manage` perm; ownership server-derived,
+  declarative config only — nothing executed, destinations SSRF/E.164/owned-trunk validated server-side, dup
+  name → 409, atomic optimistic concurrency via `expectedVersion`, audited with counts/status only); this phase
+  **authored them into the contract** (new `CreateRoutingProfile` / `UpdateRoutingProfile` + `RoutingRuleInput`
+  / `RoutingScheduleInput` schemas — the contract now fully describes the `rules[]` body even though this UI
+  doesn't send it — + POST on the collection and PATCH/DELETE on the item path in `telvyn.v1.yaml`),
+  regenerated `schema.ts` (additive — `never` placeholders became real operations) and added
+  `CreateRoutingProfile` / `UpdateRoutingProfile` / `RoutingRuleInput` aliases. New `createRoutingProfile` /
+  `updateRoutingProfile` / `deleteRoutingProfile` actions. New `<RoutingForm>` modal (create + edit): profile
+  fields + a Policy fieldset (strategy select, Enable-failover checkbox, failover-condition checkboxes, max
+  attempts 1–20, overall timeout 1–3600) with client-side range validation and the "failover enabled ⇒ ≥1
+  condition" rule mirrored. **Rules are intentionally never sent:** create omits `rules` (empty rule set to
+  start) and edit omits `rules` so the backend preserves the existing set (it only replaces when `rules` is
+  present) — so a policy/metadata edit can't accidentally wipe carefully-built rules. Edit sends
+  `expectedVersion` (the loaded profile's version) for optimistic concurrency → a concurrent change surfaces the
+  API's 409. Detail drawer gained **Edit** / **Delete** footer actions (gated on `routing.manage` via
+  `useSession`); routing-view gained a **New profile** button (gated on `routing.manage`) and a soft-delete
+  confirm dialog (notes rules go with it); every mutation reloads the list. All gating is UX-only; the API
+  re-checks `routing.manage` and re-validates every call, staying tenant/scope-authoritative. +3 web unit tests
+  (192 → 195; full web suite 195 ✓, 34 files — create-without-rules-and-reload incl. an assertion the body has
+  no `rules` key, New-profile hidden without `routing.manage`, delete-via-drawer-after-confirm; existing routing
+  tests now wrap `SessionProvider`). `next build` ✓ (/routing 6.25 kB; the usual `next/font/google` fetch flake
+  needed one retry, not a code issue); eslint ✓. **No backend change** (endpoints + audit + tenant-scoping +
+  optimistic concurrency + destination validation pre-existed, e2e-covered). `API.md` updated. Next: the
+  routing rules editor (12O-2ai), roll the pattern to LCR / member management, the deferred credential/region
+  slices, or land the stack.
