@@ -23,11 +23,14 @@ const DEST_HINT: Record<DestType, string> = {
 const selectClass =
   "h-8 w-full rounded-md border border-line-strong bg-surface px-2 text-[13px] text-ink outline-none disabled:cursor-not-allowed disabled:opacity-45";
 
+const DAY_LABELS: readonly string[] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 /**
- * An editable rule. Numeric fields are held as strings for clean input; the
- * advanced fields this slice does NOT edit (carrier, typed failover, schedule)
- * are carried through verbatim from the loaded rule so a save — which REPLACES the
- * whole rule set — never silently drops them.
+ * An editable rule. Numeric fields are held as strings for clean input. Failover
+ * (destination + type + after-seconds) and the time-of-day schedule are editable
+ * here (Phase 12O-2ap); only the `carrierId` tag is still carried through verbatim
+ * (there is no per-rule carrier picker yet) so a save — which REPLACES the whole
+ * rule set — never silently drops it.
  */
 type EditRule = {
   _key: string;
@@ -38,18 +41,42 @@ type EditRule = {
   enabled: boolean;
   timeoutSeconds: string;
   retryCount: string;
+  // typed failover (editable):
+  failoverDestinationType: "" | DestType;
+  failoverDestination: string;
+  failoverAfterSeconds: string;
+  // time-of-day schedule (editable):
+  scheduleEnabled: boolean;
+  scheduleTz: string;
+  scheduleDays: number[];
+  scheduleStart: string; // "HH:MM"
+  scheduleEnd: string; // "HH:MM"
   // preserved, not edited here:
   carrierId: string | null;
-  failoverDestination: string | null;
-  failoverDestinationType: RoutingRule["failoverDestinationType"];
-  failoverAfterSeconds: number | null;
-  schedule: RoutingRule["schedule"];
 };
 
 let keySeq = 0;
 const nextKey = () => `r${keySeq++}`;
 
+/** Minutes-of-day → "HH:MM" (zero-padded). */
+function minutesToHHMM(m: number): string {
+  const h = Math.floor(m / 60);
+  const min = m % 60;
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+/** "HH:MM" → minutes-of-day (0–1439), or null if malformed. */
+function hhmmToMinutes(v: string): number | null {
+  const m = /^(\d{2}):(\d{2})$/.exec(v.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
 function fromRule(r: RoutingRule): EditRule {
+  const s = (r.schedule ?? null) as null | Record<string, unknown>;
+  const days = s && Array.isArray(s.daysOfWeek) ? (s.daysOfWeek as number[]) : [];
   return {
     _key: nextKey(),
     destinationType: r.destinationType,
@@ -59,11 +86,15 @@ function fromRule(r: RoutingRule): EditRule {
     enabled: r.enabled,
     timeoutSeconds: r.timeoutSeconds != null ? String(r.timeoutSeconds) : "",
     retryCount: r.retryCount != null ? String(r.retryCount) : "",
+    failoverDestinationType: r.failoverDestinationType ?? "",
+    failoverDestination: r.failoverDestination ?? "",
+    failoverAfterSeconds: r.failoverAfterSeconds != null ? String(r.failoverAfterSeconds) : "",
+    scheduleEnabled: s != null,
+    scheduleTz: s && typeof s.timezone === "string" ? s.timezone : "",
+    scheduleDays: days,
+    scheduleStart: s && typeof s.startMinute === "number" ? minutesToHHMM(s.startMinute) : "",
+    scheduleEnd: s && typeof s.endMinute === "number" ? minutesToHHMM(s.endMinute) : "",
     carrierId: r.carrierId,
-    failoverDestination: r.failoverDestination,
-    failoverDestinationType: r.failoverDestinationType,
-    failoverAfterSeconds: r.failoverAfterSeconds,
-    schedule: r.schedule,
   };
 }
 
@@ -77,11 +108,15 @@ function blankRule(priority: number): EditRule {
     enabled: true,
     timeoutSeconds: "",
     retryCount: "",
+    failoverDestinationType: "",
+    failoverDestination: "",
+    failoverAfterSeconds: "",
+    scheduleEnabled: false,
+    scheduleTz: "",
+    scheduleDays: [],
+    scheduleStart: "",
+    scheduleEnd: "",
     carrierId: null,
-    failoverDestination: null,
-    failoverDestinationType: null,
-    failoverAfterSeconds: null,
-    schedule: null,
   };
 }
 
@@ -119,25 +154,51 @@ function buildRule(e: EditRule, index: number): RoutingRuleInput | { error: Fiel
   if (parsed.weight !== undefined) out.weight = parsed.weight;
   if (parsed.timeoutSeconds !== undefined) out.timeoutSeconds = parsed.timeoutSeconds;
   if (parsed.retryCount !== undefined) out.retryCount = parsed.retryCount;
-  // Preserve advanced fields not edited in this slice.
+
+  // Typed failover — a destination + its type go together (the server also rejects
+  // failing over to a rule's own destination). After-seconds is optional (1–600).
+  const foDest = e.failoverDestination.trim();
+  if (e.failoverDestinationType !== "" || foDest !== "") {
+    if (e.failoverDestinationType === "") return { error: { index, message: "Failover needs a destination type." } };
+    if (foDest === "") return { error: { index, message: "Failover needs a destination value." } };
+    out.failoverDestinationType = e.failoverDestinationType;
+    out.failoverDestination = foDest;
+    const fas = parseIntField(e.failoverAfterSeconds);
+    if (fas !== null) {
+      if (!Number.isInteger(fas) || fas < 1 || fas > 600) return { error: { index, message: "Failover after-seconds must be between 1 and 600." } };
+      out.failoverAfterSeconds = fas;
+    }
+  }
+
+  // Time-of-day schedule — all-or-nothing when enabled.
+  if (e.scheduleEnabled) {
+    const tz = e.scheduleTz.trim();
+    if (tz === "") return { error: { index, message: "Schedule needs a timezone (e.g. America/New_York)." } };
+    if (e.scheduleDays.length === 0) return { error: { index, message: "Schedule needs at least one day." } };
+    const startMinute = hhmmToMinutes(e.scheduleStart);
+    const endMinute = hhmmToMinutes(e.scheduleEnd);
+    if (startMinute === null || endMinute === null) return { error: { index, message: "Schedule needs a valid start and end time." } };
+    if (startMinute >= endMinute) return { error: { index, message: "Schedule start must be before end." } };
+    out.schedule = { timezone: tz, daysOfWeek: [...e.scheduleDays].sort((a, b) => a - b), startMinute, endMinute };
+  }
+
+  // Carrier tag is not editable here (no per-rule picker yet) — carry it through.
   if (e.carrierId) out.carrierId = e.carrierId;
-  if (e.failoverDestination) out.failoverDestination = e.failoverDestination;
-  if (e.failoverDestinationType) out.failoverDestinationType = e.failoverDestinationType;
-  if (e.failoverAfterSeconds != null) out.failoverAfterSeconds = e.failoverAfterSeconds;
-  if (e.schedule) out.schedule = e.schedule as RoutingRuleInput["schedule"];
   return out;
 }
 
 /**
- * Routing rules editor (Phase 12O-2ai). Edits a profile's ordered rule set and
- * saves it via PATCH, which REPLACES the whole set — so the editor loads every
- * current rule and sends them all back, and `expectedVersion` guards against a
- * concurrent change (409). This slice edits the core rule fields (destination
- * type + value, priority/order, enabled, weight, timeout, retries); the advanced
- * per-rule options — carrier tag, typed failover, time-of-day schedule — are NOT
- * editable here but are PRESERVED untouched on existing rules (a chip marks a rule
- * that carries them) and remain fully manageable via the API. Destination values
- * are validated per type server-side; `routing.manage` is re-checked there.
+ * Routing rules editor (Phase 12O-2ai; typed failover + schedule editing added in
+ * 12O-2ap). Edits a profile's ordered rule set and saves it via PATCH, which
+ * REPLACES the whole set — so the editor loads every current rule and sends them
+ * all back, and `expectedVersion` guards against a concurrent change (409). Editable
+ * per rule: destination type + value, priority/order, enabled, weight, timeout,
+ * retries, a typed FAILOVER (destination + type, with optional after-seconds), and a
+ * time-of-day SCHEDULE (timezone, days, start/end). The only field still not editable
+ * is the `carrierId` tag (no per-rule carrier picker yet) — it is PRESERVED untouched
+ * on existing rules (a chip marks a rule that carries one). Destinations and the
+ * timezone are validated server-side (and the server rejects a rule failing over to
+ * its own destination); `routing.manage` is re-checked there.
  */
 export function RoutingRulesEditor({
   profile,
@@ -196,7 +257,7 @@ export function RoutingRulesEditor({
     }
   }
 
-  const hasPreserved = (r: EditRule) => Boolean(r.failoverDestination || r.schedule || r.carrierId);
+  const hasPreserved = (r: EditRule) => Boolean(r.carrierId);
 
   return (
     <Dialog open onOpenChange={(open) => !open && !pending && onClose()}>
@@ -204,7 +265,7 @@ export function RoutingRulesEditor({
         <DialogTitle>Edit rules — {profile.name}</DialogTitle>
         <DialogDescription className="text-[13px] text-ink-2">
           Declarative configuration only; nothing is dialled. Rules are tried in priority order (ascending).
-          Carrier tag, typed failover and schedule are preserved but not edited here.
+          A rule's carrier tag (if any) is preserved; everything else — including failover and schedule — is editable here.
         </DialogDescription>
 
         <form onSubmit={onSubmit} className="mt-4">
@@ -220,8 +281,8 @@ export function RoutingRulesEditor({
                     <span className="text-[12px] font-semibold text-muted">Rule {i + 1}</span>
                     <div className="flex items-center gap-2">
                       {hasPreserved(r) && (
-                        <span className="rounded bg-surface px-1.5 py-0.5 text-[11px] text-muted" title="This rule has advanced options (failover / schedule / carrier) preserved but not editable here">
-                          + advanced preserved
+                        <span className="rounded bg-surface px-1.5 py-0.5 text-[11px] text-muted" title="This rule has a carrier tag preserved but not editable here">
+                          + carrier preserved
                         </span>
                       )}
                       <button
@@ -279,6 +340,96 @@ export function RoutingRulesEditor({
                     <input type="checkbox" checked={r.enabled} onChange={(ev) => patchRule(r._key, { enabled: ev.target.checked })} className="accent-[var(--accent)]" />
                     Enabled
                   </label>
+
+                  {/* Typed failover — destination + type together; after-seconds optional. */}
+                  <div className="mt-3 rounded-md border border-line px-3 pb-3 pt-2">
+                    <p className="mb-1.5 text-[12px] font-medium text-ink-2">Failover (optional)</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <Field id={`${r._key}-fo-type`} label="Failover type">
+                        <select
+                          id={`${r._key}-fo-type`}
+                          className={selectClass}
+                          value={r.failoverDestinationType}
+                          onChange={(ev) => patchRule(r._key, { failoverDestinationType: ev.target.value as "" | DestType })}
+                        >
+                          <option value="">— none</option>
+                          {DEST_TYPES.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field id={`${r._key}-fo-dest`} label="Failover destination" hint={r.failoverDestinationType ? DEST_HINT[r.failoverDestinationType] : undefined}>
+                        <Input
+                          id={`${r._key}-fo-dest`}
+                          value={r.failoverDestination}
+                          maxLength={2048}
+                          disabled={r.failoverDestinationType === ""}
+                          onChange={(ev) => patchRule(r._key, { failoverDestination: ev.target.value })}
+                          className="font-mono"
+                        />
+                      </Field>
+                      <Field id={`${r._key}-fo-after`} label="After (s)">
+                        <Input
+                          id={`${r._key}-fo-after`}
+                          inputMode="numeric"
+                          value={r.failoverAfterSeconds}
+                          disabled={r.failoverDestinationType === ""}
+                          onChange={(ev) => patchRule(r._key, { failoverAfterSeconds: ev.target.value })}
+                          placeholder="1–600"
+                        />
+                      </Field>
+                    </div>
+                  </div>
+
+                  {/* Time-of-day schedule — all-or-nothing when enabled. */}
+                  <div className="mt-2 rounded-md border border-line px-3 pb-3 pt-2">
+                    <label className="flex cursor-pointer items-center gap-2 text-[13px] text-ink-2">
+                      <input
+                        type="checkbox"
+                        checked={r.scheduleEnabled}
+                        onChange={(ev) => patchRule(r._key, { scheduleEnabled: ev.target.checked })}
+                        className="accent-[var(--accent)]"
+                      />
+                      Restrict to a schedule
+                    </label>
+                    {r.scheduleEnabled && (
+                      <div className="mt-2 space-y-2">
+                        <Field id={`${r._key}-sch-tz`} label="Timezone" hint="IANA, e.g. America/New_York">
+                          <Input id={`${r._key}-sch-tz`} value={r.scheduleTz} maxLength={64} onChange={(ev) => patchRule(r._key, { scheduleTz: ev.target.value })} className="font-mono" />
+                        </Field>
+                        <div>
+                          <p className="mb-1 text-[12px] font-medium text-ink-2">Days</p>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1">
+                            {DAY_LABELS.map((lbl, dayNum) => (
+                              <label key={dayNum} className="flex cursor-pointer items-center gap-1 text-[13px] text-ink-2">
+                                <input
+                                  type="checkbox"
+                                  checked={r.scheduleDays.includes(dayNum)}
+                                  onChange={() =>
+                                    patchRule(r._key, {
+                                      scheduleDays: r.scheduleDays.includes(dayNum)
+                                        ? r.scheduleDays.filter((d) => d !== dayNum)
+                                        : [...r.scheduleDays, dayNum],
+                                    })
+                                  }
+                                  className="accent-[var(--accent)]"
+                                />
+                                {lbl}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field id={`${r._key}-sch-start`} label="From">
+                            <Input id={`${r._key}-sch-start`} type="time" value={r.scheduleStart} onChange={(ev) => patchRule(r._key, { scheduleStart: ev.target.value })} />
+                          </Field>
+                          <Field id={`${r._key}-sch-end`} label="To">
+                            <Input id={`${r._key}-sch-end`} type="time" value={r.scheduleEnd} onChange={(ev) => patchRule(r._key, { scheduleEnd: ev.target.value })} />
+                          </Field>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   {rowError?.index === i && (
                     <p role="alert" className="mt-2 text-[12px] text-danger">{rowError.message}</p>

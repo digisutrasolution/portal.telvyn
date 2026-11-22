@@ -680,13 +680,22 @@ its order, an enabled toggle, and weight / timeout / retries. Rules can be added
 removed. Saving sends the whole rule set back at once (the API replaces it wholesale),
 carrying the profile's version so a save that collides with someone else's change is
 rejected with a clear message instead of overwriting. Because the save replaces
-everything, the editor keeps every field of every existing rule — including the
-advanced options it doesn't surface yet (carrier tag, typed failover, time-of-day
-schedule) — and a small "+ advanced preserved" chip marks any rule that carries them,
-so nothing is silently lost by editing a rule's basics. Destination values are
+everything, the editor keeps every field of every existing rule. Destination values are
 validated per type on the server, which stays authoritative; client-side checks cover
 the simple numeric ranges. Saving with no rules clears the set. Verified: 198/198 web
 Vitest · `next build` clean (/routing 8.03 kB).
+
+Routing-rule failover + schedule — EXISTING (Phase 12O-2ap, 2026-11-22): each rule card
+in the rules editor gained two more sections. Failover: a type dropdown (with a "none"
+option) and, once a type is chosen, a destination and an optional "after" delay — the
+destination and type are set together, and the server still refuses a rule that fails
+over to its own destination. Schedule: a "Restrict to a schedule" checkbox that reveals
+a timezone, day-of-week checkboxes, and From/To time pickers; a schedule is all-or-
+nothing (timezone, at least one day, and a start before the end). Times are entered as
+ordinary clock times and stored exactly as minutes-of-day. The one remaining per-rule
+option still not editable here is the carrier tag; a rule carrying one shows a
+"+ carrier preserved" chip so it is never dropped by a save. Verified: 217/217 web
+Vitest · `next build` clean (/routing 9.2 kB).
 
 LCR policy management — policy only (create / edit / delete) — EXISTING (Phase
 12O-2aj, 2026-11-22): the write pattern rolled to LCR, bounded to the policy envelope

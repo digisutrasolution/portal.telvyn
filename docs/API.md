@@ -291,10 +291,15 @@ authoritative server-side.
 change; it consumes the `RoutingRuleInput` schema already authored above). It loads a
 profile's full rule set, edits the core per-rule fields (destination type + value,
 priority/order, enabled, weight, timeout, retries), and PATCHes the **complete**
-`rules` array (replace semantics) with `expectedVersion`. Per-rule advanced options
-not yet editable in the UI — carrier tag, typed failover, time-of-day schedule — are
-preserved verbatim on existing rules so a replace never silently drops them (a chip
-marks a rule that carries them); they remain fully manageable via the API.
+`rules` array (replace semantics) with `expectedVersion`. **Phase 12O-2ap** made the
+typed **failover** (destination + type, with optional after-seconds) and the time-of-day
+**schedule** (timezone, days, start/end — entered as `HH:MM` and converted to
+minutes-of-day with integer math) editable in the same editor; the schedule is
+all-or-nothing and the failover destination+type go together (the server still rejects
+a rule failing over to its own destination and validates the IANA timezone). The only
+field still not editable in the UI is the per-rule `carrierId` tag (no per-rule carrier
+picker yet) — it is preserved verbatim on existing rules so a replace never drops it (a
+chip marks a rule that carries one); it remains fully settable via the API.
 
 OpenAPI YAML still `/v1/auth` only (tracked debt) for the surfaces not yet closed.
 

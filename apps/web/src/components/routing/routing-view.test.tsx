@@ -194,12 +194,12 @@ describe("RoutingView", () => {
     await waitFor(() => expect(deleteRoutingProfile).toHaveBeenCalledWith(row.id));
   });
 
-  it("edits rules via the drawer, saving the full replaced set with expectedVersion and preserving advanced fields", async () => {
+  it("edits rules via the drawer, saving the full replaced set with expectedVersion; failover round-trips", async () => {
     const row = profile({
       name: "Inbound default",
       version: 7,
       rules: [
-        // A rule carrying a typed failover the editor does NOT expose — it must round-trip.
+        // A rule carrying a typed failover — loaded into the editable fields, it must round-trip on save.
         { id: "r1", destinationType: "PHONE_NUMBER", destination: "+14155550100", priority: 10, weight: null, enabled: true, timeoutSeconds: null, retryCount: null, carrierId: null, failoverDestination: "+14155559999", failoverDestinationType: "PHONE_NUMBER", failoverAfterSeconds: 20, schedule: null },
       ],
     });
@@ -210,7 +210,7 @@ describe("RoutingView", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "View Inbound default" }));
     fireEvent.click(await screen.findByRole("button", { name: "Edit rules" }));
-    // Editor loaded with the existing rule; change its destination.
+    // Editor loaded with the existing rule; change its (primary) destination.
     const dest = await screen.findByLabelText("Destination");
     fireEvent.change(dest, { target: { value: "+14155550111" } });
     fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
@@ -221,8 +221,70 @@ describe("RoutingView", () => {
     expect(body.expectedVersion).toBe(7);
     expect(body.rules).toHaveLength(1);
     expect(body.rules![0].destination).toBe("+14155550111"); // edited
-    expect(body.rules![0].failoverDestination).toBe("+14155559999"); // PRESERVED (not editable here)
-    expect(body.rules![0].failoverAfterSeconds).toBe(20); // PRESERVED
+    expect(body.rules![0].failoverDestination).toBe("+14155559999"); // loaded + round-tripped
+    expect(body.rules![0].failoverDestinationType).toBe("PHONE_NUMBER");
+    expect(body.rules![0].failoverAfterSeconds).toBe(20);
+  });
+
+  it("edits a rule to add a typed failover and a time-of-day schedule", async () => {
+    const row = profile({
+      name: "Inbound default",
+      version: 3,
+      rules: [
+        { id: "r1", destinationType: "PHONE_NUMBER", destination: "+14155550100", priority: 10, weight: null, enabled: true, timeoutSeconds: null, retryCount: null, carrierId: null, failoverDestination: null, failoverDestinationType: null, failoverAfterSeconds: null, schedule: null },
+      ],
+    });
+    vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getRoutingProfile).mockResolvedValue(row);
+    vi.mocked(updateRoutingProfile).mockResolvedValue(row);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Inbound default" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit rules" }));
+
+    // Typed failover: pick a type, then its destination (disabled until a type is chosen).
+    fireEvent.change(await screen.findByLabelText("Failover type"), { target: { value: "PHONE_NUMBER" } });
+    fireEvent.change(screen.getByLabelText("Failover destination"), { target: { value: "+14155558888" } });
+    fireEvent.change(screen.getByLabelText("After (s)"), { target: { value: "15" } });
+
+    // Schedule: enable, timezone, a day, and a time window.
+    fireEvent.click(screen.getByLabelText("Restrict to a schedule"));
+    fireEvent.change(await screen.findByLabelText("Timezone"), { target: { value: "America/New_York" } });
+    fireEvent.click(screen.getByLabelText("Mon"));
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "09:00" } });
+    fireEvent.change(screen.getByLabelText("To"), { target: { value: "17:00" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+
+    await waitFor(() => expect(updateRoutingProfile).toHaveBeenCalledTimes(1));
+    const rule = vi.mocked(updateRoutingProfile).mock.calls[0][1].rules![0];
+    expect(rule.failoverDestinationType).toBe("PHONE_NUMBER");
+    expect(rule.failoverDestination).toBe("+14155558888");
+    expect(rule.failoverAfterSeconds).toBe(15);
+    expect(rule.schedule).toEqual({ timezone: "America/New_York", daysOfWeek: [1], startMinute: 540, endMinute: 1020 });
+  });
+
+  it("blocks a failover destination type with no destination value", async () => {
+    const row = profile({
+      name: "Inbound default",
+      version: 1,
+      rules: [
+        { id: "r1", destinationType: "PHONE_NUMBER", destination: "+14155550100", priority: 10, weight: null, enabled: true, timeoutSeconds: null, retryCount: null, carrierId: null, failoverDestination: null, failoverDestinationType: null, failoverAfterSeconds: null, schedule: null },
+      ],
+    });
+    vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getRoutingProfile).mockResolvedValue(row);
+    vi.mocked(updateRoutingProfile).mockResolvedValue(row);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Inbound default" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit rules" }));
+    fireEvent.change(await screen.findByLabelText("Failover type"), { target: { value: "PHONE_NUMBER" } });
+    // Destination left blank → blocked.
+    fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+
+    expect(await screen.findByText("Failover needs a destination value.")).toBeInTheDocument();
+    expect(updateRoutingProfile).not.toHaveBeenCalled();
   });
 
   it("adds a new rule in the editor and saves the longer set", async () => {

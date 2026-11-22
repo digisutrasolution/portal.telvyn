@@ -1034,3 +1034,24 @@ Format: Keep a Changelog; SemVer once releases begin.
   `regionId: null`). `next build` ✓ (/numbers 5.61 → 6.21 kB); eslint ✓. **No backend change.** `API.md`
   updated. Remaining deferred slices: routing-rule failover/schedule editing, LCR per-route trunk/effective-date
   editing, friendlier LCR decimal cost — or land the stack.
+- 2026-11-22 — **Phase 12O-2ap — routing-rule failover + schedule editing (frontend only, no contract/backend
+  change).** Makes the two per-rule options the 12O-2ai rules editor had kept preserved-but-read-only editable:
+  the typed **failover** (destinationType + destination, with an optional after-seconds 1–600) and the
+  time-of-day **schedule** (timezone, days-of-week, start/end). `<RoutingRulesEditor>` gains, per rule card, a
+  Failover sub-section (type select with a "— none" option; the destination + after-seconds inputs are disabled
+  until a type is chosen) and a Schedule sub-section behind a "Restrict to a schedule" checkbox (timezone text,
+  seven day checkboxes Sun–Sat, and two `<input type="time">` From/To). Times are entered as `HH:MM` and
+  converted to minutes-of-day with integer math (`hhmmToMinutes`/`minutesToHHMM` — no float); existing rules
+  are hydrated back from their stored minutes. **Validation (client, server still authoritative):** failover
+  destination + type go together (either both or neither), after-seconds 1–600; schedule is all-or-nothing
+  (timezone required, ≥1 day, valid start/end, start < end). The whole rule set is still sent on save (replace
+  semantics) with `expectedVersion`; the server validates destinations per type, validates the IANA timezone,
+  and rejects a rule failing over to its own destination. **Only field still not editable:** the per-rule
+  `carrierId` tag (no per-rule carrier picker yet) — carried through verbatim, with a "+ carrier preserved" chip.
+  No contract change — `RoutingRuleInput` (incl. `RoutingScheduleInput`) was authored in 12O-2ah; pure UI. +2
+  web unit tests (215 → 217; full web suite 217 ✓, 34 files — add-failover-and-schedule asserting the exact
+  `failover*` fields + `schedule {timezone, daysOfWeek:[1], startMinute:540, endMinute:1020}`, failover-type-
+  without-destination blocks submit; the existing round-trip test still green). Failover field labels are
+  "Failover type" / "Failover destination" to stay distinct from the rule's own destination fields. `next build`
+  ✓ (/routing 8.03 → 9.2 kB); eslint ✓. **No backend change.** `API.md` updated. Remaining deferred slices: LCR
+  per-route trunk/effective-date editing, friendlier LCR decimal cost — or land the stack.

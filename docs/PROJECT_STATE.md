@@ -493,10 +493,23 @@ detach, matches other refs). regionId authored into CreateDid/UpdateDid in 2ag �
 +2 tests (create-with-region asserts regionId in body / edit-clears-region sends regionId:null) → web **215**
 (34 files); isolated `next build` REAL_EXIT=0 FIRST try (/numbers 5.61→6.21 kB); eslint 0. 2 files (form+test),
 NO apps/api, NO contracts.
-Next (await owner go): the remaining deferred slices (routing-rule failover/schedule editing; LCR per-route
-trunk/effective-date editing; friendlier LCR decimal cost); or land the stack (owner provides GitHub remote →
-push `integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps
-(HealthEvent/config-version history) stay separately approval-gated.
+**12O-2ap (DONE)** — routing-rule FAILOVER + SCHEDULE editing (FRONTEND ONLY — no contract/backend change; makes
+the 2ai preserved-but-read-only fields editable). `<RoutingRulesEditor>` per rule card: Failover sub-section
+(type select "— none" + destination [disabled until type] + after-seconds 1-600) + Schedule sub-section behind
+"Restrict to a schedule" checkbox (timezone text, 7 day checkboxes Sun-Sat, 2 `<input type=time>` From/To).
+Times `HH:MM`↔minutes-of-day via integer math (hhmmToMinutes/minutesToHHMM, NO float); existing rules hydrated
+from stored minutes. Validation: failover dest+type together (both/neither), after 1-600; schedule all-or-nothing
+(tz req, ≥1 day, start<end). Replace-semantics save + expectedVersion unchanged; server validates dest-per-type +
+IANA tz + rejects self-failover. **ONLY field still not editable: per-rule `carrierId` tag (no picker yet) —
+carried through verbatim, "+ carrier preserved" chip.** RoutingRuleInput/RoutingScheduleInput authored 2ah → pure
+UI. GOTCHA: failover labels "Failover type"/"Failover destination" (distinct from rule's own Destination fields).
++2 tests (add-failover+schedule asserts exact failover* + schedule{tz,daysOfWeek:[1],startMinute:540,endMinute:1020}
+/ failover-type-without-dest blocks; existing round-trip test still green) → web **217** (34 files); isolated
+`next build` REAL_EXIT=0 FIRST try (/routing 8.03→9.2 kB); eslint 0. 2 files (editor+test), NO apps/api, NO contracts.
+Next (await owner go): the remaining deferred slices (LCR per-route trunk/effective-date editing; friendlier LCR
+decimal cost); or land the stack (owner provides GitHub remote → push `integration/phase-12o-complete`
+fast-forwarded to the feature tip → CI → PR). Backend read gaps (HealthEvent/config-version history) stay
+separately approval-gated.
 
 ### (superseded) sub-phase plan
 
