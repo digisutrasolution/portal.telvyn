@@ -127,3 +127,12 @@ export type LcrRoute = Schemas["LcrRoute"];
 
 /** Cursor-paginated page of LCR policies. */
 export type LcrPolicyPage = Schemas["LcrPolicyPage"];
+
+/** Create-LCR-policy request body (POST /v1/telecom/lcr-policies). */
+export type CreateLcrPolicy = Schemas["CreateLcrPolicy"];
+
+/** Partial update-LCR-policy request body (PATCH /v1/telecom/lcr-policies/{id}). */
+export type UpdateLcrPolicy = Schemas["UpdateLcrPolicy"];
+
+/** A single LCR route candidate input (create/replace); costMicros is integer millionths. */
+export type LcrRouteInput = Schemas["LcrRouteInput"];

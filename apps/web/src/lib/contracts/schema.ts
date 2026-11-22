@@ -711,7 +711,11 @@ export interface paths {
          */
         get: operations["listLcrPolicies"];
         put?: never;
-        post?: never;
+        /**
+         * Create an LCR policy
+         * @description Create a tenant-owned least-cost-routing policy. DECLARATIVE ROUTE SELECTION ONLY — nothing is executed, rated or billed. Ownership (tenantId) is server-derived. `routes` is optional (omitted = empty route set); each route's `carrierId` must be accessible in scope and any `sipTrunkId` must be owned, and `costMicros` is an integer in millionths of a currency unit (never floating point). A duplicate name is a 409. Requires `routing.manage`.
+         */
+        post: operations["createLcrPolicy"];
         delete?: never;
         options?: never;
         head?: never;
@@ -732,10 +736,18 @@ export interface paths {
         get: operations["getLcrPolicy"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete an LCR policy (soft delete)
+         * @description Soft-delete a tenant-owned LCR policy (sets deletedAt; the row is retained for audit and history). A foreign tenant's policy is 404 (IDOR-safe). Requires `routing.manage`.
+         */
+        delete: operations["deleteLcrPolicy"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update an LCR policy
+         * @description Partially update a tenant-owned LCR policy. DECLARATIVE ROUTE SELECTION ONLY — nothing is executed, rated or billed. Only supplied fields change; ownership is never taken from the client, and a foreign tenant's policy is 404 (IDOR-safe). If `routes` is present it REPLACES the entire route set atomically; when omitted the existing routes are left untouched. Pass `expectedVersion` for optimistic concurrency — a version mismatch is a 409. A duplicate name is a 409. Requires `routing.manage`.
+         */
+        patch: operations["updateLcrPolicy"];
         trace?: never;
     };
 }
@@ -1540,6 +1552,54 @@ export interface components {
              * @description Pass as `cursor` to fetch the next page; null when exhausted.
              */
             nextCursor: string | null;
+        };
+        /** @description A single LCR route candidate to create (config only — never dialled or rated). `carrierId` must be accessible in the caller's scope and any `sipTrunkId` must be owned by the tenant. `costMicros` is an INTEGER in millionths of a currency unit — never floating point. */
+        LcrRouteInput: {
+            /** Format: uuid */
+            carrierId: string;
+            /** Format: uuid */
+            sipTrunkId?: string;
+            /** @description Up to 15 digits, optional leading +. */
+            prefix: string;
+            /** @description ISO-3166-1 alpha-2, uppercase. */
+            country?: string;
+            /** @description Millionths of a currency unit (integer, non-negative). */
+            costMicros: number;
+            /** @enum {string} */
+            currency: "USD" | "EUR" | "GBP" | "INR" | "AUD" | "CAD" | "JPY";
+            /** @description Lower number = higher preference. */
+            priority?: number;
+            /** @description For the WEIGHTED strategy. */
+            weight?: number;
+            enabled?: boolean;
+            /** Format: date-time */
+            effectiveFrom?: string;
+            /**
+             * Format: date-time
+             * @description Must be after effectiveFrom.
+             */
+            effectiveTo?: string;
+        };
+        /** @description Create-LCR-policy body. DECLARATIVE ROUTE SELECTION ONLY. Ownership (tenantId) is server-derived. `routes` is optional (omitted = empty route set). */
+        CreateLcrPolicy: {
+            name: string;
+            description?: string;
+            /** @enum {string} */
+            selectionStrategy?: "LOWEST_COST" | "HIGHEST_PRIORITY" | "WEIGHTED" | "QUALITY_FIRST";
+            enabled?: boolean;
+            routes?: components["schemas"]["LcrRouteInput"][];
+        };
+        /** @description Partial LCR-policy update. DECLARATIVE ROUTE SELECTION ONLY. Only supplied fields change. If `routes` is present it REPLACES the whole route set; when omitted the existing routes are untouched. `expectedVersion` enables optimistic concurrency (mismatch → 409). */
+        UpdateLcrPolicy: {
+            name?: string;
+            /** @description null clears the description. */
+            description?: string | null;
+            /** @enum {string} */
+            selectionStrategy?: "LOWEST_COST" | "HIGHEST_PRIORITY" | "WEIGHTED" | "QUALITY_FIRST";
+            enabled?: boolean;
+            routes?: components["schemas"]["LcrRouteInput"][];
+            /** @description If set, the update applies only when the policy's current version matches. */
+            expectedVersion?: number;
         };
     };
     responses: {
@@ -2776,6 +2836,34 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    createLcrPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLcrPolicy"];
+            };
+        };
+        responses: {
+            /** @description LCR policy created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LcrPolicy"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
     getLcrPolicy: {
         parameters: {
             query?: never;
@@ -2799,6 +2887,60 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    deleteLcrPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description LCR policy deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateLcrPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLcrPolicy"];
+            };
+        };
+        responses: {
+            /** @description LCR policy updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LcrPolicy"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
 }

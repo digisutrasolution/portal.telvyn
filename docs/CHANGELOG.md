@@ -906,3 +906,32 @@ Format: Keep a Changelog; SemVer once releases begin.
   updated. The routing write surface (profile + policy + rules) is now complete. Next: roll the pattern to LCR /
   member management, the deferred carrier/trunk credential + DID region (+ routing rule failover/schedule)
   slices, or land the stack.
+- 2026-11-22 — **Phase 12O-2aj — LCR policy create / edit / delete, POLICY ONLY (fifth write slice,
+  contract-first).** Rolls the write pattern to LCR — bounded (owner-chosen, mirroring the routing 2ah/2ai
+  split): this slice manages the policy envelope (name, description, selection strategy, enabled); the ordered
+  routes editor — which carries the integer `costMicros` money-handling — is a dedicated later slice (12O-2ak,
+  owner chose raw-integer-micros entry). The POST/PATCH/DELETE endpoints already existed (Phase 12J,
+  `lcr.controller.ts`, all gated by the single `routing.manage` perm — LCR reuses the routing domain's perms;
+  ownership server-derived, declarative route SELECTION only — nothing executed/rated/billed, `costMicros` is an
+  integer in millionths stored as BigInt, carrier accessible + trunk owned validated, dup name → 409, atomic
+  optimistic concurrency via `expectedVersion`, audited with counts/status only); this phase **authored them
+  into the contract** (new `CreateLcrPolicy` / `UpdateLcrPolicy` + `LcrRouteInput` schemas — the contract now
+  fully describes the `routes[]` body with `costMicros` as a non-negative integer, even though this UI doesn't
+  send it — + POST on the collection and PATCH/DELETE on the item path in `telvyn.v1.yaml`), regenerated
+  `schema.ts` (additive — `never` placeholders became real operations) and added `CreateLcrPolicy` /
+  `UpdateLcrPolicy` / `LcrRouteInput` aliases. New `createLcrPolicy` / `updateLcrPolicy` / `deleteLcrPolicy`
+  actions. New `<LcrForm>` modal (create + edit): name (required), description, selection strategy, enabled.
+  **Routes are intentionally never sent:** create omits `routes` (empty set to start) and edit omits `routes` so
+  the backend preserves the existing route set (it only replaces when `routes` is present) — so a policy edit
+  can't wipe route candidates (and their money values). Edit sends `expectedVersion` (the loaded policy's
+  version) for optimistic concurrency → a concurrent change surfaces the API's 409. Detail drawer gained
+  **Edit** / **Delete** footer actions (gated on `routing.manage` via `useSession`); lcr-view gained a **New
+  policy** button (gated on `routing.manage`) and a soft-delete confirm dialog (notes routes go with it); every
+  mutation reloads the list. All gating is UX-only; the API re-checks `routing.manage` and re-validates every
+  call. +4 web unit tests (198 → 202; full web suite 202 ✓, 34 files — create-without-routes-and-reload incl. an
+  assertion the body has no `routes` key, edit-sends-expectedVersion-and-no-routes, New-policy hidden without
+  `routing.manage`, delete-via-drawer-after-confirm; existing LCR tests now wrap `SessionProvider`). `next
+  build` ✓ (/lcr 5.09 kB); eslint ✓. **No backend change** (endpoints + audit + tenant-scoping + optimistic
+  concurrency + costMicros integer handling + carrier/trunk validation pre-existed, e2e-covered). `API.md`
+  updated. Next: the LCR routes editor (12O-2ak, raw-micros cost entry), member management write, the deferred
+  credential/region/failover-schedule slices, or land the stack.

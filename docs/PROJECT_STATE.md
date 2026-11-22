@@ -419,10 +419,26 @@ destinations per type (authoritative). Empty set removes all rules. Contract alr
 RoutingScheduleInput (from 2ah) → pure UI. **web 195 → 198 (full suite ✓, 34 files): +3. `next build` ✓
 (/routing 8.03 kB); eslint ✓. No backend/contract change.** `API.md` updated. **Routing write surface COMPLETE
 (profile + policy + rules).**
-Next (await owner go): roll the write pattern to the remaining resources (LCR / member mgmt), one per sub-phase;
-the deferred carrier/trunk credential + DID region + routing-rule failover/schedule slices; or land the stack
-(owner provides GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip → CI →
-PR). Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
+**12O-2aj (DONE)** — LCR policy create / edit / delete, POLICY ONLY (FIFTH WRITE SLICE, contract-first;
+owner-chosen bounded scope mirroring routing 2ah). Manages the policy envelope (name/description/selectionStrategy/
+enabled); the ROUTES EDITOR — carrying integer `costMicros` money-handling (owner chose RAW-MICROS entry) — is a
+later slice (12O-2ak). POST/PATCH/DELETE pre-existed (12J, single `routing.manage` perm — LCR reuses routing's
+perms; declarative route SELECTION only, nothing executed/rated/billed; costMicros integer/BigInt; dup name →
+409; atomic optimistic concurrency via `expectedVersion`; carrier-accessible + trunk-owned validated). Authored
+into contract: `CreateLcrPolicy`/`UpdateLcrPolicy` + `LcrRouteInput` (full routes[] described w/ costMicros
+integer even though this UI omits it); regenerated schema.ts (additive); aliases +
+`createLcrPolicy`/`updateLcrPolicy`/`deleteLcrPolicy`. New `<LcrForm>` (name/description/strategy/enabled).
+**CRITICAL safety: routes never sent — create omits → empty set; edit omits → backend PRESERVES existing routes
+(and their money values), only replaces when `routes` present.** Edit sends `expectedVersion` → concurrent
+change = 409. Detail drawer got Edit/Delete (gated `routing.manage`); lcr-view got New-policy button (gated
+`routing.manage`) + soft-delete confirm (notes routes go with it); mutations reload. UX-only gating; server
+re-checks + re-validates every call. **web 198 → 202 (full suite ✓, 34 files): +4. `next build` ✓ (/lcr 5.09 kB);
+eslint ✓. No backend change** (endpoints + audit + tenant-scoping + optimistic concurrency + costMicros integer
+handling + carrier/trunk validation pre-existed, e2e-covered). `API.md` updated.
+Next (await owner go): the LCR ROUTES EDITOR (12O-2ak, raw-micros cost entry); roll the write pattern to member
+mgmt; the deferred carrier/trunk credential + DID region + routing-rule failover/schedule slices; or land the
+stack (owner provides GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip →
+CI → PR). Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

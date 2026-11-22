@@ -2,10 +2,12 @@
 
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { LcrPolicy, LcrRoute } from "@/lib/contracts";
 import { getLcrPolicy } from "@/lib/telecom/lcr-actions";
 import { useResource } from "@/lib/use-resource";
+import { useSession } from "@/lib/session/session-context";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -62,10 +64,29 @@ function CandidateCard({ route }: { route: LcrRoute }) {
  * Declarative route selection only — nothing is executed, rated or billed.
  * Read-only; `routing.read` is re-checked server-side. Mounted keyed by id so
  * each open refetches; a foreign/removed policy surfaces the API's 404 inline.
+ * Edit / Delete appear only with `routing.manage` (UX gating; the API re-checks)
+ * and hand the loaded policy back to the parent; editing never touches the routes.
  */
-export function LcrDetailDrawer({ policyId, onClose }: { policyId: string; onClose: () => void }) {
+export function LcrDetailDrawer({
+  policyId,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  policyId: string;
+  onClose: () => void;
+  /** Open the edit form for this policy (shown only with `routing.manage`). */
+  onEdit?: (policy: LcrPolicy) => void;
+  /** Request deletion of this policy (shown only with `routing.manage`). */
+  onDelete?: (policy: LcrPolicy) => void;
+}) {
+  const { hasPermission } = useSession();
   const fetchPolicy = React.useCallback((s: AbortSignal) => getLcrPolicy(policyId, s), [policyId]);
   const { data, loading, error } = useResource<LcrPolicy>(fetchPolicy);
+
+  const canManage = hasPermission("routing.manage");
+  const canEdit = Boolean(onEdit) && canManage;
+  const canDelete = Boolean(onDelete) && canManage;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -99,6 +120,17 @@ export function LcrDetailDrawer({ policyId, onClose }: { policyId: string; onClo
                   <CandidateCard key={c.id} route={c} />
                 ))}
               </ol>
+            )}
+          </div>
+        )}
+
+        {data && (canEdit || canDelete) && (
+          <div className="mt-4 flex justify-end gap-2">
+            {canDelete && (
+              <Button variant="danger" size="sm" onClick={() => onDelete!(data)}>Delete</Button>
+            )}
+            {canEdit && (
+              <Button variant="primary" size="sm" onClick={() => onEdit!(data)}>Edit</Button>
             )}
           </div>
         )}

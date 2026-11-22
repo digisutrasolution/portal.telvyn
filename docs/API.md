@@ -306,8 +306,23 @@ deterministic selection order + `version`.
 Route fields: `carrierId`, `sipTrunkId?`, `prefix`, `country?`, `costMicros`
 (integer micro-units), `currency`, `priority`, `weight?`, `enabled`,
 `effectiveFrom?/To?`. Duplicate name → 409; foreign/deleted carrier/trunk → 400.
-No new permission created (routing.manage reused). OpenAPI YAML still `/v1/auth`
-only (tracked debt).
+No new permission created (routing.manage reused).
+
+As of **Phase 12O-2aj** the full LCR-policy surface — list, get, **create, update,
+delete** — is authored into the OpenAPI contract (`CreateLcrPolicy` /
+`UpdateLcrPolicy` + `LcrRouteInput` schemas in `telvyn.v1.yaml`, so the contract
+fully describes the `routes[]` body too, with `costMicros` typed as a non-negative
+integer) and the frontend LCR management screen consumes the generated types. The
+POST/PATCH/DELETE handlers are unchanged since Phase 12J — no backend change. All
+three mutations gate on `routing.manage`. **This slice's UI covers the policy
+envelope only (name, description, selection strategy, enabled); it deliberately does
+NOT send `routes`** — so create starts a policy with an empty route set and edit omits
+`routes` (the backend replaces the set only when `routes` is present, otherwise
+preserves it). A dedicated routes editor — which carries the integer `costMicros`
+money-handling (entered as raw micros, no float) — is the next slice (12O-2ak). Edit
+sends `expectedVersion` for optimistic concurrency (mismatch → 409).
+
+OpenAPI YAML still `/v1/auth` only (tracked debt) for the surfaces not yet closed.
 
 ## Identity & authorization context — EXISTING (Phase 12O-2a, 2026-11-18)
 

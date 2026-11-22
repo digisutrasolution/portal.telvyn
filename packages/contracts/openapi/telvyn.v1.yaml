@@ -976,6 +976,32 @@ paths:
               schema: { $ref: "#/components/schemas/LcrPolicyPage" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [telecom]
+      summary: Create an LCR policy
+      description: >-
+        Create a tenant-owned least-cost-routing policy. DECLARATIVE ROUTE
+        SELECTION ONLY — nothing is executed, rated or billed. Ownership (tenantId)
+        is server-derived. `routes` is optional (omitted = empty route set); each
+        route's `carrierId` must be accessible in scope and any `sipTrunkId` must be
+        owned, and `costMicros` is an integer in millionths of a currency unit
+        (never floating point). A duplicate name is a 409. Requires `routing.manage`.
+      operationId: createLcrPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateLcrPolicy" }
+      responses:
+        "201":
+          description: LCR policy created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LcrPolicy" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /v1/telecom/lcr-policies/{id}:
     get:
       tags: [telecom]
@@ -996,6 +1022,51 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/LcrPolicy" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [telecom]
+      summary: Update an LCR policy
+      description: >-
+        Partially update a tenant-owned LCR policy. DECLARATIVE ROUTE SELECTION
+        ONLY — nothing is executed, rated or billed. Only supplied fields change;
+        ownership is never taken from the client, and a foreign tenant's policy is
+        404 (IDOR-safe). If `routes` is present it REPLACES the entire route set
+        atomically; when omitted the existing routes are left untouched. Pass
+        `expectedVersion` for optimistic concurrency — a version mismatch is a 409.
+        A duplicate name is a 409. Requires `routing.manage`.
+      operationId: updateLcrPolicy
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateLcrPolicy" }
+      responses:
+        "200":
+          description: LCR policy updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LcrPolicy" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [telecom]
+      summary: Delete an LCR policy (soft delete)
+      description: >-
+        Soft-delete a tenant-owned LCR policy (sets deletedAt; the row is retained
+        for audit and history). A foreign tenant's policy is 404 (IDOR-safe).
+        Requires `routing.manage`.
+      operationId: deleteLcrPolicy
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: LCR policy deleted }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -1773,3 +1844,56 @@ components:
           type: array
           items: { $ref: "#/components/schemas/LcrPolicy" }
         nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next page; null when exhausted." }
+    LcrRouteInput:
+      type: object
+      required: [carrierId, prefix, costMicros, currency]
+      description: >-
+        A single LCR route candidate to create (config only — never dialled or
+        rated). `carrierId` must be accessible in the caller's scope and any
+        `sipTrunkId` must be owned by the tenant. `costMicros` is an INTEGER in
+        millionths of a currency unit — never floating point.
+      properties:
+        carrierId: { type: string, format: uuid }
+        sipTrunkId: { type: string, format: uuid }
+        prefix: { type: string, pattern: "^\\+?[0-9]{1,15}$", description: "Up to 15 digits, optional leading +." }
+        country: { type: string, minLength: 2, maxLength: 2, description: "ISO-3166-1 alpha-2, uppercase." }
+        costMicros: { type: integer, minimum: 0, maximum: 1000000000000, description: "Millionths of a currency unit (integer, non-negative)." }
+        currency: { type: string, enum: [USD, EUR, GBP, INR, AUD, CAD, JPY] }
+        priority: { type: integer, minimum: 0, maximum: 100000, description: "Lower number = higher preference." }
+        weight: { type: integer, minimum: 1, maximum: 1000, description: "For the WEIGHTED strategy." }
+        enabled: { type: boolean }
+        effectiveFrom: { type: string, format: date-time }
+        effectiveTo: { type: string, format: date-time, description: "Must be after effectiveFrom." }
+    CreateLcrPolicy:
+      type: object
+      required: [name]
+      description: >-
+        Create-LCR-policy body. DECLARATIVE ROUTE SELECTION ONLY. Ownership
+        (tenantId) is server-derived. `routes` is optional (omitted = empty route
+        set).
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 500 }
+        selectionStrategy: { type: string, enum: [LOWEST_COST, HIGHEST_PRIORITY, WEIGHTED, QUALITY_FIRST] }
+        enabled: { type: boolean }
+        routes:
+          type: array
+          maxItems: 500
+          items: { $ref: "#/components/schemas/LcrRouteInput" }
+    UpdateLcrPolicy:
+      type: object
+      description: >-
+        Partial LCR-policy update. DECLARATIVE ROUTE SELECTION ONLY. Only supplied
+        fields change. If `routes` is present it REPLACES the whole route set; when
+        omitted the existing routes are untouched. `expectedVersion` enables
+        optimistic concurrency (mismatch → 409).
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 500, nullable: true, description: "null clears the description." }
+        selectionStrategy: { type: string, enum: [LOWEST_COST, HIGHEST_PRIORITY, WEIGHTED, QUALITY_FIRST] }
+        enabled: { type: boolean }
+        routes:
+          type: array
+          maxItems: 500
+          items: { $ref: "#/components/schemas/LcrRouteInput" }
+        expectedVersion: { type: integer, minimum: 0, description: "If set, the update applies only when the policy's current version matches." }

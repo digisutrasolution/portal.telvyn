@@ -4,12 +4,18 @@ import * as React from "react";
 import { TrendingDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { LcrPolicy } from "@/lib/contracts";
-import { listLcrPolicies, type ListLcrPoliciesParams } from "@/lib/telecom/lcr-actions";
+import { listLcrPolicies, deleteLcrPolicy, type ListLcrPoliciesParams } from "@/lib/telecom/lcr-actions";
 import { isApiError } from "@/lib/api/problem";
+import { messageFor } from "@/components/auth/auth-message";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useSession } from "@/lib/session/session-context";
 import { ListFilters } from "@/components/telecom/list-filters";
 import { LcrDetailDrawer } from "./lcr-detail-drawer";
+import { LcrForm } from "./lcr-form";
+
+type FormState = { mode: "create" } | { mode: "edit"; policy: LcrPolicy } | null;
 
 type Strategy = LcrPolicy["selectionStrategy"];
 const STRATEGY_OPTIONS = [
@@ -44,6 +50,14 @@ export function LcrView() {
   const [error, setError] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
   const [detailId, setDetailId] = React.useState<string | null>(null);
+
+  // Mutations (Phase 12O-2aj). Gating is UX-only; the API re-checks every call.
+  const { hasPermission } = useSession();
+  const canManage = hasPermission("routing.manage");
+  const [form, setForm] = React.useState<FormState>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<LcrPolicy | null>(null);
+  const [deletePending, setDeletePending] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
 
   // Filters (mapped to the already-contracted list query params; "" = no filter).
   const [search, setSearch] = React.useState("");
@@ -111,6 +125,21 @@ export function LcrView() {
     setReloadKey((k) => k + 1);
   }
 
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeletePending(true);
+    setDeleteError(null);
+    try {
+      await deleteLcrPolicy(deleteTarget.id);
+      setDeleteTarget(null);
+      refresh();
+    } catch (err) {
+      setDeleteError(messageFor(err));
+    } finally {
+      setDeletePending(false);
+    }
+  }
+
   return (
     <section aria-labelledby="lcr-heading">
       <header className="mb-4 flex items-center justify-between gap-3">
@@ -118,7 +147,12 @@ export function LcrView() {
           <h1 id="lcr-heading" className="font-display text-[19px] font-semibold text-ink">LCR</h1>
           <p className="text-[13px] text-muted">Least-cost-routing policies for your workspace. Configuration only — candidates are not executed or rated yet.</p>
         </div>
-        <Button variant="secondary" size="sm" onClick={refresh} disabled={loading}>Refresh</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={refresh} disabled={loading}>Refresh</Button>
+          {canManage && (
+            <Button variant="primary" size="sm" onClick={() => setForm({ mode: "create" })}>New policy</Button>
+          )}
+        </div>
       </header>
 
       {(items.length > 0 || hasActiveFilters) && (
@@ -189,7 +223,48 @@ export function LcrView() {
         </>
       )}
 
-      {detailId && <LcrDetailDrawer key={detailId} policyId={detailId} onClose={() => setDetailId(null)} />}
+      {detailId && (
+        <LcrDetailDrawer
+          key={detailId}
+          policyId={detailId}
+          onClose={() => setDetailId(null)}
+          onEdit={(policy) => {
+            setDetailId(null);
+            setForm({ mode: "edit", policy });
+          }}
+          onDelete={(policy) => {
+            setDetailId(null);
+            setDeleteError(null);
+            setDeleteTarget(policy);
+          }}
+        />
+      )}
+
+      {form && (
+        <LcrForm {...form} onClose={() => setForm(null)} onSaved={refresh} />
+      )}
+
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && !deletePending && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle>Delete LCR policy</DialogTitle>
+          <DialogDescription className="text-[13px] text-ink-2">
+            Delete <span className="font-medium text-ink">{deleteTarget?.name}</span>? It is removed from your
+            workspace (soft-deleted and retained for audit), along with its route candidates. This changes
+            configuration only — nothing is executed or rated.
+          </DialogDescription>
+          {deleteError && (
+            <p role="alert" className="mt-3 rounded-md border border-danger bg-danger-soft px-3 py-2 text-[12px] text-danger">
+              {deleteError}
+            </p>
+          )}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteTarget(null)} disabled={deletePending}>Cancel</Button>
+            <Button type="button" variant="danger" size="sm" onClick={confirmDelete} disabled={deletePending}>
+              {deletePending ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

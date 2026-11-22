@@ -664,3 +664,19 @@ so nothing is silently lost by editing a rule's basics. Destination values are
 validated per type on the server, which stays authoritative; client-side checks cover
 the simple numeric ranges. Saving with no rules clears the set. Verified: 198/198 web
 Vitest · `next build` clean (/routing 8.03 kB).
+
+LCR policy management — policy only (create / edit / delete) — EXISTING (Phase
+12O-2aj, 2026-11-22): the write pattern rolled to LCR, bounded to the policy envelope
+(the same policy-first split used for routing) — the route-candidate editor, which
+carries the integer cost values, is a separate later slice. All three affordances gate
+on `routing.manage` (LCR reuses the routing domain's permission): a "New policy" button
+on the LCR screen, and Edit / Delete footer actions on the LCR detail drawer.
+`<LcrForm>` is a modal for create and edit with name, description, selection strategy
+and an enabled toggle. The route candidates are never touched here: creating a policy
+starts it with no routes, and editing leaves the existing routes (and their cost values)
+exactly as they were — the backend only replaces routes when a route set is sent, and
+this form never sends one. Edit carries the policy's version for optimistic concurrency,
+so a colliding change is rejected with a clear message instead of overwriting. Delete is
+a soft delete behind a confirm dialog that notes the route candidates are removed with
+the policy; every successful mutation reloads the list. Verified: 202/202 web Vitest ·
+`next build` clean (/lcr 5.09 kB).
