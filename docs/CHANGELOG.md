@@ -5,6 +5,20 @@ Format: Keep a Changelog; SemVer once releases begin.
 
 ## [Unreleased]
 
+### Fixed
+- 2026-11-23 — Phase 12O-2ay — operator-action POSTs now return **HTTP 200** to
+  match their OpenAPI contracts (they were returning NestJS's default **201** on
+  success, a runtime-vs-contract drift). Aligned `POST
+  /v1/telecom/nodes/:id/health-check`, `/engines/:id/health-check`,
+  `/engines/:id/sync`, and `/engines/:id/sync/rollback` (added `@HttpCode(200)`).
+  These are operator **actions**, not resource creations, so 200 is correct; the
+  carrier health-check (12O-2aw) already did this. Failure mappings
+  (501/504/503/409/400) are thrown exceptions and unchanged; genuine resource
+  creations (engine/node/carrier/DID/trunk/routing/LCR POSTs) keep 201. No
+  contract change (the contracts already declared 200); the engine-runtime e2e
+  assertion was corrected 201→200 and a node health-check→200 e2e assertion
+  added. Backend-only; no schema, no web change.
+
 ### Added
 - 2026-11-23 — Phase 12O-2ax — carrier **health-event history** (read). `GET
   /v1/telecom/carriers/:id/health-events` (`telecom.health.read`) returns the

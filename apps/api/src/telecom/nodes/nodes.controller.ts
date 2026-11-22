@@ -57,6 +57,7 @@ export class NodesController {
    * HealthEvent is recorded on transition. No egress occurs. Audited.
    */
   @Post(":id/health-check")
+  @HttpCode(200)
   @RequirePermissions("telecom.health.read")
   async healthCheck(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
     const correlationId = randomUUID();

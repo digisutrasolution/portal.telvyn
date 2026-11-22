@@ -130,6 +130,11 @@ describe("platform CRUD + integrity + honest health", () => {
     expect(health.status).toBe(200);
     expect(health.body.status).toBe("UNKNOWN");
 
+    // Operator health-check POST is an action, not a resource creation → 200 (contract), honest UNKNOWN — Phase 12O-2ay
+    const probe = await request(http).post(`/v1/telecom/nodes/${nodeId}/health-check`).set(auth(plat.token)).send({});
+    expect(probe.status).toBe(200);
+    expect(probe.body.status).toBe("UNKNOWN");
+
     // Lists include the created rows
     expect((await request(http).get("/v1/telecom/nodes").set(auth(plat.token))).body.some((n: { id: string }) => n.id === nodeId)).toBe(true);
 

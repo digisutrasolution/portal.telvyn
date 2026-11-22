@@ -108,7 +108,7 @@ describe("health probe (honest, audited)", () => {
     const plat = await provision(TenantType.PLATFORM, "owner");
     const engine = await makeEngine(plat.token);
     const res = await request(http).post(`/v1/telecom/engines/${engine.body.id}/health-check`).set(auth(plat.token)).send({});
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200); // operator action, not a resource creation (contract: 200) — Phase 12O-2ay
     expect(res.body.status).toBe("UNKNOWN"); // NullConnector — never fabricated
     expect(res.body.reachability).toBe("UNCONFIGURED");
     const logs = await request(http).get("/v1/audit-logs").set(auth(plat.token));

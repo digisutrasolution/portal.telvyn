@@ -83,6 +83,7 @@ export class EnginesController {
 
   /** Actively probe engine health (SSRF-guarded). Honest UNKNOWN with the NullConnector; records a HealthEvent on transition. */
   @Post(":id/health-check")
+  @HttpCode(200)
   @RequirePermissions("telecom.health.read")
   async healthCheck(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
     const engine = await this.engines.get(id);
@@ -122,6 +123,7 @@ export class EnginesController {
    * A concurrent sync is refused (409); a lock outage fails closed (503). Always audited.
    */
   @Post(":id/sync")
+  @HttpCode(200)
   @RequirePermissions("telecom.manage")
   async sync(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
     const engine = await this.engines.get(id);
@@ -140,6 +142,7 @@ export class EnginesController {
 
   /** Roll back to the previous desired configuration version (append-only; honest apply). */
   @Post(":id/sync/rollback")
+  @HttpCode(200)
   @RequirePermissions("telecom.manage")
   async rollback(@CurrentTenant() ctx: TenantContext, @Param("id", ParseUUIDPipe) id: string, @Req() req: Request) {
     const engine = await this.engines.get(id);

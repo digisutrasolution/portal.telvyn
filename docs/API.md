@@ -138,6 +138,13 @@ desired version (append-only; **400** when there is no previous version), audite
 create/update is SSRF-validated (private/loopback/metadata/malformed → **400**).
 All runtime endpoints are platform-only.
 
+**Operator-action status (Phase 12O-2ay).** The operator-action POSTs —
+`:id/health-check`, `:id/sync`, `:id/sync/rollback` on engines, and
+`:id/health-check` on nodes/carriers — return **HTTP 200 on success** (they are
+actions, not resource creations). Failure mappings above (501/504/503/409/400)
+are unchanged. Genuine resource-creation POSTs (engine/node/region/carrier/DID/
+trunk/routing/LCR) return **201**.
+
 **Engine health-event history (Phase 12O-2as).** `GET :id/health-events`
 (`telecom.health.read`, platform) returns the append-only history of the engine's
 honest health-status transitions — a `HealthEvent` is recorded only when the status

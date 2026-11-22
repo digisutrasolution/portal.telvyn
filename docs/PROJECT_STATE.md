@@ -645,6 +645,23 @@ auth surface today) / align node 2au health-check to 200 (@HttpCode) — pre-exi
 spans frontend + SIX backend endpoints (2as/2at/2au/2av/2aw + 2ax carrier health-events read); refresh the PR draft
 accordingly — it predates 2ad-2ax.**
 
+**12O-2ay (DONE)** — operator-action POST **HTTP 200 alignment** (contract-conformance fix). Owner asked to align the node
+2au health-check (201 at runtime vs its contract's 200); DISCOVERY found the **same drift systemic** — the engine health-check
+e2e even asserted `res.status===201` while the contract says 200, and `sync`/`rollback` share it on their success path (all
+declare 200). Fixing node alone would create a NEW node-vs-engine inconsistency, so (surfaced, then) aligned the whole
+operator-action family: added `@HttpCode(200)` to `POST /nodes/:id/health-check`, `/engines/:id/health-check`, `/engines/:id/sync`,
+`/engines/:id/sync/rollback`. These are **actions, not resource creations** → 200 is correct (carrier 2aw/2ax already did this).
+**Genuine resource-creation POSTs (engine/node/carrier/DID/trunk/routing/LCR) keep 201** — untouched. Failure mappings
+(501/504/503/409/400) are thrown HttpExceptions → unaffected; sync/rollback success path is unreached with stubs so only the
+latent success status changes (correct for when a real connector lands). **NO contract change** (contracts already declared 200),
+NO schema, NO web change (clients handle any 2xx uniformly). e2e: corrected `telecom-engine-runtime` assertion 201→200 + added a
+node health-check→200 assertion in `telecom-infra` (both CI-only, NOT run here; tsc-compiled). API tsc✓ eslint✓ telecom unit
+185✓ (status is e2e-covered, not unit — count unchanged). 4 files (2 controllers + 2 e2e), NO new files, NO prisma. (51st commit;
+feature tip now <2ay>; integration branch @5fcd64e now 32 behind.) **Operator-action POSTs now contract-conformant at 200.**
+Next (await owner go): resolve/Accept ADR-0020 → implement liveness slices / LAND THE STACK (owner provides GitHub remote →
+push `integration/phase-12o-complete` FF'd to feature tip → CI → PR; refresh stale phase-12o-PR.md — predates 2ad-2ay, spans
+frontend + SIX backend endpoints + the 2ay conformance fix; ADR-0020 is a separate branch).
+
 ### (superseded) sub-phase plan
 
 **Phase 12M — real engine adapter (Kamailio first), built in additive review-gated sub-phases.** A disposable Kamailio 6.1.5 test engine is provisioned
