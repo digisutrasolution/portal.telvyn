@@ -14,6 +14,7 @@ import { useSession } from "@/lib/session/session-context";
 import { ListFilters } from "@/components/telecom/list-filters";
 import { RoutingDetailDrawer } from "./routing-detail-drawer";
 import { RoutingForm } from "./routing-form";
+import { RoutingRulesEditor } from "./routing-rules-editor";
 
 type FormState = { mode: "create" } | { mode: "edit"; profile: RoutingProfile } | null;
 
@@ -61,6 +62,7 @@ export function RoutingView() {
   const { hasPermission } = useSession();
   const canManage = hasPermission("routing.manage");
   const [form, setForm] = React.useState<FormState>(null);
+  const [rulesTarget, setRulesTarget] = React.useState<RoutingProfile | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<RoutingProfile | null>(null);
   const [deletePending, setDeletePending] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
@@ -246,6 +248,10 @@ export function RoutingView() {
             setDetailId(null);
             setForm({ mode: "edit", profile });
           }}
+          onEditRules={(profile) => {
+            setDetailId(null);
+            setRulesTarget(profile);
+          }}
           onDelete={(profile) => {
             setDetailId(null);
             setDeleteError(null);
@@ -256,6 +262,10 @@ export function RoutingView() {
 
       {form && (
         <RoutingForm {...form} onClose={() => setForm(null)} onSaved={refresh} />
+      )}
+
+      {rulesTarget && (
+        <RoutingRulesEditor profile={rulesTarget} onClose={() => setRulesTarget(null)} onSaved={refresh} />
       )}
 
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && !deletePending && setDeleteTarget(null)}>

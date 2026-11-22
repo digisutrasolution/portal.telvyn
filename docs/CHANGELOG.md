@@ -885,3 +885,24 @@ Format: Keep a Changelog; SemVer once releases begin.
   optimistic concurrency + destination validation pre-existed, e2e-covered). `API.md` updated. Next: the
   routing rules editor (12O-2ai), roll the pattern to LCR / member management, the deferred credential/region
   slices, or land the stack.
+- 2026-11-22 — **Phase 12O-2ai — routing rules editor (frontend only, no contract/backend change).** Completes
+  the routing write surface that 12O-2ah deferred. New `<RoutingRulesEditor>` modal, opened by an **"Edit
+  rules"** footer action on the routing detail drawer (gated on `routing.manage` alongside Edit/Delete). It
+  loads the profile's full ordered rule set and, on save, PATCHes the **complete** `rules` array via the
+  existing `updateRoutingProfile` action (no new action) with `expectedVersion` — so a concurrent change
+  surfaces the API's 409 rather than clobbering. **Replace-semantics safety:** because PATCH replaces the whole
+  set, the editor round-trips every rule; the per-rule advanced options this slice does NOT expose — carrier
+  tag, typed failover (`failoverDestination`/`failoverDestinationType`/`failoverAfterSeconds`), and time-of-day
+  `schedule` — are preserved verbatim on existing rules (a "+ advanced preserved" chip marks such a rule), so
+  editing a rule's destination can't silently drop its failover/schedule. Editable per rule: destination type
+  (PHONE_NUMBER / EXTENSION / SIP_TRUNK / VOICEMAIL / WEBHOOK, with a per-type hint), destination value,
+  priority (sets ascending order), enabled, weight, timeout, retries; add / remove rules; client range
+  validation per field with a per-row error; the server validates each destination per type (SSRF-safe
+  webhooks, canonical E.164, owned trunk ids) and is authoritative. Saving an empty set removes all rules
+  (valid). **No contract change** — the `RoutingRuleInput` / `RoutingScheduleInput` schemas were authored in
+  12O-2ah; this is pure UI. +3 web unit tests (195 → 198; full web suite 198 ✓, 34 files — edit-rule-saves-full-
+  set-with-expectedVersion-and-preserves-failover, add-rule-grows-the-set, Edit-rules-hidden-without-
+  `routing.manage`). `next build` ✓ (/routing 6.25 → 8.03 kB); eslint ✓. **No backend change.** `API.md`
+  updated. The routing write surface (profile + policy + rules) is now complete. Next: roll the pattern to LCR /
+  member management, the deferred carrier/trunk credential + DID region (+ routing rule failover/schedule)
+  slices, or land the stack.

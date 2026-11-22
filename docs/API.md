@@ -263,9 +263,18 @@ All three mutations gate on `routing.manage`. **This slice's UI covers the profi
 envelope + the selection/failover policy only; it deliberately does NOT send
 `rules`** — so create starts a profile with an empty rule set and edit omits `rules`
 (the backend replaces the set only when `rules` is present, otherwise preserves it).
-A dedicated rules editor is the next slice (12O-2ai). Edit sends `expectedVersion`
-for optimistic concurrency (mismatch → 409), and the "failover enabled ⇒ ≥1
-condition" rule is mirrored client-side and authoritative server-side.
+Edit (profile form) sends `expectedVersion` for optimistic concurrency (mismatch →
+409), and the "failover enabled ⇒ ≥1 condition" rule is mirrored client-side and
+authoritative server-side.
+
+**Phase 12O-2ai** shipped the dedicated rules editor (frontend only — no contract
+change; it consumes the `RoutingRuleInput` schema already authored above). It loads a
+profile's full rule set, edits the core per-rule fields (destination type + value,
+priority/order, enabled, weight, timeout, retries), and PATCHes the **complete**
+`rules` array (replace semantics) with `expectedVersion`. Per-rule advanced options
+not yet editable in the UI — carrier tag, typed failover, time-of-day schedule — are
+preserved verbatim on existing rules so a replace never silently drops them (a chip
+marks a rule that carries them); they remain fully manageable via the API.
 
 OpenAPI YAML still `/v1/auth` only (tracked debt) for the surfaces not yet closed.
 

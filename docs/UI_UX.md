@@ -646,3 +646,21 @@ rejected with a clear "modified concurrently" message rather than silently clobb
 Delete is a soft delete behind a confirm dialog that notes the profile's rules are
 removed with it; every successful mutation reloads the list. Verified: 195/195 web
 Vitest · `next build` clean (/routing 6.25 kB).
+
+Routing rules editor — EXISTING (Phase 12O-2ai, 2026-11-22): completes the routing
+write surface. The routing detail drawer gains a third footer action, "Edit rules"
+(gated on `routing.manage` alongside Edit and Delete), opening `<RoutingRulesEditor>`.
+It lists the profile's rules in priority order; each rule card edits the destination
+type (with a hint for the expected value — E.164, extension digits, trunk id,
+voicemail identifier, or https webhook), the destination value, the priority that sets
+its order, an enabled toggle, and weight / timeout / retries. Rules can be added and
+removed. Saving sends the whole rule set back at once (the API replaces it wholesale),
+carrying the profile's version so a save that collides with someone else's change is
+rejected with a clear message instead of overwriting. Because the save replaces
+everything, the editor keeps every field of every existing rule — including the
+advanced options it doesn't surface yet (carrier tag, typed failover, time-of-day
+schedule) — and a small "+ advanced preserved" chip marks any rule that carries them,
+so nothing is silently lost by editing a rule's basics. Destination values are
+validated per type on the server, which stays authoritative; client-side checks cover
+the simple numeric ranges. Saving with no rules clears the set. Verified: 198/198 web
+Vitest · `next build` clean (/routing 8.03 kB).

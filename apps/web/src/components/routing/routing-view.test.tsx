@@ -11,7 +11,7 @@ vi.mock("@/lib/telecom/routing-actions", () => ({
   deleteRoutingProfile: vi.fn(),
 }));
 
-import { createRoutingProfile, deleteRoutingProfile, getRoutingProfile, listRoutingProfiles } from "@/lib/telecom/routing-actions";
+import { createRoutingProfile, deleteRoutingProfile, getRoutingProfile, listRoutingProfiles, updateRoutingProfile } from "@/lib/telecom/routing-actions";
 import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { RoutingView } from "./routing-view";
 
@@ -192,5 +192,68 @@ describe("RoutingView", () => {
     fireEvent.click(confirm);
 
     await waitFor(() => expect(deleteRoutingProfile).toHaveBeenCalledWith(row.id));
+  });
+
+  it("edits rules via the drawer, saving the full replaced set with expectedVersion and preserving advanced fields", async () => {
+    const row = profile({
+      name: "Inbound default",
+      version: 7,
+      rules: [
+        // A rule carrying a typed failover the editor does NOT expose — it must round-trip.
+        { id: "r1", destinationType: "PHONE_NUMBER", destination: "+14155550100", priority: 10, weight: null, enabled: true, timeoutSeconds: null, retryCount: null, carrierId: null, failoverDestination: "+14155559999", failoverDestinationType: "PHONE_NUMBER", failoverAfterSeconds: 20, schedule: null },
+      ],
+    });
+    vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getRoutingProfile).mockResolvedValue(row);
+    vi.mocked(updateRoutingProfile).mockResolvedValue(row);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Inbound default" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit rules" }));
+    // Editor loaded with the existing rule; change its destination.
+    const dest = await screen.findByLabelText("Destination");
+    fireEvent.change(dest, { target: { value: "+14155550111" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+
+    await waitFor(() => expect(updateRoutingProfile).toHaveBeenCalledTimes(1));
+    const [id, body] = vi.mocked(updateRoutingProfile).mock.calls[0];
+    expect(id).toBe(row.id);
+    expect(body.expectedVersion).toBe(7);
+    expect(body.rules).toHaveLength(1);
+    expect(body.rules![0].destination).toBe("+14155550111"); // edited
+    expect(body.rules![0].failoverDestination).toBe("+14155559999"); // PRESERVED (not editable here)
+    expect(body.rules![0].failoverAfterSeconds).toBe(20); // PRESERVED
+  });
+
+  it("adds a new rule in the editor and saves the longer set", async () => {
+    const row = profile({ name: "Inbound default", version: 2 });
+    const originalCount = row.rules.length;
+    vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getRoutingProfile).mockResolvedValue(row);
+    vi.mocked(updateRoutingProfile).mockResolvedValue(row);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Inbound default" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit rules" }));
+    await screen.findByRole("button", { name: "Save rules" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    const dests = screen.getAllByLabelText("Destination");
+    fireEvent.change(dests[dests.length - 1], { target: { value: "+14155550123" } }); // the new rule
+    fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+
+    await waitFor(() => expect(updateRoutingProfile).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateRoutingProfile).mock.calls[0][1].rules).toHaveLength(originalCount + 1);
+  });
+
+  it("hides Edit rules without routing.manage permission", async () => {
+    const row = profile({ name: "Inbound default" });
+    vi.mocked(listRoutingProfiles).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getRoutingProfile).mockResolvedValue(row);
+    renderView(async () => ({ userId: "u", tenantId: "t", tenantType: "RESELLER", roles: [], permissions: ["routing.read"] }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Inbound default" }));
+    await screen.findByText("Rules (2)"); // drawer loaded
+    expect(screen.queryByRole("button", { name: "Edit rules" })).toBeNull();
   });
 });

@@ -408,10 +408,21 @@ soft-delete confirm (notes rules go with it); mutations reload. UX-only gating; 
 every call. **web 192 → 195 (full suite ✓, 34 files): +3. `next build` ✓ (/routing 6.25 kB; one `next/font`
 fetch-flake retry); eslint ✓. No backend change** (endpoints + audit + tenant-scoping + optimistic concurrency +
 destination validation pre-existed, e2e-covered). `API.md` updated.
-Next (await owner go): the routing RULES EDITOR (12O-2ai); roll the write pattern to the remaining resources
-(LCR / member mgmt), one per sub-phase; the deferred carrier/trunk credential + DID region slice; or land the
-stack (owner provides GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip →
-CI → PR). Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
+**12O-2ai (DONE)** — routing RULES EDITOR (FRONTEND ONLY — no contract/backend change; completes the routing
+write surface 2ah deferred). New `<RoutingRulesEditor>` opened by an "Edit rules" drawer footer action (gated
+`routing.manage`); loads the full rule set, PATCHes the COMPLETE `rules` array via existing
+`updateRoutingProfile` + `expectedVersion` (409 on concurrent change). **Replace-semantics safety: advanced
+per-rule options NOT exposed here (carrier tag, typed failover, schedule) are PRESERVED verbatim on existing
+rules ("+ advanced preserved" chip) so editing can't drop them.** Editable: destination type+value (per-type
+hint), priority/order, enabled, weight, timeout, retries; add/remove; client range validation; server validates
+destinations per type (authoritative). Empty set removes all rules. Contract already had RoutingRuleInput/
+RoutingScheduleInput (from 2ah) → pure UI. **web 195 → 198 (full suite ✓, 34 files): +3. `next build` ✓
+(/routing 8.03 kB); eslint ✓. No backend/contract change.** `API.md` updated. **Routing write surface COMPLETE
+(profile + policy + rules).**
+Next (await owner go): roll the write pattern to the remaining resources (LCR / member mgmt), one per sub-phase;
+the deferred carrier/trunk credential + DID region + routing-rule failover/schedule slices; or land the stack
+(owner provides GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip → CI →
+PR). Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

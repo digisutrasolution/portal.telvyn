@@ -60,12 +60,15 @@ export function RoutingDetailDrawer({
   profileId,
   onClose,
   onEdit,
+  onEditRules,
   onDelete,
 }: {
   profileId: string;
   onClose: () => void;
   /** Open the edit form for this profile (shown only with `routing.manage`). */
   onEdit?: (profile: RoutingProfile) => void;
+  /** Open the rules editor for this profile (shown only with `routing.manage`). */
+  onEditRules?: (profile: RoutingProfile) => void;
   /** Request deletion of this profile (shown only with `routing.manage`). */
   onDelete?: (profile: RoutingProfile) => void;
 }) {
@@ -75,6 +78,7 @@ export function RoutingDetailDrawer({
 
   const canManage = hasPermission("routing.manage");
   const canEdit = Boolean(onEdit) && canManage;
+  const canEditRules = Boolean(onEditRules) && canManage;
   const canDelete = Boolean(onDelete) && canManage;
 
   const rules = React.useMemo(
@@ -125,10 +129,13 @@ export function RoutingDetailDrawer({
           </div>
         )}
 
-        {data && (canEdit || canDelete) && (
+        {data && (canEdit || canEditRules || canDelete) && (
           <div className="mt-4 flex justify-end gap-2">
             {canDelete && (
               <Button variant="danger" size="sm" onClick={() => onDelete!(data)}>Delete</Button>
+            )}
+            {canEditRules && (
+              <Button variant="secondary" size="sm" onClick={() => onEditRules!(data)}>Edit rules</Button>
             )}
             {canEdit && (
               <Button variant="primary" size="sm" onClick={() => onEdit!(data)}>Edit</Button>
