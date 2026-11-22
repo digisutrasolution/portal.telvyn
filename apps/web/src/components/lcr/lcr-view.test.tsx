@@ -11,11 +11,13 @@ vi.mock("@/lib/telecom/lcr-actions", () => ({
   deleteLcrPolicy: vi.fn(),
 }));
 
-// The routes editor loads carriers for its (required) carrier picker.
+// The routes editor loads carriers (required picker) and SIP trunks (optional picker).
 vi.mock("@/lib/telecom/carriers-actions", () => ({ listCarriers: vi.fn() }));
+vi.mock("@/lib/telecom/sip-trunks-actions", () => ({ listSipTrunks: vi.fn() }));
 
 import { createLcrPolicy, deleteLcrPolicy, getLcrPolicy, listLcrPolicies, updateLcrPolicy } from "@/lib/telecom/lcr-actions";
 import { listCarriers } from "@/lib/telecom/carriers-actions";
+import { listSipTrunks } from "@/lib/telecom/sip-trunks-actions";
 import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { LcrView } from "./lcr-view";
 
@@ -231,19 +233,21 @@ describe("LcrView", () => {
     await waitFor(() => expect(deleteLcrPolicy).toHaveBeenCalledWith(row.id));
   });
 
-  it("edits routes via the drawer, saving the full set with expectedVersion, raw micros, and preserved fields", async () => {
+  it("edits routes via the drawer, saving the full set with expectedVersion, raw micros; trunk + dates round-trip", async () => {
     const carrierId = crypto.randomUUID();
+    const trunkId = crypto.randomUUID();
     const row = policy({
       name: "UK least cost",
       version: 5,
       candidates: [
-        // A route carrying a SIP trunk + effective date the editor does NOT expose — must round-trip.
-        route({ carrierId, costMicros: 1200, prefix: "44", currency: "GBP", sipTrunkId: crypto.randomUUID(), effectiveFrom: "2026-01-01T00:00:00.000Z" }),
+        // A route carrying a SIP trunk + effective date — loaded into the editable fields, it must round-trip.
+        route({ carrierId, costMicros: 1200, prefix: "44", currency: "GBP", sipTrunkId: trunkId, effectiveFrom: "2026-01-01T00:00:00.000Z" }),
       ],
     });
     vi.mocked(listLcrPolicies).mockResolvedValue({ items: [row], nextCursor: null });
     vi.mocked(getLcrPolicy).mockResolvedValue(row);
     vi.mocked(listCarriers).mockResolvedValue({ items: [{ id: carrierId, name: "Acme" }], nextCursor: null } as never);
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [], nextCursor: null } as never);
     vi.mocked(updateLcrPolicy).mockResolvedValue(row);
     renderView();
 
@@ -260,8 +264,41 @@ describe("LcrView", () => {
     expect(body.routes).toHaveLength(1);
     expect(body.routes![0].costMicros).toBe(9999); // integer, no float
     expect(body.routes![0].carrierId).toBe(carrierId);
-    expect(body.routes![0].sipTrunkId).toBe(row.candidates[0].sipTrunkId); // PRESERVED
-    expect(body.routes![0].effectiveFrom).toBe("2026-01-01T00:00:00.000Z"); // PRESERVED
+    expect(body.routes![0].sipTrunkId).toBe(trunkId); // loaded (seeded by id) + round-tripped
+    expect(body.routes![0].effectiveFrom).toBe("2026-01-01T00:00:00.000Z"); // round-tripped (minute precision)
+  });
+
+  it("edits a route to set a SIP trunk and an effective window", async () => {
+    const carrierId = crypto.randomUUID();
+    const trunkId = crypto.randomUUID();
+    const row = policy({
+      name: "UK least cost",
+      version: 4,
+      candidates: [route({ carrierId, costMicros: 1200, prefix: "44", currency: "GBP", sipTrunkId: null, effectiveFrom: null, effectiveTo: null })],
+    });
+    vi.mocked(listLcrPolicies).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getLcrPolicy).mockResolvedValue(row);
+    vi.mocked(listCarriers).mockResolvedValue({ items: [{ id: carrierId, name: "Acme" }], nextCursor: null } as never);
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [{ id: trunkId, name: "Primary trunk" }], nextCursor: null } as never);
+    vi.mocked(updateLcrPolicy).mockResolvedValue(row);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View UK least cost" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit routes" }));
+    await screen.findByRole("option", { name: "Primary trunk" });
+    fireEvent.change(screen.getByLabelText("SIP trunk"), { target: { value: trunkId } });
+    const fromLocal = "2026-06-01T09:00";
+    const toLocal = "2026-06-01T17:00";
+    fireEvent.change(screen.getByLabelText("Effective from"), { target: { value: fromLocal } });
+    fireEvent.change(screen.getByLabelText("Effective to"), { target: { value: toLocal } });
+    fireEvent.click(screen.getByRole("button", { name: "Save routes" }));
+
+    await waitFor(() => expect(updateLcrPolicy).toHaveBeenCalledTimes(1));
+    const saved = vi.mocked(updateLcrPolicy).mock.calls[0][1].routes![0];
+    expect(saved.sipTrunkId).toBe(trunkId);
+    // Local datetime → ISO instant (tz-robust: computed the same way the editor does).
+    expect(saved.effectiveFrom).toBe(new Date(fromLocal).toISOString());
+    expect(saved.effectiveTo).toBe(new Date(toLocal).toISOString());
   });
 
   it("adds a route in the editor and saves the longer set", async () => {
@@ -270,6 +307,7 @@ describe("LcrView", () => {
     vi.mocked(listLcrPolicies).mockResolvedValue({ items: [row], nextCursor: null });
     vi.mocked(getLcrPolicy).mockResolvedValue(row);
     vi.mocked(listCarriers).mockResolvedValue({ items: [{ id: carrierId, name: "Acme" }], nextCursor: null } as never);
+    vi.mocked(listSipTrunks).mockResolvedValue({ items: [], nextCursor: null } as never);
     vi.mocked(updateLcrPolicy).mockResolvedValue(row);
     renderView();
 

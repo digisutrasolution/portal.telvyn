@@ -724,13 +724,20 @@ of micros — millionths of a currency unit, e.g. 12000 for 0.012 per minute —
 to that effect; there is no decimal entry and no floating-point maths, so the stored
 integer is always exact. Routes can be added and removed. Saving sends the whole route
 set back at once (the API replaces it wholesale), carrying the policy's version so a
-colliding change is rejected with a clear message rather than overwriting. Because the
-save replaces everything, the editor keeps every field of every existing route —
-including the options it doesn't surface yet (SIP trunk, effective-from/to dates) — and
-a "+ advanced preserved" chip marks any route that carries them, so nothing is lost by
-editing a route's basics. Carrier accessibility and trunk ownership are validated on the
-server, which stays authoritative. Saving with no routes clears the set. Verified:
-205/205 web Vitest · `next build` clean (/lcr 7.45 kB).
+colliding change is rejected with a clear message rather than overwriting. Carrier
+accessibility and trunk ownership are validated on the server, which stays
+authoritative. Saving with no routes clears the set. Verified: 205/205 web Vitest ·
+`next build` clean (/lcr 7.45 kB).
+
+LCR route SIP trunk + effective dates — EXISTING (Phase 12O-2aq, 2026-11-22): each
+route card gained the last two fields it had kept hidden. An optional SIP trunk is
+chosen from its own picker (loaded from the tenant's trunks, seeded with a route's
+current trunk and shown by id until the names load, with a "none" option), and an
+effective-from / effective-to window is set with ordinary date-and-time pickers in the
+viewer's own timezone — stored precisely as instants, and rejected if the start isn't
+before the end. With these in place the editor no longer carries anything through
+unseen, so the "advanced preserved" marker is gone. Verified: 218/218 web Vitest ·
+`next build` clean (/lcr 8.16 kB).
 
 Member management — role assignment — EXISTING (Phase 12O-2al, 2026-11-22): the
 member write surface on Admin → Members. The only member change the backend supports

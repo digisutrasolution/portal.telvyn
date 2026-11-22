@@ -10,6 +10,7 @@ import { messageFor } from "@/components/auth/auth-message";
 import type { LcrPolicy, LcrRoute, LcrRouteInput } from "@/lib/contracts";
 import { updateLcrPolicy } from "@/lib/telecom/lcr-actions";
 import { listCarriers } from "@/lib/telecom/carriers-actions";
+import { listSipTrunks } from "@/lib/telecom/sip-trunks-actions";
 
 type Currency = LcrRouteInput["currency"];
 const CURRENCIES: readonly Currency[] = ["USD", "EUR", "GBP", "INR", "AUD", "CAD", "JPY"];
@@ -19,13 +20,31 @@ const PREFIX_RE = /^\+?[0-9]{1,15}$/;
 const selectClass =
   "h-8 w-full rounded-md border border-line-strong bg-surface px-2 text-[13px] text-ink outline-none disabled:cursor-not-allowed disabled:opacity-45";
 
-type CarrierOption = { id: string; name: string };
+type Opt = { id: string; name: string };
+
+/** ISO instant → "YYYY-MM-DDTHH:MM" in the viewer's local tz (for a datetime-local input); "" when null/invalid. */
+function isoToLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+/** A datetime-local string (local tz) → an ISO-8601 instant; null when blank; NaN-guarded (returns the sentinel for invalid). */
+const INVALID_DATE = "__invalid__";
+function localInputToIso(v: string): string | null | typeof INVALID_DATE {
+  const t = v.trim();
+  if (t === "") return null;
+  const d = new Date(t);
+  return Number.isNaN(d.getTime()) ? INVALID_DATE : d.toISOString();
+}
 
 /**
- * An editable route. Numeric fields are held as strings for clean input; the
- * fields this slice does NOT edit (sipTrunk, effective-from/to) are carried through
- * verbatim from the loaded route so a save — which REPLACES the whole route set —
- * never silently drops them. `costMicros` is kept as a raw integer string (no float).
+ * An editable route. Numeric fields are held as strings for clean input; the SIP
+ * trunk is chosen from a picker and the effective-from/to window is entered with
+ * datetime-local inputs (local tz), converted to ISO instants on save. `costMicros`
+ * is kept as a raw integer string (no float). The whole set is sent on save (replace
+ * semantics), so every route carries all of its own fields.
  */
 type EditRoute = {
   _key: string;
@@ -37,10 +56,9 @@ type EditRoute = {
   priority: string;
   weight: string;
   enabled: boolean;
-  // preserved, not edited here:
-  sipTrunkId: string | null;
-  effectiveFrom: string | null;
-  effectiveTo: string | null;
+  sipTrunkId: string; // "" = none
+  effectiveFrom: string; // "" or "YYYY-MM-DDTHH:MM" (local)
+  effectiveTo: string;
 };
 
 let keySeq = 0;
@@ -57,9 +75,9 @@ function fromRoute(r: LcrRoute): EditRoute {
     priority: String(r.priority),
     weight: r.weight != null ? String(r.weight) : "",
     enabled: r.enabled,
-    sipTrunkId: r.sipTrunkId,
-    effectiveFrom: r.effectiveFrom,
-    effectiveTo: r.effectiveTo,
+    sipTrunkId: r.sipTrunkId ?? "",
+    effectiveFrom: isoToLocalInput(r.effectiveFrom),
+    effectiveTo: isoToLocalInput(r.effectiveTo),
   };
 }
 
@@ -74,9 +92,9 @@ function blankRoute(priority: number): EditRoute {
     priority: String(priority),
     weight: "",
     enabled: true,
-    sipTrunkId: null,
-    effectiveFrom: null,
-    effectiveTo: null,
+    sipTrunkId: "",
+    effectiveFrom: "",
+    effectiveTo: "",
   };
 }
 
@@ -119,25 +137,32 @@ function buildRoute(e: EditRoute, index: number): LcrRouteInput | { error: RowEr
   if (country) out.country = country;
   if (prio !== null) out.priority = prio;
   if (weight !== null) out.weight = weight;
-  // Preserve fields not edited in this slice.
   if (e.sipTrunkId) out.sipTrunkId = e.sipTrunkId;
-  if (e.effectiveFrom) out.effectiveFrom = e.effectiveFrom;
-  if (e.effectiveTo) out.effectiveTo = e.effectiveTo;
+
+  // Effective window — each side optional; when both are set, from must precede to.
+  const from = localInputToIso(e.effectiveFrom);
+  if (from === INVALID_DATE) return err("Effective-from is not a valid date/time.");
+  const to = localInputToIso(e.effectiveTo);
+  if (to === INVALID_DATE) return err("Effective-to is not a valid date/time.");
+  if (from && to && new Date(from) >= new Date(to)) return err("Effective-from must be before effective-to.");
+  if (from) out.effectiveFrom = from;
+  if (to) out.effectiveTo = to;
   return out;
 }
 
 /**
- * LCR routes editor (Phase 12O-2ak). Edits a policy's route candidates and saves
- * them via PATCH, which REPLACES the whole set — so the editor loads every current
- * route and sends them all back, and `expectedVersion` guards a concurrent change
- * (409). `costMicros` is entered as a RAW INTEGER in millionths of a currency unit
- * (no floating point, per the money rule). Each route needs a carrier (chosen from
- * the tenant's carriers — the LCR API returns ids only, so an unknown current id is
- * shown by id until the list loads), a prefix, a cost and a currency; priority,
- * weight, country and enabled are optional. The fields this slice does not expose —
- * SIP trunk and effective-from/to — are PRESERVED verbatim on existing routes (a
- * chip marks a route that carries them). The server validates carrier accessibility
- * and trunk ownership and re-checks `routing.manage`.
+ * LCR routes editor (Phase 12O-2ak; SIP trunk + effective dates made editable in
+ * 12O-2aq). Edits a policy's route candidates and saves them via PATCH, which
+ * REPLACES the whole set — so the editor loads every current route and sends them
+ * all back, and `expectedVersion` guards a concurrent change (409). `costMicros` is
+ * entered as a RAW INTEGER in millionths of a currency unit (no floating point, per
+ * the money rule). Each route needs a carrier (chosen from the tenant's carriers), a
+ * prefix, a cost and a currency; an optional SIP trunk (its own picker), priority,
+ * weight, country, an effective-from/to window (datetime-local, entered in the
+ * viewer's tz and converted to ISO instants), and enabled are optional. Both pickers
+ * seed from the routes' current ids (the LCR API returns ids only) and show by id
+ * until the lists load. The server validates carrier accessibility and trunk
+ * ownership and re-checks `routing.manage`.
  */
 export function LcrRoutesEditor({
   policy,
@@ -150,19 +175,33 @@ export function LcrRoutesEditor({
 }) {
   const [routes, setRoutes] = React.useState<EditRoute[]>(() => policy.candidates.map(fromRoute));
 
-  // Carrier picker options, loaded once and seeded with the routes' current ids
-  // (labelled by id until the real name loads, since the LCR API returns ids only).
-  const seeded = React.useMemo<CarrierOption[]>(() => {
-    const ids = new Map<string, CarrierOption>();
+  // Carrier + SIP-trunk picker options, loaded once and seeded with the routes'
+  // current ids (labelled by id until the real name loads, since the LCR API
+  // returns ids only). Each list's load failure surfaces inline but doesn't block.
+  const seededCarriers = React.useMemo<Opt[]>(() => {
+    const ids = new Map<string, Opt>();
     for (const c of policy.candidates) ids.set(c.carrierId, { id: c.carrierId, name: c.carrierId });
     return [...ids.values()];
   }, [policy.candidates]);
-  const [carriers, setCarriers] = React.useState<CarrierOption[]>(seeded);
+  const seededTrunks = React.useMemo<Opt[]>(() => {
+    const ids = new Map<string, Opt>();
+    for (const c of policy.candidates) if (c.sipTrunkId) ids.set(c.sipTrunkId, { id: c.sipTrunkId, name: c.sipTrunkId });
+    return [...ids.values()];
+  }, [policy.candidates]);
+  const [carriers, setCarriers] = React.useState<Opt[]>(seededCarriers);
   const [carriersError, setCarriersError] = React.useState<string | null>(null);
+  const [trunks, setTrunks] = React.useState<Opt[]>(seededTrunks);
+  const [trunksError, setTrunksError] = React.useState<string | null>(null);
 
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [rowError, setRowError] = React.useState<RowErr | null>(null);
+
+  function mergeById(prev: Opt[], loaded: Opt[]): Opt[] {
+    const byId = new Map(prev.map((o) => [o.id, o]));
+    for (const o of loaded) byId.set(o.id, o); // real name overrides the id-fallback seed
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
 
   React.useEffect(() => {
     const ac = new AbortController();
@@ -170,16 +209,20 @@ export function LcrRoutesEditor({
     listCarriers({ limit: 100 }, ac.signal)
       .then((page) => {
         if (!active) return;
-        const loaded = page.items.map((c) => ({ id: c.id, name: c.name }));
-        setCarriers((prev) => {
-          const byId = new Map(prev.map((o) => [o.id, o]));
-          for (const o of loaded) byId.set(o.id, o); // real name overrides the id-fallback seed
-          return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
-        });
+        setCarriers((prev) => mergeById(prev, page.items.map((c) => ({ id: c.id, name: c.name }))));
       })
       .catch((err: unknown) => {
         if (!active || ac.signal.aborted) return;
         setCarriersError(messageFor(err));
+      });
+    listSipTrunks({ limit: 100 }, ac.signal)
+      .then((page) => {
+        if (!active) return;
+        setTrunks((prev) => mergeById(prev, page.items.map((t) => ({ id: t.id, name: t.name }))));
+      })
+      .catch((err: unknown) => {
+        if (!active || ac.signal.aborted) return;
+        setTrunksError(messageFor(err));
       });
     return () => {
       active = false;
@@ -225,21 +268,23 @@ export function LcrRoutesEditor({
     }
   }
 
-  const hasPreserved = (r: EditRoute) => Boolean(r.sipTrunkId || r.effectiveFrom || r.effectiveTo);
-
   return (
     <Dialog open onOpenChange={(open) => !open && !pending && onClose()}>
       <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
         <DialogTitle>Edit routes — {policy.name}</DialogTitle>
         <DialogDescription className="text-[13px] text-ink-2">
           Declarative route selection only; nothing is dialled or rated. Cost is entered in micros (millionths
-          of a currency unit) — e.g. 12000 = 0.012 per minute. SIP trunk and effective dates are preserved but
-          not edited here.
+          of a currency unit) — e.g. 12000 = 0.012 per minute. Effective dates are entered in your local time.
         </DialogDescription>
 
         {carriersError && (
           <p role="alert" className="mt-3 rounded-md border border-danger bg-danger-soft px-3 py-2 text-[12px] text-danger">
             Couldn&apos;t load carriers: {carriersError}
+          </p>
+        )}
+        {trunksError && (
+          <p role="alert" className="mt-3 rounded-md border border-danger bg-danger-soft px-3 py-2 text-[12px] text-danger">
+            Couldn&apos;t load SIP trunks: {trunksError}
           </p>
         )}
 
@@ -254,16 +299,9 @@ export function LcrRoutesEditor({
                 <li key={r._key} className="rounded-lg border border-line bg-canvas p-3">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <span className="text-[12px] font-semibold text-muted">Route {i + 1}</span>
-                    <div className="flex items-center gap-2">
-                      {hasPreserved(r) && (
-                        <span className="rounded bg-surface px-1.5 py-0.5 text-[11px] text-muted" title="This route has a SIP trunk and/or effective dates preserved but not editable here">
-                          + advanced preserved
-                        </span>
-                      )}
-                      <button type="button" onClick={() => removeRoute(r._key)} className="text-muted hover:text-danger" aria-label={`Remove route ${i + 1}`}>
-                        <Trash2 aria-hidden className="size-4" />
-                      </button>
-                    </div>
+                    <button type="button" onClick={() => removeRoute(r._key)} className="text-muted hover:text-danger" aria-label={`Remove route ${i + 1}`}>
+                      <Trash2 aria-hidden className="size-4" />
+                    </button>
                   </div>
 
                   <Field id={`${r._key}-carrier`} label="Carrier">
@@ -305,6 +343,24 @@ export function LcrRoutesEditor({
                     </Field>
                     <Field id={`${r._key}-country`} label="Country" hint="ISO-2, optional">
                       <Input id={`${r._key}-country`} value={r.country} maxLength={2} onChange={(ev) => patchRoute(r._key, { country: ev.target.value.toUpperCase() })} className="uppercase" />
+                    </Field>
+                  </div>
+
+                  <Field id={`${r._key}-trunk`} label="SIP trunk" hint="Optional." className="mt-2">
+                    <select id={`${r._key}-trunk`} className={selectClass} value={r.sipTrunkId} onChange={(ev) => patchRoute(r._key, { sipTrunkId: ev.target.value })}>
+                      <option value="">— none</option>
+                      {trunks.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  <div className="mt-2 grid grid-cols-2 gap-3">
+                    <Field id={`${r._key}-eff-from`} label="Effective from" hint="Optional.">
+                      <Input id={`${r._key}-eff-from`} type="datetime-local" value={r.effectiveFrom} onChange={(ev) => patchRoute(r._key, { effectiveFrom: ev.target.value })} />
+                    </Field>
+                    <Field id={`${r._key}-eff-to`} label="Effective to" hint="Optional.">
+                      <Input id={`${r._key}-eff-to`} type="datetime-local" value={r.effectiveTo} onChange={(ev) => patchRoute(r._key, { effectiveTo: ev.target.value })} />
                     </Field>
                   </div>
 

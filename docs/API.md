@@ -354,9 +354,13 @@ as a raw non-negative integer in millionths of a currency unit — no floating p
 Each route needs a carrier (chosen from the tenant's carriers via a picker — the LCR
 API returns ids only, so an unknown current id shows by id until the list loads), a
 prefix, a cost and a currency; priority, weight, country and enabled are optional.
-Per-route options not editable in this slice — SIP trunk and `effectiveFrom`/`To` —
-are preserved verbatim on existing routes so a replace never drops them (a chip marks
-a route that carries them); they remain fully manageable via the API.
+**Phase 12O-2aq** made the remaining per-route options editable in the same editor: an
+optional SIP trunk (its own picker, seeded like the carrier one) and the
+`effectiveFrom`/`effectiveTo` window (entered with datetime-local inputs in the viewer's
+timezone and converted to ISO instants on save; when both are set, from must precede
+to). Every route now carries all of its own fields — there is nothing left preserved-
+but-read-only. The server still validates carrier accessibility + trunk ownership and
+the from/to ordering.
 
 OpenAPI YAML still `/v1/auth` only (tracked debt) for the surfaces not yet closed.
 

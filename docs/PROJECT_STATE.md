@@ -506,9 +506,21 @@ UI. GOTCHA: failover labels "Failover type"/"Failover destination" (distinct fro
 +2 tests (add-failover+schedule asserts exact failover* + schedule{tz,daysOfWeek:[1],startMinute:540,endMinute:1020}
 / failover-type-without-dest blocks; existing round-trip test still green) → web **217** (34 files); isolated
 `next build` REAL_EXIT=0 FIRST try (/routing 8.03→9.2 kB); eslint 0. 2 files (editor+test), NO apps/api, NO contracts.
-Next (await owner go): the remaining deferred slices (LCR per-route trunk/effective-date editing; friendlier LCR
-decimal cost); or land the stack (owner provides GitHub remote → push `integration/phase-12o-complete`
-fast-forwarded to the feature tip → CI → PR). Backend read gaps (HealthEvent/config-version history) stay
+**12O-2aq (DONE)** — LCR per-route SIP TRUNK + EFFECTIVE-DATE editing (FRONTEND ONLY — no contract/backend
+change; makes the 2ak preserved fields editable). `<lcr-routes-editor.tsx>` per route: 2nd picker SIP trunk
+(loaded once from `listSipTrunks`, seeded by route trunk ids, "— none" option — same pattern as carrier picker)
++ 2 `<input type=datetime-local>` effectiveFrom/To. **Times local-tz↔ISO instants: `localInputToIso` = new
+Date(local).toISOString(), `isoToLocalInput` hydrates back (minute precision, NO float).** Validation: both
+effective sides optional, both-set → from<to (server enforces too). **"+ advanced preserved" chip REMOVED —
+every per-route field now editable, nothing carried-through-unseen.** Replace-semantics + expectedVersion +
+costMicros raw-int unchanged. LcrRouteInput already had sipTrunkId/effectiveFrom/To (2aj) → pure UI. GOTCHA
+avoided: test mocks `sip-trunks-actions.listSipTrunks` (editor now loads it). +1 test (edit-route-set-trunk+window
+asserts sipTrunkId + local→ISO via tz-robust `new Date(local).toISOString()`; round-trip test still green) → web
+**218** (34 files); isolated `next build` REAL_EXIT=0 FIRST try (/lcr 7.45→8.16 kB); eslint 0. 2 files
+(editor+test), NO apps/api, NO contracts.
+Next (await owner go): the remaining deferred slice (friendlier LCR decimal cost entry); or land the stack
+(owner provides GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip → CI →
+PR). Backend read gaps (HealthEvent/config-version history) stay
 separately approval-gated.
 
 ### (superseded) sub-phase plan

@@ -1055,3 +1055,21 @@ Format: Keep a Changelog; SemVer once releases begin.
   "Failover type" / "Failover destination" to stay distinct from the rule's own destination fields. `next build`
   ✓ (/routing 8.03 → 9.2 kB); eslint ✓. **No backend change.** `API.md` updated. Remaining deferred slices: LCR
   per-route trunk/effective-date editing, friendlier LCR decimal cost — or land the stack.
+- 2026-11-22 — **Phase 12O-2aq — LCR per-route SIP trunk + effective-date editing (frontend only, no
+  contract/backend change).** Makes the two per-route options the 12O-2ak routes editor had kept
+  preserved-but-read-only editable: an optional **SIP trunk** and the **effective-from/to** window.
+  `<LcrRoutesEditor>` gains a second picker (SIP trunk, loaded once from `listSipTrunks`, seeded with the
+  routes' current trunk ids and labelled by id until the names load — same pattern as the carrier picker, with
+  a "— none" option) and two `<input type="datetime-local">` fields per route. Times are entered in the
+  viewer's local timezone and converted to ISO-8601 instants on save (`localInputToIso` = `new Date(local)
+  .toISOString()`), and existing routes are hydrated back to local with `isoToLocalInput` (minute precision,
+  no float). Validation: both effective sides optional, but when both are set `from` must precede `to` (the
+  server enforces the same). Because every per-route field is now editable, the "+ advanced preserved" chip is
+  gone — nothing is carried through unseen. The whole route set is still sent on save (replace semantics) with
+  `expectedVersion`; `costMicros` stays raw integer micros. No contract change — `LcrRouteInput` already had
+  `sipTrunkId` / `effectiveFrom` / `effectiveTo` (authored 12O-2aj); pure UI. +1 web unit test (217 → 218; full
+  web suite 218 ✓, 34 files — edit-a-route-to-set-trunk-and-effective-window asserting the chosen `sipTrunkId`
+  and that the local datetimes become the matching ISO instants; the existing round-trip test still green with
+  trunk/date now loaded into the editable fields). `next build` ✓ (/lcr 7.45 → 8.16 kB); eslint ✓. **No backend
+  change.** `API.md` updated. **The LCR routes editor is now fully editable (no preserved fields).** Remaining
+  deferred slice: friendlier LCR decimal cost entry — or land the stack.
