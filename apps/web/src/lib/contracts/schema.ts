@@ -510,6 +510,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telecom/engines/{id}/config-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Engine config-version history (platform)
+         * @description The append-only history of this engine's desired/applied configuration versions (recorded by sync / rollback). Newest first, cursor-paginated. Each entry carries the change type, the version snapshot's kind and short fingerprint, a resource-count summary, the prior version's short fingerprint, and the actor + correlation id. Snapshots are secret-free (no credentials). A foreign/unknown engine id is 404. Requires PLATFORM + `telecom.health.read`.
+         */
+        get: operations["listEngineConfigVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/telecom/engines/{id}/sync": {
         parameters: {
             query?: never;
@@ -1120,6 +1140,39 @@ export interface components {
         };
         HealthEventPage: {
             items: components["schemas"]["HealthEvent"][];
+            /**
+             * Format: uuid
+             * @description Pass as `cursor` to fetch the next (older) page; null when exhausted.
+             */
+            nextCursor: string | null;
+        };
+        /** @description One append-only engine config-version record (secret-free snapshot metadata). */
+        ConfigVersion: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            changeType: "CREATE" | "UPDATE" | "DELETE" | "STATUS_CHANGE";
+            /**
+             * @description The version snapshot's kind.
+             * @enum {string|null}
+             */
+            kind: "desired" | "applied" | "reconcile_pending" | null;
+            /** @description Short fingerprint of this version. */
+            version: string | null;
+            /** @description Short fingerprint of the prior version, if any. */
+            previousVersion: string | null;
+            /** @description Resource-count summary for this version (e.g. carriers / trunks / dids / routes). */
+            summary: {
+                [key: string]: number;
+            } | null;
+            /** Format: uuid */
+            actorId: string | null;
+            correlationId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ConfigVersionPage: {
+            items: components["schemas"]["ConfigVersion"][];
             /**
              * Format: uuid
              * @description Pass as `cursor` to fetch the next (older) page; null when exhausted.
@@ -2374,6 +2427,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthEventPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listEngineConfigVersions: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Config versions (newest first) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigVersionPage"];
                 };
             };
             401: components["responses"]["Problem"];

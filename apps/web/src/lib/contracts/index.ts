@@ -68,6 +68,12 @@ export type HealthEvent = Schemas["HealthEvent"];
 /** Cursor-paginated page of engine health events. */
 export type HealthEventPage = Schemas["HealthEventPage"];
 
+/** One engine config-version record (secret-free snapshot metadata; GET /v1/telecom/engines/{id}/config-versions). */
+export type ConfigVersion = Schemas["ConfigVersion"];
+
+/** Cursor-paginated page of engine config versions. */
+export type ConfigVersionPage = Schemas["ConfigVersionPage"];
+
 /** Outcome of an engine config sync / rollback attempt. */
 export type SyncOutcome = Schemas["SyncOutcome"];
 

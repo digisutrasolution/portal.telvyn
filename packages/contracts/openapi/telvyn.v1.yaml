@@ -503,6 +503,32 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /v1/telecom/engines/{id}/config-versions:
+    get:
+      tags: [telecom]
+      summary: Engine config-version history (platform)
+      description: >-
+        The append-only history of this engine's desired/applied configuration
+        versions (recorded by sync / rollback). Newest first, cursor-paginated.
+        Each entry carries the change type, the version snapshot's kind and short
+        fingerprint, a resource-count summary, the prior version's short
+        fingerprint, and the actor + correlation id. Snapshots are secret-free (no
+        credentials). A foreign/unknown engine id is 404. Requires PLATFORM +
+        `telecom.health.read`.
+      operationId: listEngineConfigVersions
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: cursor, in: query, required: false, schema: { type: string, format: uuid }, description: "nextCursor from a prior page." }
+      responses:
+        "200":
+          description: Config versions (newest first)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigVersionPage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /v1/telecom/engines/{id}/sync:
     post:
       tags: [telecom]
@@ -1455,6 +1481,32 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/HealthEvent" }
+        nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next (older) page; null when exhausted." }
+    ConfigVersion:
+      type: object
+      required: [id, changeType, kind, version, previousVersion, summary, actorId, correlationId, createdAt]
+      description: One append-only engine config-version record (secret-free snapshot metadata).
+      properties:
+        id: { type: string, format: uuid }
+        changeType: { type: string, enum: [CREATE, UPDATE, DELETE, STATUS_CHANGE] }
+        kind: { type: string, enum: [desired, applied, reconcile_pending], nullable: true, description: "The version snapshot's kind." }
+        version: { type: string, nullable: true, description: "Short fingerprint of this version." }
+        previousVersion: { type: string, nullable: true, description: "Short fingerprint of the prior version, if any." }
+        summary:
+          type: object
+          nullable: true
+          additionalProperties: { type: integer }
+          description: "Resource-count summary for this version (e.g. carriers / trunks / dids / routes)."
+        actorId: { type: string, format: uuid, nullable: true }
+        correlationId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    ConfigVersionPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ConfigVersion" }
         nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next (older) page; null when exhausted." }
     SyncOutcome:
       type: object

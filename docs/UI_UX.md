@@ -771,3 +771,14 @@ never holds up the rest of the page, and a health-check that doesn't change the 
 adds no entry (the history only records real transitions). Read-only; the page is
 already platform + health-read gated. Verified: 224/224 web Vitest · `next build` clean
 (/infrastructure/[id] 4.36 kB).
+
+Engine config-version history — EXISTING (Phase 12O-2at, 2026-11-23): below the health
+history, a second timeline shows the engine's configuration versions as they were
+recorded by sync and rollback, newest first. Each entry shows what kind of change it
+was (create / update / delete / status change) and whether that version was the
+desired or the applied one, the short fingerprint it moved from and to, and a small
+count of the resources it covered (carriers, trunks, numbers, routes). It never shows
+the raw configuration — only the fingerprint and counts, which carry no secrets. Like
+the health history it loads on its own with its own Load-more and never holds up the
+rest of the page. Verified: 228/228 web Vitest · `next build` clean
+(/infrastructure/[id] 4.71 kB).

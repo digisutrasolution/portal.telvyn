@@ -1112,3 +1112,28 @@ Format: Keep a Changelog; SemVer once releases begin.
   eslint ✓, full web suite 224 ✓ (34 files). e2e (platform gating, 404, real ordering) is CI-only. Docs
   updated (API.md, CHANGELOG.md, PROJECT_STATE.md, UI_UX.md). Next read-gap candidate: engine config-version
   history (`TelecomConfigVersion`), or node/carrier health history (same pattern); or land the stack.
+- 2026-11-23 — **Phase 12O-2at — engine config-version history (read; second backend read-gap slice).** The
+  richer read gap, mirroring 2as. `GET /v1/telecom/engines/:id/config-versions` (platform +
+  `telecom.health.read`, consistent with `status` which already exposes version posture) returns the
+  append-only history of the engine's desired/applied configuration versions, newest first, cursor-paginated.
+  **No schema change** — `TelecomConfigVersion` already existed (written by `EngineSyncService.record` on sync /
+  rollback, secret-free snapshots); this adds the read path (`EngineSyncService.history`, shared
+  `cursorArgs`/`toPage` over the uuidv7 id) + the controller endpoint (`engines.get(id)` → 404 then
+  `syncSvc.history`), authored into the contract as `ConfigVersion` / `ConfigVersionPage`. The view is a **safe
+  projection** of the snapshot — `{id, changeType, kind, version (short fingerprint), previousVersion (short
+  fingerprint), summary (resource counts), actorId, correlationId, createdAt}` — exposing only the fingerprint +
+  counts, never the raw config body or any credential, and never the row's `entityType`/`entityId`/`tenantId`.
+  Frontend: a new `listEngineConfigVersions` action and a self-contained `<EngineConfigHistory>` "Config version
+  history" timeline section on the engine detail page, below the health history — its own load / error / Load
+  more; each entry shows the change type + kind badges, `previous → version` short fingerprints, and the
+  resource-count summary. Contract regenerated (additive); `ConfigVersion`/`ConfigVersionPage` aliases added.
+  **Tests:** +3 API unit (195 → 198; `engine-sync.history.test.ts` — scoped query with newest-first cursor
+  args, the safe view with `previousVersion` via `shortFingerprint` + summary passthrough + no entity/raw-config
+  leak, null-previousConfig tolerated, nextCursor + cursor-passthrough) and +4 web unit (224 → 228;
+  `engine-config-history.test.tsx` — newest-first render with change/kind/prev→version/summary, empty state,
+  load-more-appends, RFC 7807 error; the engine-detail-view test now defaults the config-history mock to empty).
+  API `tsc` ✓, API eslint ✓, API unit 198 ✓ (22 files); web `next build` ✓ (/infrastructure/[id] 4.36 → 4.71
+  kB), web eslint ✓, full web suite 228 ✓ (34 files). e2e (platform gating, 404, ordering) is CI-only. Docs
+  updated (API.md, CHANGELOG.md, PROJECT_STATE.md, UI_UX.md). The engine detail page now carries both read-gap
+  histories (health + config-version). Next read-gap candidate: node/carrier health history (same pattern); or
+  land the stack.

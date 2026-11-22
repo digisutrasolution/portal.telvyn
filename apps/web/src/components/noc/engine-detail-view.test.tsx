@@ -3,10 +3,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import type { Engine, EngineStatus } from "@/lib/contracts";
 import { ApiError } from "@/lib/api/problem";
 
-vi.mock("@/lib/telecom/telecom-actions", () => ({ getEngine: vi.fn(), getEngineStatus: vi.fn(), listEngineHealthEvents: vi.fn() }));
+vi.mock("@/lib/telecom/telecom-actions", () => ({ getEngine: vi.fn(), getEngineStatus: vi.fn(), listEngineHealthEvents: vi.fn(), listEngineConfigVersions: vi.fn() }));
 vi.mock("next/link", () => ({ default: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }));
 
-import { getEngine, getEngineStatus, listEngineHealthEvents } from "@/lib/telecom/telecom-actions";
+import { getEngine, getEngineStatus, listEngineHealthEvents, listEngineConfigVersions } from "@/lib/telecom/telecom-actions";
 import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { EngineDetailView } from "./engine-detail-view";
 
@@ -67,10 +67,12 @@ function status(): EngineStatus {
 
 afterEach(() => vi.clearAllMocks());
 
-// The embedded health-history section loads independently; default it to empty so
-// these read-detail tests stay focused (its own behavior lives in its own test).
+// The embedded health-history + config-history sections load independently; default
+// them to empty so these read-detail tests stay focused (their own behavior lives in
+// their own test files).
 beforeEach(() => {
   vi.mocked(listEngineHealthEvents).mockResolvedValue({ items: [], nextCursor: null });
+  vi.mocked(listEngineConfigVersions).mockResolvedValue({ items: [], nextCursor: null });
 });
 
 describe("EngineDetailView", () => {

@@ -11,6 +11,7 @@ import { getEngine, getEngineStatus } from "@/lib/telecom/telecom-actions";
 import { useResource } from "@/lib/use-resource";
 import { EngineActions } from "./engine-actions";
 import { EngineHealthHistory } from "./engine-health-history";
+import { EngineConfigHistory } from "./engine-config-history";
 
 type Tone = "ok" | "info" | "warn" | "danger" | "frozen" | "neutral";
 
@@ -144,6 +145,7 @@ export function EngineDetailView({ engineId }: { engineId: string }) {
           <EngineActions engineId={engineId} engineName={engine.data.name} onChanged={() => { engine.reload(); status.reload(); }} />
 
           <EngineHealthHistory engineId={engineId} />
+          <EngineConfigHistory engineId={engineId} />
         </>
       ) : null}
     </section>

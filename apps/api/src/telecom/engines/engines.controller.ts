@@ -107,6 +107,14 @@ export class EnginesController {
     return this.health.history(id, query);
   }
 
+  /** Append-only config-version history for the engine (newest first, cursor-paginated). Read-only; secret-free snapshots. */
+  @Get(":id/config-versions")
+  @RequirePermissions("telecom.health.read")
+  async configVersions(@Param("id", ParseUUIDPipe) id: string, @Query(new ZodPipe(PaginationQuery)) query: PaginationInput) {
+    await this.engines.get(id); // 404 if not found; platform-scoped
+    return this.syncSvc.history(id, query);
+  }
+
   /**
    * Attempt versioned, idempotent, concurrency-guarded synchronization of
    * control-plane config to the engine. With stub adapters this returns a

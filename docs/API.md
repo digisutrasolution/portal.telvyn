@@ -55,6 +55,7 @@ the existing `AuditService`. None of these resources hold secrets.
 | `GET /v1/telecom/engines/:id/status` | `telecom.health.read` |
 | `POST /v1/telecom/engines/:id/health-check` | `telecom.health.read` |
 | `GET /v1/telecom/engines/:id/health-events` (health history; cursor pagination) | `telecom.health.read` |
+| `GET /v1/telecom/engines/:id/config-versions` (config-version history; cursor pagination) | `telecom.health.read` |
 | `POST /v1/telecom/engines/:id/sync` | `telecom.manage` |
 | `POST /v1/telecom/engines/:id/sync/rollback` | `telecom.manage` |
 | `GET /v1/telecom/engines/:engineId/assignments` | `telecom.read` |
@@ -119,6 +120,20 @@ and never echoes `entityType`/`entityId`/`tenantId`. An unknown engine id is **4
 No schema change — the `HealthEvent` model existed; this adds the read endpoint
 (`EngineHealthService.history`) and authors `HealthEvent`/`HealthEventPage` into the
 contract. The NOC engine detail page renders it as a "Health history" timeline.
+
+**Engine config-version history (Phase 12O-2at).** `GET :id/config-versions`
+(`telecom.health.read`, platform — consistent with `status`, which already exposes
+desired/applied version posture) returns the append-only history of the engine's
+desired/applied configuration versions (recorded by `sync` / `rollback` into
+`TelecomConfigVersion`). Newest first, cursor-paginated (`ConfigVersionPage`). Each
+`ConfigVersion` is a safe view of the secret-free snapshot — `{id, changeType
+(CREATE/UPDATE/DELETE/STATUS_CHANGE), kind (desired/applied/reconcile_pending|null),
+version (short fingerprint|null), previousVersion (short fingerprint|null), summary
+(resource counts|null), actorId, correlationId, createdAt}` — it exposes only the
+fingerprint + counts, never the raw config body. No schema change — the model
+existed; this adds the read endpoint (`EngineSyncService.history`) and authors
+`ConfigVersion`/`ConfigVersionPage`. The NOC engine detail page renders it as a
+"Config version history" timeline below the health history.
 
 **Desired config from assignments (Phase 12N-3).** `GET :id/status` now also returns
 `desired` — a live, read-only preview of the engine's desired configuration built

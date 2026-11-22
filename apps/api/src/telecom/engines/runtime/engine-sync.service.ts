@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import { ConfigChangeType, type TelecomEngineType, type TelecomStatus } from "@prisma/client";
 import { PrismaService } from "@/infra/prisma.service";
+import { cursorArgs, toPage } from "@/common/pagination";
 import { EngineService } from "../engine.service";
 import { EngineErrorCode } from "../engine.types";
 import { EngineLockService } from "./engine-lock.service";
@@ -229,6 +230,39 @@ export class EngineSyncService {
       appliedVersion: applied ? shortFingerprint(applied) : null,
       syncState,
       versions: history.filter((h) => h.kind === "desired").length,
+    };
+  }
+
+  /**
+   * The engine's append-only config-version history, newest first, cursor-paginated.
+   * A safe view over TelecomConfigVersion (entityType=engine): change type, the
+   * version snapshot's kind + short fingerprint + resource-count summary, the prior
+   * version's short fingerprint, actor + correlation — all already secret-free (the
+   * snapshots never hold credentials). Reuses the uuidv7-id cursor helper.
+   */
+  async history(engineId: string, page: { limit: number; cursor?: string }) {
+    const rows = await this.prisma.telecomConfigVersion.findMany({
+      where: { entityType: "engine", entityId: engineId },
+      ...cursorArgs(page.limit, page.cursor),
+    });
+    const { items, nextCursor } = toPage(rows, page.limit);
+    return {
+      items: items.map((r) => {
+        const snap = (r.newConfig ?? null) as Partial<VersionSnapshot> | null;
+        const prev = (r.previousConfig ?? null) as { fingerprint?: unknown } | null;
+        return {
+          id: r.id,
+          changeType: r.changeType,
+          kind: snap && typeof snap.kind === "string" ? snap.kind : null,
+          version: snap && typeof snap.short === "string" ? snap.short : null,
+          previousVersion: prev && typeof prev.fingerprint === "string" ? shortFingerprint(prev.fingerprint) : null,
+          summary: snap && snap.summary && typeof snap.summary === "object" ? (snap.summary as Record<string, number>) : null,
+          actorId: r.actorId,
+          correlationId: r.correlationId,
+          createdAt: r.createdAt,
+        };
+      }),
+      nextCursor,
     };
   }
 

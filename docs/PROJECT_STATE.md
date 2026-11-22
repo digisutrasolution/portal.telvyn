@@ -540,10 +540,25 @@ from→to+reason+time. +3 API unit (192→195, engine-health.service.test — sc
 + cursor-passthrough) + 4 web (220→224, engine-health-history.test). API tsc✓ eslint✓ unit 195✓ (21 files); web
 build✓ (/infrastructure/[id] 3.23→4.36 kB) eslint✓ suite 224✓. e2e (platform gating/404/ordering) CI-only. 11 files
 (2 api + 1 api-test + contract/schema + 4 web + ...). Docs updated.
-Next (await owner go): more backend read-gaps (engine config-version history `TelecomConfigVersion`; node/carrier
-health history — same pattern); or LAND THE STACK (owner provides GitHub remote → push `integration/phase-12o-complete`
-fast-forwarded to the feature tip → CI → PR). **NOTE: 2as is a BACKEND change — the integration branch / PR now
-spans frontend + a backend read endpoint; refresh the PR draft accordingly.**
+**12O-2at (DONE)** — engine CONFIG-VERSION HISTORY (read; SECOND BACKEND read-gap slice, mirrors 2as). `GET
+/v1/telecom/engines/:id/config-versions` (platform + `telecom.health.read`, consistent w/ status version posture,
+cursor-paginated newest-first). **NO schema change** — TelecomConfigVersion existed (written by
+`EngineSyncService.record` on sync/rollback; entityType="engine"; newConfig=VersionSnapshot{kind,fingerprint,
+short,summary}, previousConfig={fingerprint}). Added READ: `EngineSyncService.history` (shared cursorArgs/toPage
+uuidv7 id) + controller endpoint (engines.get→404 then syncSvc.history). Contract: `ConfigVersion`/`ConfigVersionPage`.
+**SAFE PROJECTION: {id, changeType(CREATE/UPDATE/DELETE/STATUS_CHANGE), kind(desired/applied/reconcile_pending|null),
+version(=snapshot.short), previousVersion(=shortFingerprint(prev.fingerprint)|null), summary(counts|null), actorId,
+correlationId, createdAt} — only fingerprint+counts, NEVER raw config body or entityType/entityId/tenantId.**
+Frontend: `listEngineConfigVersions` + `<EngineConfigHistory>` timeline on engine detail below health history
+(change/kind badges, prev→version short fps, summary counts). +3 API unit (195→198, engine-sync.history.test) + 4
+web (224→228, engine-config-history.test). API tsc✓ eslint✓ unit 198✓ (22 files); web build✓ (/infrastructure/[id]
+4.36→4.71 kB) eslint✓ suite 228✓ (34 files). e2e CI-only. 12 files + 3 new, NO prisma change. (46th commit; feature
+tip now <2at>; integration branch @5fcd64e now 27 behind.) **Engine detail now carries BOTH read-gap histories
+(health + config-version).**
+Next (await owner go): node/carrier health history (same HealthEvent pattern — model already supports NODE/CARRIER);
+or LAND THE STACK (owner provides GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature
+tip → CI → PR). **NOTE: the stack now spans frontend + TWO backend read endpoints (2as health-events, 2at
+config-versions); refresh the PR draft accordingly.**
 
 ### (superseded) sub-phase plan
 
