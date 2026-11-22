@@ -578,12 +578,23 @@ concurrent calls, and codec checkboxes. Validation is client-side with per-field
 error messages, but the server re-validates and re-checks permission on every call —
 the UI gating is convenience only. Delete is a soft delete behind a confirm dialog
 that names the carrier and explains trunks/numbers referencing it are untouched.
-Every successful mutation reloads the list. Two optional, API-supported inputs are
-deliberately deferred to a later slice: region selection (no region picker exists yet)
-and credential attachment (entering or linking a vault secret) — editing a carrier
-here never changes them. In edit mode, clearing an optional numeric field leaves it
-unchanged (the API has no "unset" for those). Verified: 186/186 web Vitest · `next
-build` clean (/carriers 5.69 kB).
+Every successful mutation reloads the list. In edit mode, clearing an optional numeric
+field leaves it unchanged (the API has no "unset" for those). Verified: 186/186 web
+Vitest · `next build` clean (/carriers 5.69 kB).
+
+Carrier credential — EXISTING (Phase 12O-2am, 2026-11-22): the carrier form gained an
+optional Credential section that creates and attaches a credential inline. It asks for
+a credential type (SIP password, Carrier API, Engine API), a label, an optional
+non-secret hint, and the secret itself. The secret is a write-only password field — it
+is never pre-filled and the stored secret can never be read back; it goes straight to
+the vault and the carrier only ever shows a non-secret reference (its label and type).
+On create the section offers "Attach a credential"; on edit it shows the current
+credential as a reference with a "Replace credential" toggle, and leaving it alone keeps
+the existing credential untouched. Once a credential is being entered, type + label +
+secret are all required together. Two related actions are intentionally absent: linking
+an *existing* credential (there is no catalogue of credentials to choose from) and
+detaching one (the API offers no way to clear it); region selection also remains
+deferred. Verified: 210/210 web Vitest · `next build` clean (/carriers 6.7 kB).
 
 SIP trunk management — create / edit / delete — EXISTING (Phase 12O-2af, 2026-11-22):
 the 12O-2ae carrier write pattern rolled to SIP trunks. The SIP trunks screen gains a

@@ -11,7 +11,7 @@ vi.mock("@/lib/telecom/carriers-actions", () => ({
   deleteCarrier: vi.fn(),
 }));
 
-import { createCarrier, deleteCarrier, getCarrier, listCarriers } from "@/lib/telecom/carriers-actions";
+import { createCarrier, deleteCarrier, getCarrier, listCarriers, updateCarrier } from "@/lib/telecom/carriers-actions";
 import { SessionProvider, type SessionLoader } from "@/lib/session/session-context";
 import { CarriersView } from "./carriers-view";
 
@@ -179,5 +179,69 @@ describe("CarriersView", () => {
     fireEvent.click(confirm);
 
     await waitFor(() => expect(deleteCarrier).toHaveBeenCalledWith(row.id));
+  });
+
+  it("creates a carrier with an inline credential (write-only secret)", async () => {
+    vi.mocked(listCarriers).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(createCarrier).mockResolvedValue(carrier({ name: "Vault Co" }));
+    renderView();
+    await screen.findByText(/No carriers are configured yet/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "New carrier" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Vault Co" } });
+    fireEvent.click(screen.getByRole("button", { name: "Attach a credential" }));
+    fireEvent.change(await screen.findByLabelText("Credential type"), { target: { value: "CARRIER_API" } });
+    fireEvent.change(screen.getByLabelText("Credential label"), { target: { value: "Acme API key" } });
+    const secret = screen.getByLabelText("Secret");
+    expect(secret).toHaveAttribute("type", "password"); // write-only field
+    fireEvent.change(secret, { target: { value: "s3cr3t-value" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create carrier" }));
+
+    await waitFor(() =>
+      expect(createCarrier).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Vault Co",
+          credential: { type: "CARRIER_API", label: "Acme API key", secret: "s3cr3t-value" },
+        }),
+      ),
+    );
+  });
+
+  it("requires the secret once a credential is being attached", async () => {
+    vi.mocked(listCarriers).mockResolvedValue({ items: [], nextCursor: null });
+    renderView();
+    await screen.findByText(/No carriers are configured yet/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "New carrier" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Vault Co" } });
+    fireEvent.click(screen.getByRole("button", { name: "Attach a credential" }));
+    fireEvent.change(await screen.findByLabelText("Credential type"), { target: { value: "CARRIER_API" } });
+    fireEvent.change(screen.getByLabelText("Credential label"), { target: { value: "Acme API key" } });
+    // Secret left blank → submit must be blocked and createCarrier never called.
+    fireEvent.click(screen.getByRole("button", { name: "Create carrier" }));
+
+    expect(await screen.findByText("The secret is required.")).toBeInTheDocument();
+    expect(createCarrier).not.toHaveBeenCalled();
+  });
+
+  it("edits a carrier without touching its credential (credential omitted from the body)", async () => {
+    const row = carrier({ name: "Acme SIP", credential: { id: crypto.randomUUID(), type: "CARRIER_API", label: "Live key", hint: null, scope: "TENANT" } });
+    vi.mocked(listCarriers).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(getCarrier).mockResolvedValue(row);
+    vi.mocked(updateCarrier).mockResolvedValue(row);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Acme SIP" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    // The current credential is shown as a reference; we don't touch it.
+    expect(await screen.findByText(/Live key/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme Telecom" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(updateCarrier).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(updateCarrier).mock.calls[0][1];
+    expect(body).toEqual(expect.objectContaining({ name: "Acme Telecom" }));
+    expect(body).not.toHaveProperty("credential"); // unchanged → not sent
+    expect(body).not.toHaveProperty("credentialId");
   });
 });

@@ -982,3 +982,24 @@ Format: Keep a Changelog; SemVer once releases begin.
   member roles. Next: the deferred enhancement slices (carrier/trunk credential, DID region, routing-rule
   failover/schedule editing, LCR per-route trunk/effective-date editing, friendlier LCR decimal cost), or land
   the stack.
+- 2026-11-22 — **Phase 12O-2am — carrier inline credential (frontend only, no contract/backend change).** Fills
+  the credential half of the carrier write slice that 12O-2ae deferred. `<CarrierForm>` gains an optional
+  Credential fieldset that creates and attaches a credential inline — `credential` = `{type (SIP_PASSWORD /
+  CARRIER_API / ENGINE_API), label, hint?, secret}`. **Secret handling:** the secret is a write-only field
+  (`type="password"`, `autoComplete="off"`, never pre-filled) that goes straight to the vault; the carrier only
+  ever carries back a non-secret reference (the detail drawer already shows `{label, type}`). All-or-nothing
+  when engaged — type + label + secret are required together (per-field errors), hint optional; when not
+  engaged the body omits `credential` entirely, so an edit that doesn't touch it leaves the carrier's credential
+  unchanged. On edit the current credential shows as a reference with a "Replace credential" toggle (engaging it
+  replaces); on create it's "Attach a credential". **Deliberately NOT offered:** attaching an existing
+  credential by `credentialId` — there is NO credentials-list endpoint to pick from, so a picker would be
+  dishonest (the field stays available on the API); detaching a credential — the API has no null for it; and
+  `regionId` (no region picker). No contract change — `InlineCredentialInput` + `credential` were authored in
+  12O-2ae; no new action (`createCarrier`/`updateCarrier` already carry it); pure UI. +3 web unit tests (207 →
+  210; full web suite 210 ✓, 34 files — create-with-inline-credential asserting the exact `{type,label,secret}`
+  body + that the Secret input is `type=password`, secret-required-once-engaged blocks submit, edit-without-
+  touching-credential omits `credential`/`credentialId`). The credential field labels are "Credential type" /
+  "Credential label" to stay distinct from the carrier's own Type field. `next build` ✓ (/carriers 5.69 → 6.7
+  kB); eslint ✓. **No backend change.** `API.md` updated. Next: the remaining deferred slices (SIP trunk
+  credential — same pattern; DID region; routing-rule failover/schedule; LCR per-route trunk/effective-date;
+  friendlier LCR decimal cost), or land the stack.

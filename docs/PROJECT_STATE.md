@@ -461,10 +461,24 @@ action per row + reloads from authoritative refetch on save. **web 205 → 207 (
 `next build` ✓ (/admin 2.7 kB); eslint ✓. No backend change** (endpoints + audit + tenant-scoping + role
 validation pre-existed, e2e-covered). `API.md` updated. **NOC/ADMIN WRITE SURFACE COMPLETE** (carriers · SIP
 trunks · numbers · routing profile+policy+rules · LCR policy+routes · member roles).
-Next (await owner go): the deferred enhancement slices (carrier/trunk credential, DID region, routing-rule
-failover/schedule editing, LCR per-route trunk/effective-date editing, friendlier LCR decimal cost); or land the
-stack (owner provides GitHub remote → push `integration/phase-12o-complete` fast-forwarded to the feature tip →
-CI → PR). Backend read gaps (HealthEvent/config-version history) stay separately approval-gated.
+**12O-2am (DONE)** — carrier INLINE CREDENTIAL (FRONTEND ONLY — no contract/backend change; fills the credential
+half 2ae deferred). `<CarrierForm>` got an optional Credential fieldset creating+attaching inline `credential`
+{type(SIP_PASSWORD/CARRIER_API/ENGINE_API), label, hint?, secret}. **SECRET write-only (type=password,
+autoComplete=off, never pre-filled) → straight to vault; carrier returns only non-secret ref.** All-or-nothing
+when engaged (type+label+secret required); NOT engaged → body omits `credential` → edit leaves it unchanged.
+Edit shows current cred as ref + "Replace credential" toggle; create "Attach a credential". **NOT offered:
+attach-existing-by-credentialId (NO credentials-list endpoint → picker would be dishonest; field stays on API),
+detach (API has no null), regionId (no picker).** Contract already had InlineCredentialInput + credential (2ae);
+`createCarrier`/`updateCarrier` already carry it → pure UI, no new action. Cred field labels "Credential type"/
+"Credential label" to avoid collision w/ carrier Type. +3 tests (create-with-inline-cred asserting exact
+{type,label,secret} + Secret input type=password / secret-required-once-engaged blocks submit / edit-without-
+touching-cred omits credential+credentialId) → web **210** (34 files); isolated `next build` REAL_EXIT=0 FIRST
+try (/carriers 5.69→6.7 kB); eslint 0. 2 files (form+test) +~200, NO apps/api, NO contracts.
+Next (await owner go): the remaining deferred slices (SIP TRUNK credential — same inline pattern, InlineSipCredentialInput
+already in contract; DID region; routing-rule failover/schedule editing; LCR per-route trunk/effective-date
+editing; friendlier LCR decimal cost); or land the stack (owner provides GitHub remote → push
+`integration/phase-12o-complete` fast-forwarded to the feature tip → CI → PR). Backend read gaps
+(HealthEvent/config-version history) stay separately approval-gated.
 
 ### (superseded) sub-phase plan
 

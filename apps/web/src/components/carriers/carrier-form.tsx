@@ -11,10 +11,16 @@ import { createCarrier, updateCarrier } from "@/lib/telecom/carriers-actions";
 
 type CarrierType = NonNullable<Carrier["type"]>;
 type Codec = Carrier["codecs"][number];
+type CredType = NonNullable<CreateCarrier["credential"]>["type"];
 
 const TYPE_OPTIONS: readonly CarrierType[] = ["ORIGINATION", "TERMINATION", "BIDIRECTIONAL"];
 const STATUS_OPTIONS: readonly Carrier["status"][] = ["ACTIVE", "SUSPENDED", "DISABLED"];
 const CODEC_OPTIONS: readonly Codec[] = ["PCMU", "PCMA", "G722", "G729", "OPUS", "AMR", "AMR_WB"];
+const CRED_TYPE_OPTIONS: readonly { value: CredType; label: string }[] = [
+  { value: "SIP_PASSWORD", label: "SIP password" },
+  { value: "CARRIER_API", label: "Carrier API" },
+  { value: "ENGINE_API", label: "Engine API" },
+];
 
 const selectClass =
   "h-8 w-full rounded-md border border-line-strong bg-surface px-2 text-[13px] text-ink outline-none disabled:cursor-not-allowed disabled:opacity-45";
@@ -29,13 +35,19 @@ function parseIntField(v: string): number | null {
 }
 
 /**
- * Create / edit a carrier (Phase 12O-2ae — the first write slice). Covers the
- * declarative fields (name, type, country, status, priority, codecs, capacity).
- * Scope/ownership are server-derived and never sent. `regionId` and credential
- * management are deferred to a later slice (both optional on the API) — editing
- * a carrier here never touches them. In edit mode, clearing an optional numeric
- * field leaves it unchanged (the API has no "unset" for these). The server
- * re-validates and re-checks `carrier.create` / `carrier.update` on every call.
+ * Create / edit a carrier (Phase 12O-2ae; credential added in 12O-2am). Covers the
+ * declarative fields (name, type, country, status, priority, codecs, capacity) and
+ * an optional INLINE credential — a label/hint plus a write-only secret that goes
+ * straight to the vault (the carrier only ever carries a non-secret reference back).
+ * The secret field is write-only: it is never pre-filled and the existing secret is
+ * never readable; on edit the current credential is shown as a reference and a
+ * "Replace credential" toggle reveals the inline fields (omitted → the credential is
+ * left unchanged). Attaching an *existing* credential by id is NOT offered — there is
+ * no credentials-list endpoint to pick from — and the API has no way to DETACH a
+ * credential, so neither does this form. Scope/ownership are server-derived and never
+ * sent; `regionId` remains deferred. In edit mode, clearing an optional numeric field
+ * leaves it unchanged. The server re-validates and re-checks `carrier.create` /
+ * `carrier.update` on every call; the secret is vaulted and never returned.
  */
 export function CarrierForm(props: Mode & { onClose: () => void; onSaved: () => void }) {
   const { onClose, onSaved } = props;
@@ -51,6 +63,14 @@ export function CarrierForm(props: Mode & { onClose: () => void; onSaved: () => 
     existing?.maxConcurrentCalls != null ? String(existing.maxConcurrentCalls) : "",
   );
   const [codecs, setCodecs] = React.useState<Codec[]>(existing?.codecs ?? []);
+
+  // Inline credential (Phase 12O-2am). Off by default; the secret is write-only and
+  // never pre-filled. On edit, engaging this REPLACES the carrier's credential.
+  const [showCred, setShowCred] = React.useState(false);
+  const [credType, setCredType] = React.useState<"" | CredType>("");
+  const [credLabel, setCredLabel] = React.useState("");
+  const [credHint, setCredHint] = React.useState("");
+  const [credSecret, setCredSecret] = React.useState("");
 
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -93,6 +113,19 @@ export function CarrierForm(props: Mode & { onClose: () => void; onSaved: () => 
     if (parsed.maxCps !== undefined) body.maxCps = parsed.maxCps;
     if (parsed.maxConcurrentCalls !== undefined) body.maxConcurrentCalls = parsed.maxConcurrentCalls;
     body.codecs = codecs;
+
+    // Inline credential — all-or-nothing when engaged. Omitted entirely when not,
+    // so an edit that doesn't touch it leaves the carrier's credential unchanged.
+    if (showCred) {
+      if (!credType) return { error: { field: "credType", message: "Choose a credential type." } };
+      const label = credLabel.trim();
+      if (label === "") return { error: { field: "credLabel", message: "A credential label is required." } };
+      if (credSecret === "") return { error: { field: "credSecret", message: "The secret is required." } };
+      const credential: NonNullable<CreateCarrier["credential"]> = { type: credType, label, secret: credSecret };
+      const hint = credHint.trim();
+      if (hint) credential.hint = hint;
+      body.credential = credential;
+    }
     return body;
   }
 
@@ -198,6 +231,71 @@ export function CarrierForm(props: Mode & { onClose: () => void; onSaved: () => 
                 </label>
               ))}
             </div>
+          </fieldset>
+
+          <fieldset className="rounded-md border border-line px-3 pb-3 pt-2">
+            <legend className="px-1 text-[12px] font-medium text-ink-2">Credential</legend>
+            {existing?.credential ? (
+              <p className="text-[12px] text-muted">
+                Current: <span className="text-ink-2">{existing.credential.label}</span> ({existing.credential.type})
+              </p>
+            ) : (
+              <p className="text-[12px] text-muted">No credential attached.</p>
+            )}
+
+            {!showCred ? (
+              <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={() => setShowCred(true)}>
+                {existing?.credential ? "Replace credential" : "Attach a credential"}
+              </Button>
+            ) : (
+              <div className="mt-2 space-y-3">
+                <p className="text-[12px] text-muted">
+                  The secret is stored in the vault and never shown again.{existing?.credential ? " Saving replaces the current credential." : ""}
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field id="carrier-cred-type" label="Credential type" error={fe("credType")}>
+                    <select id="carrier-cred-type" className={selectClass} value={credType} onChange={(e) => setCredType(e.target.value as "" | CredType)} aria-invalid={fe("credType") ? true : undefined}>
+                      <option value="">—</option>
+                      {CRED_TYPE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field id="carrier-cred-label" label="Credential label" error={fe("credLabel")}>
+                    <Input id="carrier-cred-label" value={credLabel} maxLength={120} onChange={(e) => setCredLabel(e.target.value)} aria-invalid={fe("credLabel") ? true : undefined} placeholder="Acme API key" />
+                  </Field>
+                </div>
+                <Field id="carrier-cred-hint" label="Hint" hint="Optional, non-secret reminder (e.g. last 4).">
+                  <Input id="carrier-cred-hint" value={credHint} maxLength={120} onChange={(e) => setCredHint(e.target.value)} />
+                </Field>
+                <Field id="carrier-cred-secret" label="Secret" error={fe("credSecret")}>
+                  <Input
+                    id="carrier-cred-secret"
+                    type="password"
+                    autoComplete="off"
+                    value={credSecret}
+                    maxLength={4096}
+                    onChange={(e) => setCredSecret(e.target.value)}
+                    aria-invalid={fe("credSecret") ? true : undefined}
+                    placeholder="Write-only — vaulted immediately"
+                  />
+                </Field>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowCred(false);
+                    setCredType("");
+                    setCredLabel("");
+                    setCredHint("");
+                    setCredSecret("");
+                  }}
+                >
+                  Cancel credential
+                </Button>
+              </div>
+            )}
           </fieldset>
 
           {error && (

@@ -151,10 +151,20 @@ honest `health` (UNKNOWN). Routing note: telecom resources live under
 As of **Phase 12O-2ae** the full carrier surface — list, get, **create, update,
 delete** — is authored into the OpenAPI contract (`CreateCarrier` / `UpdateCarrier`
 / `InlineCredentialInput` schemas in `telvyn.v1.yaml`) and the frontend carrier
-management screen (create / edit / soft-delete) consumes the generated types. The
-UI defers two optional, API-supported inputs for a later slice: `regionId` (no
-region picker yet) and credential attachment (`credentialId` / inline `credential`
-secret) — both remain fully available on the API.
+management screen (create / edit / soft-delete) consumes the generated types.
+
+**Phase 12O-2am** added the inline credential to the carrier form (frontend only — no
+contract change; it consumes the `InlineCredentialInput` already authored here). The
+form can create and attach a credential inline (`credential` = `{type, label, hint?,
+secret}`): the secret is a write-only field (password input, `autoComplete="off"`,
+never pre-filled) and goes straight to the vault — the carrier only ever carries back
+a non-secret reference. On edit the current credential shows as a reference and a
+"Replace credential" toggle reveals the inline fields; leaving it untouched omits
+`credential` so the carrier's credential is unchanged. **Still not offered in the UI:**
+attaching an *existing* credential by `credentialId` (no credentials-list endpoint
+exists to pick from — the field stays available on the API), detaching a credential
+(the API has no null for it), and `regionId` (no region picker). The server validates
+and vaults; the secret is never returned.
 
 ## SIP trunk API — EXISTING (Phase 12F, 2026-08-29)
 
