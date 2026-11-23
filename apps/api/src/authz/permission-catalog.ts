@@ -79,6 +79,10 @@ export const PERMISSIONS: PermissionDef[] = [
   // (fraud.policy.manage, fraud.killswitch, platform read_all) land with their
   // slices — declared there, never as a `fraud.*` wildcard, so no escalation.
   { key: "fraud.events.read", resource: "fraud.events", action: "read", description: "View fraud events", group: "fraud" },
+  // fraud policy authoring (Phase 12R-2a). Declarative config only — no
+  // enforcement. `read` is oversight; `manage` creates/updates/deletes limits.
+  { key: "fraud.policy.read", resource: "fraud.policy", action: "read", description: "View fraud policy (spend limits)", group: "fraud" },
+  { key: "fraud.policy.manage", resource: "fraud.policy", action: "manage", description: "Manage fraud policy (spend limits)", group: "fraud" },
 ];
 
 export const SYSTEM_ROLES: SystemRoleDef[] = [
@@ -95,8 +99,9 @@ export const SYSTEM_ROLES: SystemRoleDef[] = [
     permissions: [
       "tenant.*", "member.*", "role.*", "did.*", "audit.read",
       "carrier.*", "sip_trunk.*", "routing.*", "telecom.read", "telecom.health.read",
-      // Explicit (not fraud.*) — oversight read only; no enforcement perms by wildcard.
-      "fraud.events.read",
+      // Explicit (not fraud.*) — events read + policy authoring; still no
+      // enforcement-control perm (those land, explicit, with their slices).
+      "fraud.events.read", "fraud.policy.read", "fraud.policy.manage",
     ],
   },
   {
@@ -115,7 +120,7 @@ export const SYSTEM_ROLES: SystemRoleDef[] = [
     permissions: [
       "tenant.read", "member.read", "role.read", "did.read", "wallet.read", "cdr.read", "audit.read",
       "carrier.read", "sip_trunk.read", "routing.read", "telecom.read", "telecom.health.read",
-      "fraud.events.read",
+      "fraud.events.read", "fraud.policy.read",
     ],
   },
 ];
