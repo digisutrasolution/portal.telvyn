@@ -818,12 +818,44 @@ or balance gate; the engine-enforcement boundary stays owner-gated on the delive
     +4 e2e. **This completes the Phase-12R policy-authoring + kill-switch set.**
   All additive migrations (zero destructive). Full API suite **413 passed / 2 skipped**; API
   tsc/eslint/build + web tsc clean; **31 permissions**.
-- **NEXT (per the Phase-12R plan): 12R-4** the Authorization Decision Service (pure evaluator +
-  contract — the slice that first *consumes* these policies + the switch); **12R-5/6** velocity
-  counters + spend-reservation ledger; **12R-7** alerts → RUNBOOK; **12R-8 (owner-gated)** the
-  engine call-authorization hook. Owner decisions still open: default thresholds,
-  prepaid-vs-postpaid balance gate (DB-003), delivery model (TELECOM #2), high-risk destination
-  source, kill-switch maker-checker + step-up MFA.
+- **12R-4/5/6 (DONE — MERGED `main` @`3722a7c`, PR #9)** — three stacked slices landed together
+  (merge commit preserves `ab7e01f`→`ab5c2cf`→`132b173`), the **Authorization Decision**. The
+  decision now consumes **every** policy input for real, each **fail-closed** — but it is still
+  exposed **only** as a dry-run preview (`POST /v1/fraud/authorize/preview`, `fraud.policy.read`)
+  with **NO call-time enforcement**: nothing places a reservation, increments a counter, or gates
+  a live call yet (that is the owner-gated engine hook, 12R-8), and no engine/routing/SIP is
+  touched.
+  - **12R-4 Authorization Decision Service** — a **pure** `decideFraud` evaluator (zero I/O):
+    ordered short-circuit kill-switch GLOBAL→TENANT → E.164 normalization → geo/destination rules
+    (most-specific-match-wins) → spend (per-call + period) → velocity → ALLOW. The single place
+    the toll-fraud decision is expressed; later stateful slices reuse it unchanged.
+    `FraudAuthorizationService.preview` assembles the tenant's policy snapshot + kill-switch and
+    runs it. No new permission/migration/contract beyond the preview route.
+  - **12R-5 live velocity counters** — `VelocityCounterService` (Redis fixed-window rate counters
+    CPM/CPH/CPD + a concurrent-call gauge, reusing the auth rate-limiter's INCR + first-hit EXPIRE
+    pattern). `read()` **fail-closed** (throws on Redis error, never silently zero). `decideFraud`
+    gains `countersAvailable`; a velocity limit + unavailable counters → DENY `COUNTERS_UNAVAILABLE`.
+    Increment side (`recordCall`/`acquireConcurrent`/`releaseConcurrent`) built + tested, **inert**
+    until the call path. Redis-only, no schema/migration/permission change.
+  - **12R-6 spend-reservation ledger** — durable `SpendReservation` rows (source of truth, audit,
+    idempotency, lifecycle) + a Redis per-period reserved-micros gauge; added to
+    `TENANT_SCOPED_MODELS`. `readReserved()` **fail-closed**; `reserve()` **idempotent**
+    (`@@unique(tenantId, idempotencyKey)`; P2002 race → winner) + fail-closed (undoes the hold if
+    the gauge can't be raised; atomic Lua INCRBY + first-hit window TTL to UTC day/month end);
+    `settle`/`release`/`expireDue` (cross-tenant TTL sweeper) built + tested, **inert**.
+    `decideFraud` gains `reservationsAvailable`; a period cap fails closed with
+    `SPEND_RESERVATIONS_UNAVAILABLE`. One additive migration (zero destructive). Settled actuals
+    fold into the billing ledger (Phase 13); until then a period cap reflects in-flight
+    reservations only.
+  Full API suite **469 passed / 2 skipped**; API tsc/eslint/build + web tsc + **web production
+  build** clean; CI green on PR #9. Permissions unchanged at **31**.
+- **NEXT (per the Phase-12R plan): 12R-7** alerts → RUNBOOK (FraudEvent producers for breaches +
+  an operator runbook; still no enforcement); **12R-8 (owner-gated)** the engine
+  call-authorization hook — the FIRST slice that actually enforces, placing reservations/counters
+  at call time and gating a live call on `decideFraud` (touches the media/engine plane → needs
+  explicit owner go-ahead). Owner decisions still open: default thresholds, prepaid-vs-postpaid
+  balance gate (DB-003), delivery model (TELECOM #2), high-risk destination source, kill-switch
+  maker-checker + step-up MFA.
 
 ### (superseded) sub-phase plan
 
