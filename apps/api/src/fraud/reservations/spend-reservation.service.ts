@@ -88,6 +88,12 @@ export class SpendReservationService {
     }
   }
 
+  /** The active tenant's reservation for this key, or null — the enforcing hook's idempotency lookup. */
+  async find(_ctx: TenantContext, idempotencyKey: string): Promise<SpendReservationView | null> {
+    const row = await this.prisma.scoped.spendReservation.findFirst({ where: { idempotencyKey } });
+    return row ? this.view(row) : null;
+  }
+
   /**
    * Hold `amountMicros` for the active tenant. Idempotent on `idempotencyKey`:
    * an existing hold for the key is returned unchanged (never double-counted).
