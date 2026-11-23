@@ -52,7 +52,9 @@ disposable Kamailio 6.1.5 VPS: apply → verify → idempotent (0-op) → rollba
 left clean. **Phase 12N COMPLETE.** Production stays on `NullEngineConnector` (`ENGINE_CONNECTOR`
 unset).
 
-**Phase 12O IN PROGRESS — NOC frontend enablement.** **12O-1 (DONE — planning/inspection only)**
+**Phase 12O MERGED to `main` @`c295fe9` (PR #2, 60 commits, CI green) — NOC frontend enablement; plus
+S-1 auth-frontend follow-up @`67dca00` (PR #3). All buildable-now 12O software is DONE (full slice log
+below); node health goes green once ops deploy a real inbound mTLS terminator.** **12O-1 (DONE — planning/inspection only)**
 confirmed the frontend has no auth/session/API-client/data layer (only `SHELL_CONFIG` seams) and
 that the single hard prerequisite for permission-aware UI was a server endpoint exposing the
 session's `tenantType` + permission set (none existed: `/v1/auth/me` is identity-only,
@@ -759,6 +761,25 @@ telecom-actions modified, node-credential-dialog + its test new. NO prisma, NO c
 Next = LAND THE STACK (owner git remote; refresh stale phase-12o-PR.md — now predates 2ad-2bd + ADR-0020 branch) / carrier health
 projection (later, needs engine/media or CDR). **All buildable-now 12O software is DONE; node health goes green once ops deploy a
 real inbound mTLS terminator.**
+
+**STACK LANDED — Phase 12O MERGED to `main` @`c295fe9`** (PR #2, 60 commits, CI green on
+`github.com/digisutrasolution/portal.telvyn`; local branches cleaned up to `main` only).
+
+**S-1 (DONE) — auth-frontend UX fix (post-12O follow-up, MERGED to `main` @`67dca00`, PR #3).**
+A logged-out visitor saw **"Can't reach the server"** instead of the sign-in screen. Root cause:
+the session bootstrap exchanges the httpOnly refresh cookie for an access token before loading
+`GET /v1/me/context`, but the backend returns **HTTP 400** (not 401) when there is no valid refresh
+cookie, and `SessionProvider` mapped only 401 → `unauthenticated`, everything else → `error`.
+Fix (frontend-only, `apps/web/src/lib/session/session-context.tsx`): new exported
+`UnauthenticatedError` sentinel; `defaultSessionLoader` wraps `refresh()` so a refresh `ApiError` of
+**400 or 401** throws it while **5xx / network / aborted propagate unchanged**; the provider catch
+maps `UnauthenticatedError` (or `ApiError` 401) → `unauthenticated`, 403 → `forbidden`, everything
+else stays `error`. The 400 response itself is unchanged — genuine connectivity/server errors keep
+the "Can't reach the server" state; gating is component-level so no redirect loops and post-login
+navigation is preserved. **+6 tests → web suite 257, typecheck ✓, lint ✓, `next build` ✓**; verified
+live (`POST /v1/auth/refresh → 400` now renders the Sign-in screen). **No backend/API/DB/RBAC/
+contract/dependency change.** CI's first attempt failed on the known transient `next/font` Google-font
+fetch flake (`layout.tsx`, unrelated); re-run passed clean.
 
 ### (superseded) sub-phase plan
 
