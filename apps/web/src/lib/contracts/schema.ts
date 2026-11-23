@@ -1098,6 +1098,58 @@ export interface paths {
         patch: operations["updateVelocityLimit"];
         trace?: never;
     };
+    "/v1/fraud/policies/destination-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List geo/destination rules (tenant)
+         * @description The tenant's own geo/destination rules (Phase 12R-2c, ADR-0021), cursor-paginated. DECLARATIVE config only — nothing evaluates or enforces these yet. A rule matches by COUNTRY (ISO-3166-1 alpha-2) or by dial PREFIX, with an ALLOW/DENY action + risk class. Strictly tenant-scoped. Optional `matchType` / `action` / `riskClass` / `enabled` filters. Requires `fraud.policy.read`.
+         */
+        get: operations["listDestinationRules"];
+        put?: never;
+        /**
+         * Create a geo/destination rule
+         * @description Create a tenant-owned rule (declarative config only — no enforcement). Ownership (tenantId) is server-derived. `matchValue` must be an ISO-3166-1 alpha-2 country (COUNTRY) or a dial prefix of up to 15 digits (PREFIX); it is normalized server-side (country → uppercase, prefix → no leading +). At most one active rule per (tenant, matchType, matchValue) — a duplicate is a 409. Requires `fraud.policy.manage`.
+         */
+        post: operations["createDestinationRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/policies/destination-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a geo/destination rule
+         * @description A tenant's own rule by id (foreign/removed → 404, IDOR-safe). Requires `fraud.policy.read`.
+         */
+        get: operations["getDestinationRule"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a geo/destination rule (soft delete)
+         * @description Soft-delete a tenant-owned rule (sets deletedAt). A foreign tenant's rule is 404 (IDOR-safe). Requires `fraud.policy.manage`.
+         */
+        delete: operations["deleteDestinationRule"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a geo/destination rule
+         * @description Update a tenant-owned rule (action / riskClass / enabled). `matchType` and `matchValue` are immutable (the business key). Pass `expectedVersion` for optimistic concurrency — a mismatch is a 409. A foreign tenant's rule is 404. Requires `fraud.policy.manage`.
+         */
+        patch: operations["updateDestinationRule"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1618,6 +1670,59 @@ export interface components {
         /** @description `metric` is immutable and cannot be changed here. */
         UpdateVelocityLimit: {
             limit?: number;
+            enabled?: boolean;
+            /** @description Optimistic concurrency — a mismatch is a 409. */
+            expectedVersion?: number;
+        };
+        /** @description A tenant's geo/destination rule (Phase 12R-2c). Declarative config — not evaluated or enforced yet. Matches by COUNTRY (ISO-3166-1 alpha-2) or dial PREFIX; `matchValue` is stored normalized. */
+        DestinationRule: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            matchType: "COUNTRY" | "PREFIX";
+            /** @description Normalized: COUNTRY = uppercase alpha-2; PREFIX = digits, no leading +. */
+            matchValue: string;
+            /** @enum {string} */
+            action: "ALLOW" | "DENY";
+            /** @enum {string} */
+            riskClass: "STANDARD" | "HIGH_COST" | "PREMIUM";
+            enabled: boolean;
+            /** @description Optimistic-concurrency version; pass as expectedVersion on update. */
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        DestinationRulePage: {
+            items: components["schemas"]["DestinationRule"][];
+            /**
+             * Format: uuid
+             * @description Pass as `cursor` to fetch the next (older) page; null when exhausted.
+             */
+            nextCursor: string | null;
+        };
+        CreateDestinationRule: {
+            /** @enum {string} */
+            matchType: "COUNTRY" | "PREFIX";
+            /** @description COUNTRY = ISO-3166-1 alpha-2; PREFIX = up to 15 digits (optional leading +). Normalized server-side. */
+            matchValue: string;
+            /** @enum {string} */
+            action: "ALLOW" | "DENY";
+            /**
+             * @default STANDARD
+             * @enum {string}
+             */
+            riskClass: "STANDARD" | "HIGH_COST" | "PREMIUM";
+            /** @default true */
+            enabled: boolean;
+        };
+        /** @description `matchType` and `matchValue` are immutable and cannot be changed here. */
+        UpdateDestinationRule: {
+            /** @enum {string} */
+            action?: "ALLOW" | "DENY";
+            /** @enum {string} */
+            riskClass?: "STANDARD" | "HIGH_COST" | "PREMIUM";
             enabled?: boolean;
             /** @description Optimistic concurrency — a mismatch is a 409. */
             expectedVersion?: number;
@@ -4188,6 +4293,143 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VelocityLimit"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listDestinationRules: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+                matchType?: "COUNTRY" | "PREFIX";
+                action?: "ALLOW" | "DENY";
+                riskClass?: "STANDARD" | "HIGH_COST" | "PREMIUM";
+                enabled?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Destination rules */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DestinationRulePage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    createDestinationRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDestinationRule"];
+            };
+        };
+        responses: {
+            /** @description Destination rule created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DestinationRule"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getDestinationRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Destination rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DestinationRule"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteDestinationRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Destination rule deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateDestinationRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDestinationRule"];
+            };
+        };
+        responses: {
+            /** @description Destination rule updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DestinationRule"];
                 };
             };
             400: components["responses"]["Problem"];

@@ -1605,6 +1605,115 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /v1/fraud/policies/destination-rules:
+    get:
+      tags: [fraud]
+      summary: List geo/destination rules (tenant)
+      description: >-
+        The tenant's own geo/destination rules (Phase 12R-2c, ADR-0021),
+        cursor-paginated. DECLARATIVE config only — nothing evaluates or enforces
+        these yet. A rule matches by COUNTRY (ISO-3166-1 alpha-2) or by dial
+        PREFIX, with an ALLOW/DENY action + risk class. Strictly tenant-scoped.
+        Optional `matchType` / `action` / `riskClass` / `enabled` filters.
+        Requires `fraud.policy.read`.
+      operationId: listDestinationRules
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: cursor, in: query, required: false, schema: { type: string, format: uuid }, description: "nextCursor from a prior page." }
+        - { name: matchType, in: query, required: false, schema: { type: string, enum: [COUNTRY, PREFIX] } }
+        - { name: action, in: query, required: false, schema: { type: string, enum: [ALLOW, DENY] } }
+        - { name: riskClass, in: query, required: false, schema: { type: string, enum: [STANDARD, HIGH_COST, PREMIUM] } }
+        - { name: enabled, in: query, required: false, schema: { type: boolean } }
+      responses:
+        "200":
+          description: Destination rules
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DestinationRulePage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [fraud]
+      summary: Create a geo/destination rule
+      description: >-
+        Create a tenant-owned rule (declarative config only — no enforcement).
+        Ownership (tenantId) is server-derived. `matchValue` must be an ISO-3166-1
+        alpha-2 country (COUNTRY) or a dial prefix of up to 15 digits (PREFIX); it
+        is normalized server-side (country → uppercase, prefix → no leading +). At
+        most one active rule per (tenant, matchType, matchValue) — a duplicate is
+        a 409. Requires `fraud.policy.manage`.
+      operationId: createDestinationRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDestinationRule" }
+      responses:
+        "201":
+          description: Destination rule created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DestinationRule" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /v1/fraud/policies/destination-rules/{id}:
+    get:
+      tags: [fraud]
+      summary: Get a geo/destination rule
+      description: "A tenant's own rule by id (foreign/removed → 404, IDOR-safe). Requires `fraud.policy.read`."
+      operationId: getDestinationRule
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Destination rule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DestinationRule" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [fraud]
+      summary: Update a geo/destination rule
+      description: >-
+        Update a tenant-owned rule (action / riskClass / enabled). `matchType` and
+        `matchValue` are immutable (the business key). Pass `expectedVersion` for
+        optimistic concurrency — a mismatch is a 409. A foreign tenant's rule is
+        404. Requires `fraud.policy.manage`.
+      operationId: updateDestinationRule
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDestinationRule" }
+      responses:
+        "200":
+          description: Destination rule updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DestinationRule" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [fraud]
+      summary: Delete a geo/destination rule (soft delete)
+      description: "Soft-delete a tenant-owned rule (sets deletedAt). A foreign tenant's rule is 404 (IDOR-safe). Requires `fraud.policy.manage`."
+      operationId: deleteDestinationRule
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Destination rule deleted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -2091,6 +2200,50 @@ components:
       description: "`metric` is immutable and cannot be changed here."
       properties:
         limit: { type: integer, minimum: 0, maximum: 10000000 }
+        enabled: { type: boolean }
+        expectedVersion: { type: integer, minimum: 0, description: "Optimistic concurrency — a mismatch is a 409." }
+    DestinationRule:
+      type: object
+      required: [id, matchType, matchValue, action, riskClass, enabled, version, createdAt, updatedAt]
+      description: >-
+        A tenant's geo/destination rule (Phase 12R-2c). Declarative config — not
+        evaluated or enforced yet. Matches by COUNTRY (ISO-3166-1 alpha-2) or dial
+        PREFIX; `matchValue` is stored normalized.
+      properties:
+        id: { type: string, format: uuid }
+        matchType: { type: string, enum: [COUNTRY, PREFIX] }
+        matchValue: { type: string, description: "Normalized: COUNTRY = uppercase alpha-2; PREFIX = digits, no leading +." }
+        action: { type: string, enum: [ALLOW, DENY] }
+        riskClass: { type: string, enum: [STANDARD, HIGH_COST, PREMIUM] }
+        enabled: { type: boolean }
+        version: { type: integer, description: "Optimistic-concurrency version; pass as expectedVersion on update." }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DestinationRulePage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DestinationRule" }
+        nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next (older) page; null when exhausted." }
+    CreateDestinationRule:
+      type: object
+      required: [matchType, matchValue, action]
+      additionalProperties: false
+      properties:
+        matchType: { type: string, enum: [COUNTRY, PREFIX] }
+        matchValue: { type: string, minLength: 1, maxLength: 20, description: "COUNTRY = ISO-3166-1 alpha-2; PREFIX = up to 15 digits (optional leading +). Normalized server-side." }
+        action: { type: string, enum: [ALLOW, DENY] }
+        riskClass: { type: string, enum: [STANDARD, HIGH_COST, PREMIUM], default: STANDARD }
+        enabled: { type: boolean, default: true }
+    UpdateDestinationRule:
+      type: object
+      additionalProperties: false
+      description: "`matchType` and `matchValue` are immutable and cannot be changed here."
+      properties:
+        action: { type: string, enum: [ALLOW, DENY] }
+        riskClass: { type: string, enum: [STANDARD, HIGH_COST, PREMIUM] }
         enabled: { type: boolean }
         expectedVersion: { type: integer, minimum: 0, description: "Optimistic concurrency — a mismatch is a 409." }
     ConfigVersion:

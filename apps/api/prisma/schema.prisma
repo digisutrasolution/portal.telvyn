@@ -87,9 +87,10 @@ model Tenant {
   engineResourceAssignments EngineResourceAssignment[]
 
   // Fraud control plane (Phase 12R). Back-relations only — no new column on Tenant.
-  fraudEvents    FraudEvent[]
-  spendLimits    SpendLimit[]
-  velocityLimits VelocityLimit[]
+  fraudEvents      FraudEvent[]
+  spendLimits      SpendLimit[]
+  velocityLimits   VelocityLimit[]
+  destinationRules DestinationRule[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1065,5 +1066,50 @@ model VelocityLimit {
   deletedAt DateTime?
 
   @@index([tenantId, metric])
+  @@index([tenantId])
+}
+
+// --- Fraud control plane (Phase 12R-2c, ADR-0021) --------------------------
+// Tenant-authored geo + destination rules — DECLARATIVE CONFIG ONLY. Stores and
+// manages allow/deny rules keyed by COUNTRY (ISO-3166-1 alpha-2) or by dial
+// PREFIX (E.164 prefix), with an optional risk class. NOTHING evaluates, matches,
+// or enforces these yet (no call normalization, no geo/destination decision —
+// later slices). Optimistic concurrency via `version`; soft-delete. At most one
+// active rule per (tenant, matchType, matchValue), enforced in the service. The
+// per-tenant default action (allow/deny when no rule matches) is a later policy
+// envelope, not modelled here.
+enum DestinationMatchType {
+  COUNTRY
+  PREFIX
+}
+
+enum DestinationAction {
+  ALLOW
+  DENY
+}
+
+enum DestinationRiskClass {
+  STANDARD
+  HIGH_COST
+  PREMIUM
+}
+
+model DestinationRule {
+  id         String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId   String               @db.Uuid
+  tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  matchType  DestinationMatchType
+  // COUNTRY → ISO-3166-1 alpha-2 (uppercase). PREFIX → digits (no leading +),
+  // normalized in the service before storage/uniqueness.
+  matchValue String
+  action     DestinationAction
+  riskClass  DestinationRiskClass @default(STANDARD)
+  enabled    Boolean              @default(true)
+  version    Int                  @default(1)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  deletedAt  DateTime?
+
+  @@index([tenantId, matchType])
   @@index([tenantId])
 }
