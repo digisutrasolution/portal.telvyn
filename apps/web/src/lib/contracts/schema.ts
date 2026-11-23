@@ -1046,6 +1046,58 @@ export interface paths {
         patch: operations["updateSpendLimit"];
         trace?: never;
     };
+    "/v1/fraud/policies/velocity-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List velocity limits (tenant)
+         * @description The tenant's own velocity limits (Phase 12R-2b, ADR-0021), cursor-paginated. DECLARATIVE config only — nothing counts or enforces these yet. Strictly tenant-scoped. Optional `metric` / `enabled` filters. Requires `fraud.policy.read`.
+         */
+        get: operations["listVelocityLimits"];
+        put?: never;
+        /**
+         * Create a velocity limit
+         * @description Create a tenant-owned velocity limit (declarative config only — no enforcement). Ownership (tenantId) is server-derived. `limit` is an integer count (calls per window, or the concurrent-call cap). At most one active limit per (tenant, metric) — a duplicate is a 409. Requires `fraud.policy.manage`.
+         */
+        post: operations["createVelocityLimit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/policies/velocity-limits/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a velocity limit
+         * @description A tenant's own velocity limit by id (foreign/removed → 404, IDOR-safe). Requires `fraud.policy.read`.
+         */
+        get: operations["getVelocityLimit"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a velocity limit (soft delete)
+         * @description Soft-delete a tenant-owned velocity limit (sets deletedAt). A foreign tenant's limit is 404 (IDOR-safe). Requires `fraud.policy.manage`.
+         */
+        delete: operations["deleteVelocityLimit"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a velocity limit
+         * @description Update a tenant-owned velocity limit (limit / enabled). `metric` is immutable (the business key). Pass `expectedVersion` for optimistic concurrency — a mismatch is a 409. A foreign tenant's limit is 404. Requires `fraud.policy.manage`.
+         */
+        patch: operations["updateVelocityLimit"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1528,6 +1580,44 @@ export interface components {
             amountMicros?: number;
             /** @enum {string} */
             currency?: "USD" | "EUR" | "GBP" | "INR" | "AUD" | "CAD" | "JPY";
+            enabled?: boolean;
+            /** @description Optimistic concurrency — a mismatch is a 409. */
+            expectedVersion?: number;
+        };
+        /** @description A tenant's velocity limit (Phase 12R-2b). Declarative config — not enforced yet. `limit` is an integer count. */
+        VelocityLimit: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            metric: "CALLS_PER_MINUTE" | "CALLS_PER_HOUR" | "CALLS_PER_DAY" | "CONCURRENT_CALLS";
+            /** @description Max count per the metric's window, or the concurrent-call cap. */
+            limit: number;
+            enabled: boolean;
+            /** @description Optimistic-concurrency version; pass as expectedVersion on update. */
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        VelocityLimitPage: {
+            items: components["schemas"]["VelocityLimit"][];
+            /**
+             * Format: uuid
+             * @description Pass as `cursor` to fetch the next (older) page; null when exhausted.
+             */
+            nextCursor: string | null;
+        };
+        CreateVelocityLimit: {
+            /** @enum {string} */
+            metric: "CALLS_PER_MINUTE" | "CALLS_PER_HOUR" | "CALLS_PER_DAY" | "CONCURRENT_CALLS";
+            limit: number;
+            /** @default true */
+            enabled: boolean;
+        };
+        /** @description `metric` is immutable and cannot be changed here. */
+        UpdateVelocityLimit: {
+            limit?: number;
             enabled?: boolean;
             /** @description Optimistic concurrency — a mismatch is a 409. */
             expectedVersion?: number;
@@ -3963,6 +4053,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SpendLimit"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listVelocityLimits: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+                metric?: "CALLS_PER_MINUTE" | "CALLS_PER_HOUR" | "CALLS_PER_DAY" | "CONCURRENT_CALLS";
+                enabled?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Velocity limits */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VelocityLimitPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    createVelocityLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVelocityLimit"];
+            };
+        };
+        responses: {
+            /** @description Velocity limit created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VelocityLimit"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getVelocityLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Velocity limit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VelocityLimit"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteVelocityLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Velocity limit deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateVelocityLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVelocityLimit"];
+            };
+        };
+        responses: {
+            /** @description Velocity limit updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VelocityLimit"];
                 };
             };
             400: components["responses"]["Problem"];

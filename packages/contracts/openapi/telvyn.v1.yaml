@@ -1501,6 +1501,110 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /v1/fraud/policies/velocity-limits:
+    get:
+      tags: [fraud]
+      summary: List velocity limits (tenant)
+      description: >-
+        The tenant's own velocity limits (Phase 12R-2b, ADR-0021), cursor-paginated.
+        DECLARATIVE config only — nothing counts or enforces these yet. Strictly
+        tenant-scoped. Optional `metric` / `enabled` filters. Requires
+        `fraud.policy.read`.
+      operationId: listVelocityLimits
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: cursor, in: query, required: false, schema: { type: string, format: uuid }, description: "nextCursor from a prior page." }
+        - { name: metric, in: query, required: false, schema: { type: string, enum: [CALLS_PER_MINUTE, CALLS_PER_HOUR, CALLS_PER_DAY, CONCURRENT_CALLS] } }
+        - { name: enabled, in: query, required: false, schema: { type: boolean } }
+      responses:
+        "200":
+          description: Velocity limits
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VelocityLimitPage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [fraud]
+      summary: Create a velocity limit
+      description: >-
+        Create a tenant-owned velocity limit (declarative config only — no
+        enforcement). Ownership (tenantId) is server-derived. `limit` is an
+        integer count (calls per window, or the concurrent-call cap). At most one
+        active limit per (tenant, metric) — a duplicate is a 409. Requires
+        `fraud.policy.manage`.
+      operationId: createVelocityLimit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateVelocityLimit" }
+      responses:
+        "201":
+          description: Velocity limit created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VelocityLimit" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /v1/fraud/policies/velocity-limits/{id}:
+    get:
+      tags: [fraud]
+      summary: Get a velocity limit
+      description: "A tenant's own velocity limit by id (foreign/removed → 404, IDOR-safe). Requires `fraud.policy.read`."
+      operationId: getVelocityLimit
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Velocity limit
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VelocityLimit" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [fraud]
+      summary: Update a velocity limit
+      description: >-
+        Update a tenant-owned velocity limit (limit / enabled). `metric` is
+        immutable (the business key). Pass `expectedVersion` for optimistic
+        concurrency — a mismatch is a 409. A foreign tenant's limit is 404.
+        Requires `fraud.policy.manage`.
+      operationId: updateVelocityLimit
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateVelocityLimit" }
+      responses:
+        "200":
+          description: Velocity limit updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VelocityLimit" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [fraud]
+      summary: Delete a velocity limit (soft delete)
+      description: "Soft-delete a tenant-owned velocity limit (sets deletedAt). A foreign tenant's limit is 404 (IDOR-safe). Requires `fraud.policy.manage`."
+      operationId: deleteVelocityLimit
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Velocity limit deleted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -1951,6 +2055,42 @@ components:
       properties:
         amountMicros: { type: integer, format: int64, minimum: 0, maximum: 1000000000000000 }
         currency: { type: string, enum: [USD, EUR, GBP, INR, AUD, CAD, JPY] }
+        enabled: { type: boolean }
+        expectedVersion: { type: integer, minimum: 0, description: "Optimistic concurrency — a mismatch is a 409." }
+    VelocityLimit:
+      type: object
+      required: [id, metric, limit, enabled, version, createdAt, updatedAt]
+      description: "A tenant's velocity limit (Phase 12R-2b). Declarative config — not enforced yet. `limit` is an integer count."
+      properties:
+        id: { type: string, format: uuid }
+        metric: { type: string, enum: [CALLS_PER_MINUTE, CALLS_PER_HOUR, CALLS_PER_DAY, CONCURRENT_CALLS] }
+        limit: { type: integer, minimum: 0, description: "Max count per the metric's window, or the concurrent-call cap." }
+        enabled: { type: boolean }
+        version: { type: integer, description: "Optimistic-concurrency version; pass as expectedVersion on update." }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    VelocityLimitPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/VelocityLimit" }
+        nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next (older) page; null when exhausted." }
+    CreateVelocityLimit:
+      type: object
+      required: [metric, limit]
+      additionalProperties: false
+      properties:
+        metric: { type: string, enum: [CALLS_PER_MINUTE, CALLS_PER_HOUR, CALLS_PER_DAY, CONCURRENT_CALLS] }
+        limit: { type: integer, minimum: 0, maximum: 10000000 }
+        enabled: { type: boolean, default: true }
+    UpdateVelocityLimit:
+      type: object
+      additionalProperties: false
+      description: "`metric` is immutable and cannot be changed here."
+      properties:
+        limit: { type: integer, minimum: 0, maximum: 10000000 }
         enabled: { type: boolean }
         expectedVersion: { type: integer, minimum: 0, description: "Optimistic concurrency — a mismatch is a 409." }
     ConfigVersion:
