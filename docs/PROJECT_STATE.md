@@ -864,12 +864,31 @@ or balance gate; the engine-enforcement boundary stays owner-gated on the delive
   preview is a dry run and deliberately does NOT alert; alerts flow when 12R-8 wires the call path.
   No schema/migration/contract/permission change (`FraudEventType` already has `AUTHORIZATION_DENIED`;
   Redis + existing `FraudEvent` store). Full API suite **478 passed / 2 skipped**; CI green on PR #11.
-- **NEXT — only 12R-8 remains (owner-gated): the engine call-authorization hook** — the FIRST
-  slice that actually enforces: wires the real call path to place reservations/counters at call
-  time, gate a live call on `decideFraud`, and fire `alertOnDecision` on deny (touches the
-  media/engine plane → needs explicit owner go-ahead). Owner decisions still open: default
-  thresholds, prepaid-vs-postpaid balance gate (DB-003), delivery model (TELECOM #2), high-risk
-  destination source, kill-switch maker-checker + step-up MFA.
+- **12R-8 + 12R-9 (DONE — MERGED `main` @`eb85f73`, PR #13)** — enforcement + operational hardening,
+  the capstone of the toll-fraud program:
+  - **12R-8 call authorization** — the FIRST ENFORCING slice. `CallAuthorizationService` runs the
+    decision AND, on ALLOW, commits the side effects that make the limits real (reserve + acquire
+    the concurrent gauge + record the call); on DENY it alerts. `POST /v1/fraud/authorize`
+    (+ `/complete`, `/abandon`), gated by new `fraud.call.authorize`. **Policy-only** (kill-switch +
+    geo/destination + spend + velocity; NO wallet/balance gate — DB-003/Phase 13). **Race-safe**
+    (concurrent gauge checked post-`acquire`, period spend post-`reserve`, breach compensates),
+    **fail-closed** (Redis outage → deny after compensation — the inverse of the fail-open alert
+    path), **idempotent** on `callKey` (the reservation row is the auth record + retry guard), with
+    the settle/release lifecycle. Reuses the inert 12R-5/6/7 primitives unchanged (extracts a shared
+    `FraudAuthorizationService.decide`). **NOT wired to a live SIP call** — no engine contacted; an
+    SBC/softswitch calls it once the delivery model (TELECOM #2) + media plane land.
+  - **12R-9 maintenance sweeper** — `FraudSweeperService.sweep()` expires overdue ACTIVE
+    reservations AND releases their leaked concurrent-gauge counts (so an unfinalized call can't
+    wedge a tenant's concurrent cap). `POST /v1/fraud/maintenance/sweep`, PLATFORM-only +
+    `fraud.maintenance.run`; no in-process timer (scheduled externally — RUNBOOK). `expireDue` now
+    returns swept tenantIds.
+  No schema/migration/contract change; two new seeded permissions. Full API suite **500 passed /
+  2 skipped**; CI green on PR #13. **The toll-fraud program (12R-1 → 12R-9) is complete.**
+- **NEXT — the remaining items are all owner-decision-gated (nothing further is buildable without a
+  decision):** (a) **wire enforcement to a live call path** — needs the media/SIP plane + the
+  delivery model (TELECOM #2); (b) **Phase 13 — Billing** — needs DB-003 (prepaid wallet vs postpaid)
+  before the wallet/invoice model + the 12R-8 balance gate can be built. Other open decisions:
+  default thresholds, high-risk destination source, kill-switch maker-checker + step-up MFA.
 
 ### (superseded) sub-phase plan
 

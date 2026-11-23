@@ -6,6 +6,32 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-23 — Phase 12R-9 — **fraud maintenance sweeper** (ROADMAP Phase 12 toll-fraud rails,
+  ADR-0021; PR #13). Operational hardening for the enforcing hook. `FraudSweeperService.sweep()`
+  expires overdue ACTIVE reservations (their TTL is the backstop) AND releases the matching
+  concurrent-gauge count, so a call authorized but never finalized can't leak a held concurrent
+  slot and wedge a tenant's concurrent-call cap. `SpendReservationService.expireDue` now returns
+  the swept tenantIds so the sweeper (composing the two decoupled services) can return both holds.
+  `POST /v1/fraud/maintenance/sweep` — PLATFORM-only (PlatformGuard) + new `fraud.maintenance.run`;
+  no in-process timer (it would fan out across instances of the stateless, horizontally scaled API),
+  so scheduling is external (ops cron / k8s CronJob), documented in `docs/RUNBOOK.md`. System-wide,
+  idempotent, best-effort on the gauge. No schema/migration/contract change; one new seeded
+  permission. +2 unit +3 e2e.
+- 2026-11-23 — Phase 12R-8 — **call authorization: the enforcing hook** (ROADMAP Phase 12 toll-fraud
+  rails, ADR-0021; PR #13). The FIRST slice that actually **ENFORCES**. `CallAuthorizationService`
+  runs the toll-fraud decision AND, on ALLOW, commits the side effects that make the limits real
+  (places a reservation, acquires the concurrent-call gauge, records the call); on DENY it alerts.
+  `POST /v1/fraud/authorize` (+ `/complete`, `/abandon`), gated by new `fraud.call.authorize`.
+  **Policy-only** — kill-switch + geo/destination + spend + velocity; **no wallet/balance gate**
+  (that needs DB-003 + the billing ledger, Phase 13). **Race-safe**: the authoritative stateful
+  gates are checked AFTER the atomic commit (concurrent gauge vs the post-acquire count, period
+  spend vs the post-reserve total), so simultaneous authorizations can't each read "under limit"
+  and overshoot; a breach compensates and denies. **Fail-closed** (Redis outage → deny after
+  compensation, the inverse of the fail-open alert path). **Idempotent** on `callKey` (the
+  reservation row is the authorization record + retry guard). Settle/release lifecycle. Reuses the
+  inert 12R-5/6/7 primitives unchanged (extracts a shared `FraudAuthorizationService.decide`). NOT
+  wired to a live SIP call yet — no engine is contacted. No schema/migration/contract change; one
+  new seeded permission. +9 unit +8 e2e.
 - 2026-11-23 — Phase 12R-7 — **fraud alerting** (ROADMAP Phase 12 toll-fraud rails, ADR-0021;
   PR #11). The "alert → RUNBOOK" path (SEC-002) — **records only, enforces nothing**.
   `FraudAlertService.alertOnDecision` turns a toll-fraud decision **DENY** into an append-only
