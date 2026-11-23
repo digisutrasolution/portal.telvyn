@@ -6,6 +6,32 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-23 — Phase 12R-3 — **kill-switch state** (ROADMAP Phase 12 toll-fraud rails,
+  ADR-0021; PR #8). The emergency brake — **STATE only, nothing enforced at call time yet**.
+  New `KillSwitch` model + `KillSwitchScope` enum with **GLOBAL** (platform-wide, PlatformGuard)
+  and **TENANT** scopes; additive migration (zero destructive); dual-nature nullable `tenantId`
+  scoped explicitly in the service. Each toggle (activate/deactivate) is **audited** and emits a
+  `KILL_SWITCH` **FraudEvent** (CRITICAL on activate, WARNING on deactivate). New permission
+  **`fraud.killswitch.manage`** (owner/admin only; read state via `fraud.policy.read`); step-up
+  MFA on activation deferred. Tenant surface `GET`/`POST …/activate`/`…/deactivate` at
+  `/v1/fraud/kill-switch`; global surface at `/v1/fraud/kill-switch/global` (+PlatformGuard).
+  +4 unit +4 e2e.
+- 2026-11-23 — Phase 12R-2c — **geo/destination-rule authoring** (ROADMAP Phase 12 toll-fraud
+  rails, ADR-0021; PR #8). Declarative config, **no enforcement**. New `DestinationRule` model
+  unifies geo + destination: match by **COUNTRY** (ISO-3166-1 alpha-2) or dial **PREFIX**, with
+  an ALLOW/DENY action + risk class (STANDARD/HIGH_COST/PREMIUM). Match value normalized before
+  storage (country→uppercase, prefix→no leading +); cross-field validation; at most one active
+  rule per (tenant, matchType, matchValue) → 409; optimistic concurrency; soft-delete. Reuses
+  `fraud.policy.read`/`manage`; every mutation audited. `GET`/`POST
+  /v1/fraud/policies/destination-rules` + `GET`/`PATCH`/`DELETE /{id}` (tenant-scoped). Additive
+  migration (zero destructive). +6 unit +6 e2e.
+- 2026-11-23 — Phase 12R-2b — **velocity-limit authoring** (ROADMAP Phase 12 toll-fraud rails,
+  ADR-0021; PR #8). Declarative config, **no enforcement**. New `VelocityLimit` model +
+  `VelocityMetric` enum (CALLS_PER_MINUTE/HOUR/DAY, CONCURRENT_CALLS); `limit` is an integer
+  count. Full tenant-scoped CRUD; optimistic concurrency; soft-delete; at most one active limit
+  per (tenant, metric) → 409. Reuses `fraud.policy.read`/`manage`; every mutation audited.
+  `GET`/`POST /v1/fraud/policies/velocity-limits` + `GET`/`PATCH`/`DELETE /{id}` (tenant-scoped).
+  Additive migration (zero destructive). +5 unit +6 e2e.
 - 2026-11-23 — Phase 12R-2a — **spend-limit authoring** (ROADMAP Phase 12 toll-fraud rails,
   ADR-0021; PR #6). Tenant-authored spend limits as **declarative fraud-policy config** — a
   full CRUD API with **no enforcement** (nothing reads or applies these limits: no call

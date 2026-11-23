@@ -803,12 +803,27 @@ or balance gate; the engine-enforcement boundary stays owner-gated on the delive
   `GET`/`POST /v1/fraud/policies/spend-limits` + `GET`/`PATCH`/`DELETE /{id}` (tenant-scoped,
   no PlatformGuard; `period` immutable). Additive migration (zero destructive). +5 unit +6 e2e.
   Full API suite 382 passed / 2 skipped; API tsc/eslint/build + web tsc clean.
-- **NEXT (per the Phase-12R plan): 12R-2b/2c** velocity / geo / destination policy authoring;
-  **12R-3** kill-switch; **12R-4** the Authorization Decision Service (pure evaluator +
-  contract); **12R-5/6** velocity counters + spend-reservation ledger; **12R-7** alerts →
-  RUNBOOK; **12R-8 (owner-gated)** the engine call-authorization hook. Owner decisions still
-  open: default thresholds, prepaid-vs-postpaid balance gate (DB-003), delivery model
-  (TELECOM #2), high-risk destination source, kill-switch maker-checker.
+- **12R-2b/2c/3 (DONE — MERGED `main` @`3f9f9f6`, PR #8)** — three stacked slices landed
+  together, all **authoring/state only, no enforcement**:
+  - **12R-2b velocity-limit authoring** — `VelocityLimit` + `VelocityMetric` (CALLS_PER_MINUTE/
+    HOUR/DAY, CONCURRENT_CALLS; integer `limit`); tenant-scoped CRUD; one-active-per-metric;
+    reuses `fraud.policy.*`. +5 unit +6 e2e.
+  - **12R-2c geo/destination-rule authoring** — `DestinationRule` unifies geo + destination:
+    match by COUNTRY (ISO-3166-1 alpha-2) or dial PREFIX; ALLOW/DENY + risk class; match value
+    normalized; cross-field validation; one-active-per-(matchType, matchValue); reuses
+    `fraud.policy.*`. +6 unit +6 e2e.
+  - **12R-3 kill-switch state** — `KillSwitch` with GLOBAL (platform-only, PlatformGuard) +
+    TENANT scopes; toggle audited + emits a `KILL_SWITCH` FraudEvent; new permission
+    `fraud.killswitch.manage` (owner/admin only); step-up MFA on activation deferred. +4 unit
+    +4 e2e. **This completes the Phase-12R policy-authoring + kill-switch set.**
+  All additive migrations (zero destructive). Full API suite **413 passed / 2 skipped**; API
+  tsc/eslint/build + web tsc clean; **31 permissions**.
+- **NEXT (per the Phase-12R plan): 12R-4** the Authorization Decision Service (pure evaluator +
+  contract — the slice that first *consumes* these policies + the switch); **12R-5/6** velocity
+  counters + spend-reservation ledger; **12R-7** alerts → RUNBOOK; **12R-8 (owner-gated)** the
+  engine call-authorization hook. Owner decisions still open: default thresholds,
+  prepaid-vs-postpaid balance gate (DB-003), delivery model (TELECOM #2), high-risk destination
+  source, kill-switch maker-checker + step-up MFA.
 
 ### (superseded) sub-phase plan
 
