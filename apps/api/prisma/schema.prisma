@@ -91,6 +91,7 @@ model Tenant {
   spendLimits      SpendLimit[]
   velocityLimits   VelocityLimit[]
   destinationRules DestinationRule[]
+  killSwitches     KillSwitch[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1112,4 +1113,40 @@ model DestinationRule {
 
   @@index([tenantId, matchType])
   @@index([tenantId])
+}
+
+// --- Fraud control plane (Phase 12R-3, ADR-0021) ---------------------------
+// Emergency kill-switch STATE — stores and toggles the switch; NOTHING reads or
+// enforces it at call time yet (no call authorization — that is the later
+// Authorization Decision Service). Two scopes: GLOBAL (platform-wide, tenantId
+// null, platform-operator only) and TENANT (a tenant's own calling). Dual-nature
+// nullable tenantId → NOT in TENANT_SCOPED_MODELS; scoping is explicit in the
+// service. Each toggle is audited and emits a KILL_SWITCH FraudEvent (12R-1).
+// Step-up MFA on activation is a later enforcement/auth concern (deferred).
+enum KillSwitchScope {
+  GLOBAL
+  TENANT
+}
+
+model KillSwitch {
+  id            String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  scope         KillSwitchScope
+  // GLOBAL → null (platform-wide); TENANT → the owning tenant.
+  tenantId      String?         @db.Uuid
+  tenant        Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  active        Boolean         @default(false)
+  // Safe human-readable reason (bounded; never secrets/PII).
+  reason        String?
+  activatedAt   DateTime?
+  activatedBy   String?         @db.Uuid
+  deactivatedAt DateTime?
+  deactivatedBy String?         @db.Uuid
+  version       Int             @default(1)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  // One switch per tenant (TENANT scope). GLOBAL singleton (tenantId null) is
+  // enforced in the service — Postgres treats NULLs as distinct here.
+  @@unique([scope, tenantId])
+  @@index([scope])
 }

@@ -10,6 +10,8 @@ import { VelocityLimitsController } from "./velocity-limits.controller";
 import { VelocityLimitsService } from "./velocity-limits.service";
 import { DestinationRulesController } from "./destination-rules.controller";
 import { DestinationRulesService } from "./destination-rules.service";
+import { KillSwitchController, GlobalKillSwitchController } from "./kill-switch.controller";
+import { KillSwitchService } from "./kill-switch.service";
 
 /**
  * Fraud control plane (Phase 12R, ADR-0021).
@@ -17,15 +19,24 @@ import { DestinationRulesService } from "./destination-rules.service";
  * 12R-2a — spend-limit authoring (declarative config + CRUD API).
  * 12R-2b — velocity-limit authoring (declarative config + CRUD API).
  * 12R-2c — geo/destination-rule authoring (declarative config + CRUD API).
- * NO enforcement anywhere yet (no kill-switch control, no call authorization, no
- * rate/concurrency counting, no geo/destination evaluation, no reservation/
- * balance gate, no engine wiring). AuthzModule provides the guards +
- * AuditService; the tenant-scoping Prisma client enforces isolation.
+ * 12R-3  — kill-switch state (GLOBAL + TENANT; toggle + audit + FraudEvent).
+ * NO enforcement anywhere yet (nothing reads the switch or policies at call
+ * time, no call authorization, no rate/concurrency counting, no geo/destination
+ * evaluation, no reservation/balance gate, no engine wiring). AuthzModule
+ * provides the guards + AuditService; the tenant-scoping Prisma client enforces
+ * isolation (the kill-switch is dual-nature, scoped explicitly in its service).
  */
 @Module({
   imports: [AuthModule, AuthzModule],
-  controllers: [FraudController, SpendLimitsController, VelocityLimitsController, DestinationRulesController],
-  providers: [PrismaService, FraudEventsService, SpendLimitsService, VelocityLimitsService, DestinationRulesService],
-  exports: [FraudEventsService, SpendLimitsService, VelocityLimitsService, DestinationRulesService],
+  controllers: [
+    FraudController,
+    SpendLimitsController,
+    VelocityLimitsController,
+    DestinationRulesController,
+    KillSwitchController,
+    GlobalKillSwitchController,
+  ],
+  providers: [PrismaService, FraudEventsService, SpendLimitsService, VelocityLimitsService, DestinationRulesService, KillSwitchService],
+  exports: [FraudEventsService, SpendLimitsService, VelocityLimitsService, DestinationRulesService, KillSwitchService],
 })
 export class FraudModule {}

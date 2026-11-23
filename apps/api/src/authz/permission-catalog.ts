@@ -83,6 +83,10 @@ export const PERMISSIONS: PermissionDef[] = [
   // enforcement. `read` is oversight; `manage` creates/updates/deletes limits.
   { key: "fraud.policy.read", resource: "fraud.policy", action: "read", description: "View fraud policy (spend limits)", group: "fraud" },
   { key: "fraud.policy.manage", resource: "fraud.policy", action: "manage", description: "Manage fraud policy (spend limits)", group: "fraud" },
+  // Emergency kill-switch (Phase 12R-3) — higher-stakes than policy authoring, so
+  // its own permission (not fraud.policy.manage). GLOBAL scope additionally needs
+  // the platform tenant (PlatformGuard).
+  { key: "fraud.killswitch.manage", resource: "fraud.killswitch", action: "manage", description: "Activate / deactivate the fraud kill-switch", group: "fraud" },
 ];
 
 export const SYSTEM_ROLES: SystemRoleDef[] = [
@@ -99,9 +103,9 @@ export const SYSTEM_ROLES: SystemRoleDef[] = [
     permissions: [
       "tenant.*", "member.*", "role.*", "did.*", "audit.read",
       "carrier.*", "sip_trunk.*", "routing.*", "telecom.read", "telecom.health.read",
-      // Explicit (not fraud.*) — events read + policy authoring; still no
-      // enforcement-control perm (those land, explicit, with their slices).
-      "fraud.events.read", "fraud.policy.read", "fraud.policy.manage",
+      // Explicit (not fraud.*) — events read + policy authoring + kill-switch;
+      // each enforcement-control perm is granted explicitly, never by wildcard.
+      "fraud.events.read", "fraud.policy.read", "fraud.policy.manage", "fraud.killswitch.manage",
     ],
   },
   {

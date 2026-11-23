@@ -1150,6 +1150,126 @@ export interface paths {
         patch: operations["updateDestinationRule"];
         trace?: never;
     };
+    "/v1/fraud/kill-switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the tenant kill-switch state
+         * @description The caller tenant's emergency kill-switch state (Phase 12R-3, ADR-0021). STATE only — nothing is enforced yet. Defaults to inactive before the switch has ever been toggled. Requires `fraud.policy.read`.
+         */
+        get: operations["getKillSwitch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/kill-switch/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate the tenant kill-switch
+         * @description Activate the caller tenant's kill-switch (audited; emits a KILL_SWITCH fraud event). Requires `fraud.killswitch`.
+         */
+        post: operations["activateKillSwitch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/kill-switch/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate the tenant kill-switch
+         * @description Deactivate the caller tenant's kill-switch (audited; emits a KILL_SWITCH fraud event). Requires `fraud.killswitch`.
+         */
+        post: operations["deactivateKillSwitch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/kill-switch/global": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the global kill-switch state (platform)
+         * @description The platform-wide kill-switch state. PLATFORM tenant only. Requires `fraud.policy.read`.
+         */
+        get: operations["getGlobalKillSwitch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/kill-switch/global/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate the global kill-switch (platform)
+         * @description Activate the platform-wide kill-switch (audited; emits a KILL_SWITCH fraud event). PLATFORM tenant only. Requires `fraud.killswitch`.
+         */
+        post: operations["activateGlobalKillSwitch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/kill-switch/global/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate the global kill-switch (platform)
+         * @description Deactivate the platform-wide kill-switch (audited; emits a KILL_SWITCH fraud event). PLATFORM tenant only. Requires `fraud.killswitch`.
+         */
+        post: operations["deactivateGlobalKillSwitch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1726,6 +1846,25 @@ export interface components {
             enabled?: boolean;
             /** @description Optimistic concurrency — a mismatch is a 409. */
             expectedVersion?: number;
+        };
+        /** @description Kill-switch state (Phase 12R-3). STATE only — not enforced yet. version is 0 before the switch has ever been toggled. */
+        KillSwitch: {
+            /** @enum {string} */
+            scope: "GLOBAL" | "TENANT";
+            active: boolean;
+            /** @description Safe reason from the last toggle — never secrets/PII. */
+            reason?: string | null;
+            version: number;
+            /** Format: date-time */
+            activatedAt?: string | null;
+            /** Format: date-time */
+            deactivatedAt?: string | null;
+            /** Format: date-time */
+            updatedAt?: string | null;
+        };
+        ToggleKillSwitch: {
+            /** @description Optional safe reason recorded with the toggle. */
+            reason?: string;
         };
         /** @description One append-only engine config-version record (secret-free snapshot metadata). */
         ConfigVersion: {
@@ -4437,6 +4576,158 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    getKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Kill-switch state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    activateKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ToggleKillSwitch"];
+            };
+        };
+        responses: {
+            /** @description Kill-switch state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    deactivateKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ToggleKillSwitch"];
+            };
+        };
+        responses: {
+            /** @description Kill-switch state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getGlobalKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Kill-switch state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    activateGlobalKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ToggleKillSwitch"];
+            };
+        };
+        responses: {
+            /** @description Kill-switch state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    deactivateGlobalKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ToggleKillSwitch"];
+            };
+        };
+        responses: {
+            /** @description Kill-switch state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
 }
