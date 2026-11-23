@@ -182,3 +182,68 @@ It applies a small set, verifies, re-applies (idempotent 0-op), then rolls back 
 empty. To wire the running API to real apply, set `ENGINE_CONNECTOR=kamailio` +
 `ENGINE_MGMT_ALLOWLIST=10.9.0.1/32@8443` in `apps/api/.env`. Production DI stays
 `NullEngineConnector` until that flag is set.
+
+## Toll-fraud alerts (Phase 12R, SEC-002) — the alert → response path
+
+Toll fraud is the #1 ranked risk (SEC-002). The fraud control plane records
+fraud-relevant occurrences as append-only **`FraudEvent`** rows, read via
+`GET /v1/fraud/events` (`fraud.events.read`; owner/admin/auditor), newest-first,
+filterable by `type`/`severity`. Every alert carries `source` (the control),
+`code` (machine reason), `severity`, an optional `correlationId` (the call
+attempt), and bounded non-PII `metadata` (e.g. `destinationCountry`).
+
+**Current wiring (as of 12R-7).** Two producers emit today:
+- **`KILL_SWITCH`** — on every kill-switch activate/deactivate (12R-3). CRITICAL
+  on activate, WARNING on deactivate.
+- **`AUTHORIZATION_DENIED`** — `FraudAlertService` maps a denied toll-fraud
+  decision to an alert (12R-7), throttled to one per `(tenant, code)` per 60s and
+  **fail-open** (records even if the throttle store is down — a dropped alert is
+  worse than a duplicate).
+
+> **NOT YET LIVE:** nothing calls `FraudAlertService` at call time yet — the
+> `/v1/fraud/authorize/preview` decision is a dry run and deliberately does **not**
+> alert. Alerts begin flowing when the owner-gated call-authorization path (12R-8)
+> is wired. `LIMIT_WARNING` (approaching a cap, pre-deny) has no producer yet.
+
+**Severity → response.**
+
+| Severity | Meaning | On-call response |
+|---|---|---|
+| CRITICAL | kill-switch active, or a usage store is down and calls are failing closed | Treat as an incident. Confirm scope (global vs one tenant), page the owner for a kill-switch; for a store outage see below. |
+| WARNING | a policy breach denied a call (spend / velocity / geo-destination) | Triage: is it one tenant or many? Legitimate traffic growth, or a compromised account / unexpected destinations? |
+| INFO | informational | Note; no immediate action. |
+
+**By `code` (source → what it means → action).**
+
+- `GLOBAL_KILL_SWITCH_ACTIVE` / `TENANT_KILL_SWITCH_ACTIVE` (`kill-switch`,
+  CRITICAL) — all calling (platform-wide, or for one tenant) is halted. Expected
+  during an active incident; if unexpected, find who toggled it
+  (`fraud.kill_switch.*` AuditLog) and why.
+- `COUNTERS_UNAVAILABLE` / `SPEND_RESERVATIONS_UNAVAILABLE` (`velocity` / `spend`,
+  CRITICAL) — **Redis is unreachable**, so velocity / reserved-spend cannot be
+  read and the decision is **failing closed** (denying calls for tenants that have
+  those limits). This is an infrastructure incident, not fraud: restore Redis
+  (check `REDIS_URL`, the host, and connectivity), confirm `GET /v1/fraud/events`
+  stops emitting these, and verify calls recover. Do **not** disable the limits to
+  "fix" it — that removes the fraud control.
+- `PER_CALL_SPEND_EXCEEDED` / `DAILY_SPEND_EXCEEDED` / `MONTHLY_SPEND_EXCEEDED`
+  (`spend`, WARNING) — the call's estimate (or the period's reserved spend) breached
+  a tenant spend cap. Confirm the cap (`GET /v1/fraud/policies/spend-limits`) is
+  intentional; a sudden spike in denials for one tenant suggests a compromised
+  account or a dialer loop — consider the tenant kill-switch.
+- `CALLS_PER_MINUTE_EXCEEDED` / `CALLS_PER_HOUR_EXCEEDED` / `CALLS_PER_DAY_EXCEEDED`
+  / `CONCURRENT_CALLS_EXCEEDED` (`velocity`, WARNING) — a rate / concurrency cap was
+  hit. Same triage: expected burst vs. abuse. Review the velocity limit
+  (`GET /v1/fraud/policies/velocity-limits`).
+- `COUNTRY_DENIED` / `PREFIX_DENIED` (`destination`, WARNING) — a call to a denied
+  country / dial prefix. Repeated attempts to high-cost / premium destinations are a
+  classic toll-fraud signature — check the account for compromise.
+- `INVALID_DESTINATION` (`destination`, WARNING) — the dialled number did not
+  normalize to E.164. Usually a client/data bug; a flood from one tenant can still
+  indicate probing.
+
+**Escalation.** A tenant kill-switch (`POST /v1/fraud/kill-switch/activate`,
+`fraud.killswitch.manage`) halts one tenant's calling; the global switch
+(`/v1/fraud/kill-switch/global/activate`, platform-admin) halts all of it. Both
+are audited and emit a `KILL_SWITCH` event. Deactivate only once the cause is
+understood.
