@@ -781,6 +781,35 @@ live (`POST /v1/auth/refresh → 400` now renders the Sign-in screen). **No back
 contract/dependency change.** CI's first attempt failed on the known transient `next/font` Google-font
 fetch flake (`layout.tsx`, unrelated); re-run passed clean.
 
+**ROADMAP Phase 12 — TOLL-FRAUD RAILS (SEC-002) — IN PROGRESS.** The first call-affecting
+capability, built in narrow additive slices (12R-n) off the design in the Phase-12R plan +
+**ADR-0021 (Accepted)**. Every slice so far is **authoring/foundation only — NO enforcement**
+(no call authorization, spend/velocity/geo/destination evaluation, kill-switch, reservation,
+or balance gate; the engine-enforcement boundary stays owner-gated on the delivery model).
+- **12R-1 (DONE — MERGED `main` @`a59c6d8`, PR #5)** — fraud-event foundation. Append-only,
+  immutable, tenant-scoped `FraudEvent` store (`TENANT_SCOPED_MODELS`, deny-by-default,
+  IDOR-safe; no mutable status → tamper-evident) + a read-only `GET /v1/fraud/events`
+  (cursor-paginated, type/severity filters, safe view, **no creation endpoint**). Permission
+  `fraud.events.read` (new `fraud` group; owner/admin/auditor only; no `fraud.*` wildcard →
+  no escalation). `FraudEventsService.record` writes one `AuditService` entry only for an
+  actor-driven event — system-raised events skip the AuditLog firehose (ADR-0010) — with
+  bounded metadata validation. Additive migration (zero destructive). +9 unit +5 e2e.
+- **12R-2a (DONE — MERGED `main` @`71cbd1a`, PR #6)** — spend-limit authoring. `SpendLimit`
+  model + `SpendLimitPeriod` enum (PER_CALL/DAILY/MONTHLY); full tenant-scoped CRUD. Money is
+  **integer micros** (`BigInt`), currency-tagged, never float; optimistic concurrency
+  (`version`/`expectedVersion`); soft-delete; at most one active limit per (tenant, period)
+  (409). Permissions `fraud.policy.read` (owner/admin/auditor) + `fraud.policy.manage`
+  (owner/admin only, not auditor/operator); every mutation audited.
+  `GET`/`POST /v1/fraud/policies/spend-limits` + `GET`/`PATCH`/`DELETE /{id}` (tenant-scoped,
+  no PlatformGuard; `period` immutable). Additive migration (zero destructive). +5 unit +6 e2e.
+  Full API suite 382 passed / 2 skipped; API tsc/eslint/build + web tsc clean.
+- **NEXT (per the Phase-12R plan): 12R-2b/2c** velocity / geo / destination policy authoring;
+  **12R-3** kill-switch; **12R-4** the Authorization Decision Service (pure evaluator +
+  contract); **12R-5/6** velocity counters + spend-reservation ledger; **12R-7** alerts →
+  RUNBOOK; **12R-8 (owner-gated)** the engine call-authorization hook. Owner decisions still
+  open: default thresholds, prepaid-vs-postpaid balance gate (DB-003), delivery model
+  (TELECOM #2), high-risk destination source, kill-switch maker-checker.
+
 ### (superseded) sub-phase plan
 
 **Phase 12M — real engine adapter (Kamailio first), built in additive review-gated sub-phases.** A disposable Kamailio 6.1.5 test engine is provisioned
