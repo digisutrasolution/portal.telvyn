@@ -87,11 +87,12 @@ model Tenant {
   engineResourceAssignments EngineResourceAssignment[]
 
   // Fraud control plane (Phase 12R). Back-relations only — no new column on Tenant.
-  fraudEvents      FraudEvent[]
-  spendLimits      SpendLimit[]
-  velocityLimits   VelocityLimit[]
-  destinationRules DestinationRule[]
-  killSwitches     KillSwitch[]
+  fraudEvents       FraudEvent[]
+  spendLimits       SpendLimit[]
+  velocityLimits    VelocityLimit[]
+  destinationRules  DestinationRule[]
+  killSwitches      KillSwitch[]
+  spendReservations SpendReservation[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1149,4 +1150,50 @@ model KillSwitch {
   // enforced in the service — Postgres treats NULLs as distinct here.
   @@unique([scope, tenantId])
   @@index([scope])
+}
+
+// --- Fraud control plane (Phase 12R-6, ADR-0021) ---------------------------
+// Spend-reservation ledger — the durable record of estimated call cost HELD
+// against a tenant's period spend caps while a call is in flight, so concurrent
+// authorizations cannot each individually pass a period cap and collectively
+// blow through it. STATE/MECHANISM ONLY: nothing places a reservation at call
+// time yet (the engine-wired call-authorization path is a later slice). The hot
+// per-period reserved total is a Redis gauge (fail-closed) that is reconcilable
+// from these rows; these rows are the source of truth + audit + idempotency
+// guard. Money is integer micros (never float). Settled actuals fold into the
+// billing ledger (Phase 13); until then a period cap reflects in-flight
+// reservations only. One live hold per (tenant, idempotencyKey) — the retry
+// guard. Designed for time-based partitioning as call volume arrives.
+enum SpendReservationStatus {
+  ACTIVE // reserved; call in flight
+  SETTLED // call completed; actual cost recorded (settledMicros)
+  RELEASED // call never placed / failed / cancelled; hold returned
+  EXPIRED // TTL elapsed while still ACTIVE; swept and returned
+}
+
+model SpendReservation {
+  id             String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId       String                 @db.Uuid
+  tenant         Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Dedupes retries of the same call-authorization attempt (one hold per key).
+  idempotencyKey String
+  // Reserved (estimated) cost in integer micros; actual recorded on settle.
+  amountMicros   BigInt
+  settledMicros  BigInt?
+  currency       Currency               @default(USD)
+  status         SpendReservationStatus @default(ACTIVE)
+  // Ties to the call attempt; set by the future call-authorization path.
+  correlationId  String?
+  // TTL: an ACTIVE reservation past this is swept to EXPIRED (hold returned).
+  expiresAt      DateTime
+  settledAt      DateTime?
+  releasedAt     DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  // One live hold per retry key; also the idempotency guard (service upserts).
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, createdAt])
+  // Drives the TTL sweeper (find overdue ACTIVE holds across tenants).
+  @@index([status, expiresAt])
 }

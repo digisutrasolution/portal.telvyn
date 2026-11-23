@@ -1,8 +1,9 @@
 /**
- * Phase 12R-4 — Authorization-decision preview e2e (real Postgres + Redis).
- * Proves the dry-run preview consumes the tenant's real policies + kill-switch:
- * RBAC, ALLOW with no policy, destination DENY, per-call spend DENY, kill-switch
- * DENY, invalid-destination DENY. Read-only — nothing is enforced or placed.
+ * Phase 12R-4/5/6 — Authorization-decision preview e2e (real Postgres + Redis).
+ * Proves the dry-run preview consumes the tenant's real policies + kill-switch +
+ * live usage: RBAC, ALLOW with no policy, destination DENY, per-call spend DENY,
+ * kill-switch DENY, invalid-destination DENY, a live velocity counter DENY, and
+ * a reserved-spend (ledger) DENY. Read-only — nothing is enforced or placed.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
@@ -55,11 +56,13 @@ beforeAll(async () => {
 });
 beforeEach(flushRateLimits);
 afterAll(async () => {
-  const velKeys = await redis.keys("fraud:vel:*");
+  const usageKeys = await redis.keys("fraud:vel:*");
   const concKeys = await redis.keys("fraud:conc:*");
-  if (velKeys.length || concKeys.length) await redis.del(...velKeys, ...concKeys);
+  const spendKeys = await redis.keys("fraud:spend:*");
+  const all = [...usageKeys, ...concKeys, ...spendKeys];
+  if (all.length) await redis.del(...all);
   await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
-  await prisma.tenant.deleteMany({ where: { name: { in: NAMES } } }); // policies + tenant kill-switch cascade
+  await prisma.tenant.deleteMany({ where: { name: { in: NAMES } } }); // policies + reservations + tenant kill-switch cascade
   await prisma.$disconnect();
   await redis.quit();
   await app.close();
@@ -124,5 +127,16 @@ describe("consumes real policies + kill-switch", () => {
     const r = await request(http).post(PREVIEW).set(auth(a.token)).send({ destination: "+14155550123" }).expect(200);
     expect(r.body.decision).toBe("DENY");
     expect(r.body.reasons[0].code).toBe("CALLS_PER_MINUTE_EXCEEDED");
+  });
+
+  it("DENYs when the reserved period spend already exceeds the cap", async () => {
+    const a = await provision("aza", "admin");
+    // Seed the live per-day reserved gauge directly (the real call path that
+    // would place reservations is a later slice); the preview must read it.
+    await redis.set(`fraud:spend:${a.tenantId}:DAILY`, "5000");
+    await request(http).post("/v1/fraud/policies/spend-limits").set(auth(a.token)).send({ period: "DAILY", amountMicros: 1000 }).expect(201);
+    const r = await request(http).post(PREVIEW).set(auth(a.token)).send({ destination: "+14155550123" }).expect(200);
+    expect(r.body.decision).toBe("DENY");
+    expect(r.body.reasons[0].code).toBe("DAILY_SPEND_EXCEEDED");
   });
 });

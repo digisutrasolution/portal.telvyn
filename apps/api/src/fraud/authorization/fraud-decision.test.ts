@@ -124,6 +124,35 @@ describe("decideFraud — spend limits", () => {
   });
 });
 
+describe("decideFraud — spend fail-closed (reservation ledger)", () => {
+  it("DENYs when a period spend limit exists but the reservation ledger is unavailable", () => {
+    const d = decideFraud(
+      base({ spendLimits: [{ period: "DAILY", amountMicros: 1_000, currency: "USD" }], reservationsAvailable: false }),
+    );
+    expect(d.decision).toBe("DENY");
+    expect(d.reasons[0]).toMatchObject({ control: "spend", code: "SPEND_RESERVATIONS_UNAVAILABLE" });
+  });
+  it("ALLOWs when the ledger is unavailable but only a PER_CALL limit is configured", () => {
+    const d = decideFraud(
+      base({ spendLimits: [{ period: "PER_CALL", amountMicros: 10_000, currency: "USD" }], reservationsAvailable: false }),
+    );
+    expect(d.decision).toBe("ALLOW");
+  });
+  it("still reports a PER_CALL breach even when the ledger is unavailable", () => {
+    const d = decideFraud(
+      base({
+        request: { destinationRaw: "+14155550123", estimatedCostMicros: 50_000 },
+        spendLimits: [
+          { period: "PER_CALL", amountMicros: 10_000, currency: "USD" },
+          { period: "DAILY", amountMicros: 1_000, currency: "USD" },
+        ],
+        reservationsAvailable: false,
+      }),
+    );
+    expect(d.reasons[0].code).toBe("PER_CALL_SPEND_EXCEEDED");
+  });
+});
+
 describe("decideFraud — velocity limits", () => {
   it("DENYs when adding this call exceeds a rate limit", () => {
     const d = decideFraud(

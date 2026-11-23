@@ -66,7 +66,7 @@ export interface FraudDecisionInput {
   spendLimits: SpendLimitSnapshot[];
   /** Enabled velocity limits only. */
   velocityLimits: VelocityLimitSnapshot[];
-  /** Current usage. `counts` are live velocity counters (12R-5); `spentMicros` stays zero until the reservation ledger lands (12R-6). */
+  /** Current usage. `counts` are live velocity counters (12R-5); `spentMicros` is the reserved total per period from the reservation ledger (12R-6). */
   usage: {
     spentMicros: Partial<Record<SpendLimitPeriod, number>>;
     counts: Partial<Record<VelocityMetric, number>>;
@@ -77,6 +77,12 @@ export interface FraudDecisionInput {
    * evaluating against unknown usage.
    */
   countersAvailable?: boolean;
+  /**
+   * Whether the spend-reservation ledger could be read. Default true. When false
+   * AND a period (non-PER_CALL) spend limit exists, the decision fails closed
+   * (DENY) rather than evaluating a period cap against an unknown reserved total.
+   */
+  reservationsAvailable?: boolean;
   request: {
     /** Raw dialled destination (normalized here). */
     destinationRaw: string;
@@ -159,18 +165,25 @@ export function decideFraud(input: FraudDecisionInput): FraudDecision {
     return { decision: "DENY", reasons: [ruleReason], destinationE164: e164, destinationCountry: country };
   }
 
-  // 4. Spend limits (per-call cap against the estimate; period caps against usage + estimate).
+  // 4. Spend limits. The per-call cap is deterministic (needs no usage) and is
+  // checked first; period caps need the reserved total from the ledger.
   const est = input.request.estimatedCostMicros ?? 0;
   for (const sl of input.spendLimits) {
-    if (sl.period === "PER_CALL") {
-      if (est > sl.amountMicros) {
-        return deny("spend", "PER_CALL_SPEND_EXCEEDED", "estimated call cost exceeds the per-call spend limit", e164, country);
-      }
-    } else {
-      const used = input.usage.spentMicros[sl.period] ?? 0;
-      if (used + est > sl.amountMicros) {
-        return deny("spend", `${sl.period}_SPEND_EXCEEDED`, `this call would exceed the ${sl.period.toLowerCase()} spend limit`, e164, country);
-      }
+    if (sl.period === "PER_CALL" && est > sl.amountMicros) {
+      return deny("spend", "PER_CALL_SPEND_EXCEEDED", "estimated call cost exceeds the per-call spend limit", e164, country);
+    }
+  }
+  // Fail closed: if a period cap is configured but the reservation ledger could
+  // not be read, deny rather than evaluate against an unknown reserved total.
+  const hasPeriodSpendLimit = input.spendLimits.some((sl) => sl.period !== "PER_CALL");
+  if (hasPeriodSpendLimit && input.reservationsAvailable === false) {
+    return deny("spend", "SPEND_RESERVATIONS_UNAVAILABLE", "spend reservation ledger is unavailable — failing closed", e164, country);
+  }
+  for (const sl of input.spendLimits) {
+    if (sl.period === "PER_CALL") continue;
+    const used = input.usage.spentMicros[sl.period] ?? 0;
+    if (used + est > sl.amountMicros) {
+      return deny("spend", `${sl.period}_SPEND_EXCEEDED`, `this call would exceed the ${sl.period.toLowerCase()} spend limit`, e164, country);
     }
   }
 

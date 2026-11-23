@@ -16,6 +16,7 @@ import { KillSwitchService } from "./kill-switch.service";
 import { FraudAuthorizationController } from "./authorization/authorization.controller";
 import { FraudAuthorizationService } from "./authorization/fraud-authorization.service";
 import { VelocityCounterService } from "./counters/velocity-counter.service";
+import { SpendReservationService } from "./reservations/spend-reservation.service";
 
 /**
  * Fraud control plane (Phase 12R, ADR-0021).
@@ -28,9 +29,13 @@ import { VelocityCounterService } from "./counters/velocity-counter.service";
  *          preview that consumes the policies + kill-switch.
  * 12R-5  — live velocity counters (Redis windows + concurrent gauge, fail-closed)
  *          wired into the decision's velocity check.
- * Still NO call-time enforcement — the preview is a dry run, nothing increments
- * the counters at call time yet, and no engine is wired. The spend-reservation
- * ledger + the real call-authorization path are later slices (12R-6+).
+ * 12R-6  — spend-reservation ledger (durable SpendReservation rows + a Redis
+ *          per-period reserved-micros gauge, fail-closed) wired into the
+ *          decision's period-spend check.
+ * Still NO call-time enforcement — the preview is a dry run, nothing places a
+ * reservation or increments a counter at call time yet, and no engine is wired.
+ * The real call-authorization path (reserve on authorize, settle/release on
+ * call end) + the TTL sweeper job are later slices (12R-7+).
  * AuthzModule provides the guards + AuditService; the tenant-scoping Prisma
  * client enforces isolation.
  */
@@ -55,6 +60,7 @@ import { VelocityCounterService } from "./counters/velocity-counter.service";
     KillSwitchService,
     FraudAuthorizationService,
     VelocityCounterService,
+    SpendReservationService,
   ],
   exports: [
     FraudEventsService,
@@ -64,6 +70,7 @@ import { VelocityCounterService } from "./counters/velocity-counter.service";
     KillSwitchService,
     FraudAuthorizationService,
     VelocityCounterService,
+    SpendReservationService,
   ],
 })
 export class FraudModule {}
