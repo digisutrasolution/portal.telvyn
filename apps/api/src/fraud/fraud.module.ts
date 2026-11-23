@@ -17,6 +17,7 @@ import { FraudAuthorizationController } from "./authorization/authorization.cont
 import { FraudAuthorizationService } from "./authorization/fraud-authorization.service";
 import { VelocityCounterService } from "./counters/velocity-counter.service";
 import { SpendReservationService } from "./reservations/spend-reservation.service";
+import { FraudAlertService } from "./alerts/fraud-alert.service";
 
 /**
  * Fraud control plane (Phase 12R, ADR-0021).
@@ -32,10 +33,14 @@ import { SpendReservationService } from "./reservations/spend-reservation.servic
  * 12R-6  — spend-reservation ledger (durable SpendReservation rows + a Redis
  *          per-period reserved-micros gauge, fail-closed) wired into the
  *          decision's period-spend check.
+ * 12R-7  — fraud alerting (FraudAlertService): a decision DENY → an append-only
+ *          AUTHORIZATION_DENIED FraudEvent, Redis-throttled per (tenant, code),
+ *          FAIL-OPEN. The "alert → RUNBOOK" path (docs/RUNBOOK.md). Records only.
  * Still NO call-time enforcement — the preview is a dry run, nothing places a
- * reservation or increments a counter at call time yet, and no engine is wired.
- * The real call-authorization path (reserve on authorize, settle/release on
- * call end) + the TTL sweeper job are later slices (12R-7+).
+ * reservation, increments a counter, or RAISES AN ALERT at call time yet, and no
+ * engine is wired. The real call-authorization path (reserve on authorize,
+ * settle/release on call end, alert on deny) + the TTL sweeper job are later
+ * slices (12R-8+).
  * AuthzModule provides the guards + AuditService; the tenant-scoping Prisma
  * client enforces isolation.
  */
@@ -61,6 +66,7 @@ import { SpendReservationService } from "./reservations/spend-reservation.servic
     FraudAuthorizationService,
     VelocityCounterService,
     SpendReservationService,
+    FraudAlertService,
   ],
   exports: [
     FraudEventsService,
@@ -71,6 +77,7 @@ import { SpendReservationService } from "./reservations/spend-reservation.servic
     FraudAuthorizationService,
     VelocityCounterService,
     SpendReservationService,
+    FraudAlertService,
   ],
 })
 export class FraudModule {}
