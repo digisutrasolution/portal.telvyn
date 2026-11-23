@@ -1270,6 +1270,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/fraud/authorize/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a fraud authorization decision (dry run)
+         * @description Run the toll-fraud decision for a hypothetical call against the caller tenant's policies + kill-switch (Phase 12R-4, ADR-0021). **Dry-run and read-only — no call is placed, no reservation is taken, no engine is contacted, and nothing is enforced.** The `destination` is normalized to E.164 server-side. Live usage counters do not exist yet (12R-5/6), so the kill-switch, geo/destination rules, and the per-call spend cap are fully evaluated while the period-spend and velocity checks pass until real counters feed them. Requires `fraud.policy.read`.
+         */
+        post: operations["previewFraudAuthorization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1865,6 +1885,33 @@ export interface components {
         ToggleKillSwitch: {
             /** @description Optional safe reason recorded with the toggle. */
             reason?: string;
+        };
+        PreviewAuthorization: {
+            /** @description Raw dialled number; normalized to E.164 server-side (must be international, starting with +). */
+            destination: string;
+            /**
+             * Format: int64
+             * @description Estimated call cost in integer micros (for the spend checks).
+             */
+            estimatedCostMicros?: number;
+        };
+        FraudDecisionReason: {
+            /** @description The control that produced this reason (kill-switch | destination | spend | velocity). */
+            control: string;
+            /** @description Short machine code, e.g. TENANT_KILL_SWITCH_ACTIVE | PER_CALL_SPEND_EXCEEDED. */
+            code: string;
+            /** @description Safe human-readable explanation. */
+            message: string;
+        };
+        /** @description The toll-fraud decision for a (hypothetical) call. `reasons` is empty on ALLOW and carries the single decisive reason on DENY (evaluation short-circuits). */
+        FraudDecision: {
+            /** @enum {string} */
+            decision: "ALLOW" | "DENY";
+            reasons: components["schemas"]["FraudDecisionReason"][];
+            /** @description Canonical destination, or null when it could not be parsed. */
+            destinationE164: string | null;
+            /** @description ISO-3166-1 alpha-2 country of the destination, or null. */
+            destinationCountry: string | null;
         };
         /** @description One append-only engine config-version record (secret-free snapshot metadata). */
         ConfigVersion: {
@@ -4723,6 +4770,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    previewFraudAuthorization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewAuthorization"];
+            };
+        };
+        responses: {
+            /** @description Decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FraudDecision"];
                 };
             };
             400: components["responses"]["Problem"];
