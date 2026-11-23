@@ -12,6 +12,8 @@ import { DestinationRulesController } from "./destination-rules.controller";
 import { DestinationRulesService } from "./destination-rules.service";
 import { KillSwitchController, GlobalKillSwitchController } from "./kill-switch.controller";
 import { KillSwitchService } from "./kill-switch.service";
+import { FraudAuthorizationController } from "./authorization/authorization.controller";
+import { FraudAuthorizationService } from "./authorization/fraud-authorization.service";
 
 /**
  * Fraud control plane (Phase 12R, ADR-0021).
@@ -20,11 +22,12 @@ import { KillSwitchService } from "./kill-switch.service";
  * 12R-2b — velocity-limit authoring (declarative config + CRUD API).
  * 12R-2c — geo/destination-rule authoring (declarative config + CRUD API).
  * 12R-3  — kill-switch state (GLOBAL + TENANT; toggle + audit + FraudEvent).
- * NO enforcement anywhere yet (nothing reads the switch or policies at call
- * time, no call authorization, no rate/concurrency counting, no geo/destination
- * evaluation, no reservation/balance gate, no engine wiring). AuthzModule
- * provides the guards + AuditService; the tenant-scoping Prisma client enforces
- * isolation (the kill-switch is dual-nature, scoped explicitly in its service).
+ * 12R-4  — Authorization Decision Service: a PURE decision evaluator + a DRY-RUN
+ *          preview that consumes the policies + kill-switch. Still NO enforcement
+ *          — no live call, reservation, counter, or engine; nothing is placed or
+ *          blocked. Live usage counters + the real call-authorization path are
+ *          later slices (12R-5/6+). AuthzModule provides the guards + AuditService;
+ *          the tenant-scoping Prisma client enforces isolation.
  */
 @Module({
   imports: [AuthModule, AuthzModule],
@@ -35,8 +38,24 @@ import { KillSwitchService } from "./kill-switch.service";
     DestinationRulesController,
     KillSwitchController,
     GlobalKillSwitchController,
+    FraudAuthorizationController,
   ],
-  providers: [PrismaService, FraudEventsService, SpendLimitsService, VelocityLimitsService, DestinationRulesService, KillSwitchService],
-  exports: [FraudEventsService, SpendLimitsService, VelocityLimitsService, DestinationRulesService, KillSwitchService],
+  providers: [
+    PrismaService,
+    FraudEventsService,
+    SpendLimitsService,
+    VelocityLimitsService,
+    DestinationRulesService,
+    KillSwitchService,
+    FraudAuthorizationService,
+  ],
+  exports: [
+    FraudEventsService,
+    SpendLimitsService,
+    VelocityLimitsService,
+    DestinationRulesService,
+    KillSwitchService,
+    FraudAuthorizationService,
+  ],
 })
 export class FraudModule {}
