@@ -6,6 +6,41 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-23 — Phase 12R-6 — **spend-reservation ledger** (ROADMAP Phase 12 toll-fraud rails,
+  ADR-0021; PR #9). Backs the decision's **period-spend** check with real reserved spend —
+  **state/mechanism only, NO call-time enforcement** (nothing places a reservation at call time
+  yet; the preview stays a dry run). New `SpendReservation` model + `SpendReservationStatus` enum
+  (ACTIVE/SETTLED/RELEASED/EXPIRED): durable rows holding a call's estimated cost against
+  DAILY/MONTHLY caps while in flight (source of truth, audit, idempotency, lifecycle), plus a
+  Redis per-period reserved-micros gauge (the hot read). Money is **integer micros**;
+  `@@unique(tenantId, idempotencyKey)` retry guard; added to `TENANT_SCOPED_MODELS`.
+  `SpendReservationService`: `readReserved()` **fail-closed**; `reserve()` **idempotent** (P2002
+  race → winner) + fail-closed (undoes the hold if the gauge can't be raised; atomic Lua INCRBY +
+  first-hit window TTL to UTC day/month end); `settle`/`release`/`expireDue` (cross-tenant TTL
+  sweeper) built + tested, **inert**. `decideFraud` gains `reservationsAvailable`; a period cap
+  fails closed with `SPEND_RESERVATIONS_UNAVAILABLE`. Additive migration (zero destructive). No
+  new API/permission/contract. Settled actuals fold into the billing ledger (Phase 13). +17 unit
+  +3 evaluator +1 e2e.
+- 2026-11-23 — Phase 12R-5 — **live velocity counters** (ROADMAP Phase 12 toll-fraud rails,
+  ADR-0021; PR #9). Backs the decision's **velocity** check with real per-tenant Redis counters —
+  **mechanism + wiring only, NO call-time enforcement** (nothing increments them at call time
+  yet). `VelocityCounterService`: fixed-window rate counters (CALLS_PER_MINUTE/HOUR/DAY) + a
+  concurrent-call gauge, reusing the auth rate-limiter's INCR + first-hit EXPIRE pattern.
+  `read()` **fail-closed** (throws on Redis error, never silently zero). `decideFraud` gains
+  `countersAvailable`; a velocity limit + unavailable counters → DENY `COUNTERS_UNAVAILABLE`. The
+  increment side (`recordCall`/`acquireConcurrent`/`releaseConcurrent`) is built + tested, inert
+  until the call path. Redis-only — no schema/migration/permission/contract change. +8 unit
+  +2 evaluator +1 e2e.
+- 2026-11-23 — Phase 12R-4 — **Authorization Decision Service** (ROADMAP Phase 12 toll-fraud
+  rails, ADR-0021; PR #9). The first slice that **consumes** the authored policies + kill-switch,
+  exposed **only** as a dry-run preview — **NO enforcement** (not wired to a live call, a
+  reservation, or an engine). A **pure** `decideFraud` evaluator (zero I/O): ordered short-circuit
+  kill-switch GLOBAL→TENANT → E.164 normalization → geo/destination rules (most-specific-match-
+  wins) → spend (per-call + period) → velocity → ALLOW; returns the decision + decisive reason +
+  normalized destination/country. `FraudAuthorizationService.preview` assembles the tenant's
+  policy snapshot + kill-switch and runs it; new route `POST /v1/fraud/authorize/preview`
+  (`fraud.policy.read`, tenant-scoped). The single place the toll-fraud decision is expressed —
+  later stateful slices (12R-5/6) reuse it unchanged. No new permission/migration. +17 unit +7 e2e.
 - 2026-11-23 — Phase 12R-3 — **kill-switch state** (ROADMAP Phase 12 toll-fraud rails,
   ADR-0021; PR #8). The emergency brake — **STATE only, nothing enforced at call time yet**.
   New `KillSwitch` model + `KillSwitchScope` enum with **GLOBAL** (platform-wide, PlatformGuard)
