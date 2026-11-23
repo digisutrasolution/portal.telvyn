@@ -849,13 +849,27 @@ or balance gate; the engine-enforcement boundary stays owner-gated on the delive
     reservations only.
   Full API suite **469 passed / 2 skipped**; API tsc/eslint/build + web tsc + **web production
   build** clean; CI green on PR #9. Permissions unchanged at **31**.
-- **NEXT (per the Phase-12R plan): 12R-7** alerts → RUNBOOK (FraudEvent producers for breaches +
-  an operator runbook; still no enforcement); **12R-8 (owner-gated)** the engine
-  call-authorization hook — the FIRST slice that actually enforces, placing reservations/counters
-  at call time and gating a live call on `decideFraud` (touches the media/engine plane → needs
-  explicit owner go-ahead). Owner decisions still open: default thresholds, prepaid-vs-postpaid
-  balance gate (DB-003), delivery model (TELECOM #2), high-risk destination source, kill-switch
-  maker-checker + step-up MFA.
+- **12R-7 (DONE — MERGED `main` @`ca3748f`, PR #11)** — fraud alerting: the "alert → RUNBOOK"
+  path (SEC-002). `FraudAlertService.alertOnDecision` turns a toll-fraud decision **DENY** into
+  an append-only `AUTHORIZATION_DENIED` `FraudEvent` (mapped from the decisive reason: source =
+  control, code, safe message, bounded non-PII metadata); **records only, enforces nothing**.
+  Severity: kill-switch + the fail-closed store-outage codes (`COUNTERS_UNAVAILABLE` /
+  `SPEND_RESERVATIONS_UNAVAILABLE`) → CRITICAL, else WARNING. **Throttled** one alert per
+  (tenant, code) per 60s (`SET NX EX`) so a flood of identical denials can't firehose the store;
+  **FAIL-OPEN** (the deliberate inverse of the enforcement path — a throttle-store outage records
+  the alert anyway; a dropped fraud signal is worse than a duplicate). System-raised → `FraudEvent`
+  only (no per-event AuditLog firehose, ADR-0010). `docs/RUNBOOK.md` gained a **"Toll-fraud
+  alerts"** section (type/code → severity → on-call response, incl. the Redis-down fail-closed
+  incident path + kill-switch escalation). **Inert**: nothing calls it at decision time yet — the
+  preview is a dry run and deliberately does NOT alert; alerts flow when 12R-8 wires the call path.
+  No schema/migration/contract/permission change (`FraudEventType` already has `AUTHORIZATION_DENIED`;
+  Redis + existing `FraudEvent` store). Full API suite **478 passed / 2 skipped**; CI green on PR #11.
+- **NEXT — only 12R-8 remains (owner-gated): the engine call-authorization hook** — the FIRST
+  slice that actually enforces: wires the real call path to place reservations/counters at call
+  time, gate a live call on `decideFraud`, and fire `alertOnDecision` on deny (touches the
+  media/engine plane → needs explicit owner go-ahead). Owner decisions still open: default
+  thresholds, prepaid-vs-postpaid balance gate (DB-003), delivery model (TELECOM #2), high-risk
+  destination source, kill-switch maker-checker + step-up MFA.
 
 ### (superseded) sub-phase plan
 
