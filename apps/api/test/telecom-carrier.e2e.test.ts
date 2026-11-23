@@ -194,7 +194,7 @@ describe("validation + honest health + pagination", () => {
 describe("operator health probe (Phase 12O-2aw)", () => {
   it("probes an honest posture (no fabricated HEALTHY) and the carrier health then reflects the probe", async () => {
     const a = await provision("ca", TenantType.CUSTOMER, "owner");
-    const created = await request(http).post("/v1/telecom/carriers").set(auth(a.token)).send(carrierBody("probe")).expect(201);
+    const created = await request(http).post("/v1/telecom/carriers").set(auth(a.token)).send(carrierBody("probe", { status: "ACTIVE" })).expect(201);
     const id = created.body.id as string;
 
     // Before any probe → honest "not yet probed".
@@ -230,7 +230,7 @@ describe("operator health probe (Phase 12O-2aw)", () => {
 describe("health-event history (Phase 12O-2ax)", () => {
   it("reads back the transitions a probe records (newest first), and is empty before any probe", async () => {
     const a = await provision("ca", TenantType.CUSTOMER, "owner");
-    const created = await request(http).post("/v1/telecom/carriers").set(auth(a.token)).send(carrierBody("hist")).expect(201);
+    const created = await request(http).post("/v1/telecom/carriers").set(auth(a.token)).send(carrierBody("hist", { status: "ACTIVE" })).expect(201);
     const id = created.body.id as string;
 
     const before = await request(http).get(`/v1/telecom/carriers/${id}/health-events`).set(auth(a.token)).expect(200);

@@ -152,10 +152,23 @@ describe("platform CRUD + integrity + honest health", () => {
     expect(health.status).toBe(200);
     expect(health.body.status).toBe("UNKNOWN");
 
-    // Operator health-check POST is an action, not a resource creation → 200 (contract), honest UNKNOWN — Phase 12O-2ay
+    // Dead-man's-switch evaluator (ADR-0020, 12O-2bb) runs on the FRESH node (health
+    // UNKNOWN, administratively DISABLED) → it transitions UNKNOWN → DISABLED, a real,
+    // honest change recorded as a HealthEvent (no heartbeat needed to demonstrate).
+    const evalRes = await request(http).post("/v1/telecom/nodes/health/evaluate").set(auth(plat.token)).send({});
+    expect(evalRes.status).toBe(200);
+    expect(evalRes.body.skipped).toBe(false);
+    expect(evalRes.body.transitioned).toBeGreaterThanOrEqual(1); // this node transitioned UNKNOWN → DISABLED
+    const graded = await request(http).get(`/v1/telecom/nodes/${nodeId}/health`).set(auth(plat.token));
+    expect(graded.body.status).toBe("DISABLED"); // health now reflects the evaluator, not a placeholder
+    const events = await request(http).get(`/v1/telecom/nodes/${nodeId}/health-events`).set(auth(plat.token));
+    expect(events.body.items.some((e: { toStatus: string }) => e.toStatus === "DISABLED")).toBe(true);
+
+    // Operator health-check POST is an action, not a resource creation → 200 (contract),
+    // and it honestly reports the administratively DISABLED node as DISABLED — Phase 12O-2ay.
     const probe = await request(http).post(`/v1/telecom/nodes/${nodeId}/health-check`).set(auth(plat.token)).send({});
     expect(probe.status).toBe(200);
-    expect(probe.body.status).toBe("UNKNOWN");
+    expect(probe.body.status).toBe("DISABLED");
 
     // Heartbeat ingest (ADR-0020, 12O-2ba) FAILS CLOSED: no inbound mTLS terminator
     // is wired, so the Null authenticator yields no verified identity → 401. The
@@ -166,18 +179,6 @@ describe("platform CRUD + integrity + honest health", () => {
     expect(beat.status).toBe(401);
     const after = await request(http).get(`/v1/telecom/nodes/${nodeId}/health`).set(auth(plat.token));
     expect(after.body.lastHeartbeatAt ?? null).toBeNull(); // unchanged — the beat was rejected
-
-    // Dead-man's-switch evaluator (ADR-0020, 12O-2bb). The node was created with the
-    // default administrative status DISABLED, so the tick transitions its health
-    // UNKNOWN -> DISABLED (a real, honest change — no heartbeat needed to demonstrate).
-    const evalRes = await request(http).post("/v1/telecom/nodes/health/evaluate").set(auth(plat.token)).send({});
-    expect(evalRes.status).toBe(200);
-    expect(evalRes.body.skipped).toBe(false);
-    expect(evalRes.body.transitioned).toBeGreaterThanOrEqual(1);
-    const graded = await request(http).get(`/v1/telecom/nodes/${nodeId}/health`).set(auth(plat.token));
-    expect(graded.body.status).toBe("DISABLED"); // health now reflects the evaluator, not a placeholder
-    const events = await request(http).get(`/v1/telecom/nodes/${nodeId}/health-events`).set(auth(plat.token));
-    expect(events.body.items.some((e: { toStatus: string }) => e.toStatus === "DISABLED")).toBe(true);
 
     // NODE_AGENT provisioning (ADR-0020, 12O-2bc): attach the node's public client cert,
     // then detach. The server derives the fingerprint (hint); the private key never sent.

@@ -30,12 +30,10 @@ function carrierRow(id: string, over: Partial<Record<string, unknown>> = {}) {
 function makeService(stub: {
   findFirstCarrier?: ReturnType<typeof carrierRow> | null;
   findManyCarriers?: ReturnType<typeof carrierRow>[];
-  latestEvent?: { toStatus: HealthStatus } | null; // get() derivation
-  groupBy?: { entityId: string; _max: { id: string | null } }[]; // list() step 1
-  eventsById?: { entityId: string; toStatus: HealthStatus }[]; // list() step 2
+  latestEvent?: { toStatus: HealthStatus } | null; // get() derivation (findFirst)
+  listEvents?: { entityId: string; toStatus: HealthStatus }[]; // list() derivation (findMany, newest-first)
 }) {
-  const groupBy = vi.fn().mockResolvedValue(stub.groupBy ?? []);
-  const findManyEvents = vi.fn().mockResolvedValue(stub.eventsById ?? []);
+  const findManyEvents = vi.fn().mockResolvedValue(stub.listEvents ?? []);
   const prisma = {
     carrier: {
       findFirst: vi.fn().mockResolvedValue(stub.findFirstCarrier ?? null),
@@ -43,12 +41,11 @@ function makeService(stub: {
     },
     healthEvent: {
       findFirst: vi.fn().mockResolvedValue(stub.latestEvent ?? null),
-      groupBy,
       findMany: findManyEvents,
     },
   } as unknown as ConstructorParameters<typeof CarriersService>[0];
   const vault = {} as unknown as ConstructorParameters<typeof CarriersService>[1];
-  return { service: new CarriersService(prisma, vault), groupBy, findManyEvents };
+  return { service: new CarriersService(prisma, vault), findManyEvents };
 }
 
 const listInput: ListCarriersInput = { limit: 25, scope: "all" } as ListCarriersInput;
@@ -66,27 +63,30 @@ describe("CarriersService health derivation", () => {
     expect(view.health).toEqual({ status: HealthStatus.UNKNOWN, detail: "not yet probed" });
   });
 
-  it("list(): derives per-carrier health in two bounded queries (no N+1) and leaves unprobed carriers UNKNOWN", async () => {
-    const { service, groupBy, findManyEvents } = makeService({
+  it("list(): derives per-carrier health in ONE bounded query (no N+1), newest-first dedupe, unprobed → UNKNOWN", async () => {
+    const { service, findManyEvents } = makeService({
       findManyCarriers: [carrierRow("c1"), carrierRow("c2")],
-      groupBy: [{ entityId: "c1", _max: { id: "evt-c1" } }], // only c1 has events
-      eventsById: [{ entityId: "c1", toStatus: HealthStatus.DISABLED }],
+      // newest-first (orderBy id desc): c1's newest is DISABLED (an older UNKNOWN follows); c2 has none.
+      listEvents: [
+        { entityId: "c1", toStatus: HealthStatus.DISABLED },
+        { entityId: "c1", toStatus: HealthStatus.UNKNOWN },
+      ],
     });
     const page = await service.list(ctx, listInput);
 
-    expect(page.items.find((i) => i.id === "c1")!.health.status).toBe(HealthStatus.DISABLED);
+    expect(page.items.find((i) => i.id === "c1")!.health.status).toBe(HealthStatus.DISABLED); // newest wins
     expect(page.items.find((i) => i.id === "c2")!.health).toEqual({ status: HealthStatus.UNKNOWN, detail: "not yet probed" });
-    // exactly one groupBy + one findMany regardless of carrier count — not a per-row lookup
-    expect(groupBy).toHaveBeenCalledTimes(1);
-    expect(groupBy).toHaveBeenCalledWith(expect.objectContaining({ by: ["entityId"], where: expect.objectContaining({ entityType: HealthEntityType.CARRIER, entityId: { in: ["c1", "c2"] } }) }));
+    // a single events query for ALL carriers (not a per-row lookup), ordered newest-first, no max(uuid)
     expect(findManyEvents).toHaveBeenCalledTimes(1);
-    expect(findManyEvents).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ["evt-c1"] } } }));
+    expect(findManyEvents).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { entityType: HealthEntityType.CARRIER, entityId: { in: ["c1", "c2"] } }, orderBy: { id: "desc" } }),
+    );
   });
 
   it("list(): makes no health query for an empty page", async () => {
-    const { service, groupBy } = makeService({ findManyCarriers: [] });
+    const { service, findManyEvents } = makeService({ findManyCarriers: [] });
     const page = await service.list(ctx, listInput);
     expect(page.items).toHaveLength(0);
-    expect(groupBy).not.toHaveBeenCalled();
+    expect(findManyEvents).not.toHaveBeenCalled();
   });
 });

@@ -47,24 +47,22 @@ export class CarriersService {
   }
 
   /**
-   * Latest CARRIER health status per carrier id, in two bounded queries (no N+1):
-   * group the events to the newest id per carrier (uuidv7 id is time-ordered), then
-   * fetch exactly those rows. Carriers never probed are simply absent from the map.
+   * Latest CARRIER health status per carrier id (no N+1): one query over the listed
+   * carriers' events, newest-first by the uuidv7 id, keeping the first (newest) seen
+   * per carrier. Health events are transitions only (ADR-0010), so the row count is
+   * small. Carriers never probed are simply absent from the map. (We cannot `max(id)`
+   * — Postgres has no max() for uuid — so we order + dedupe in-process instead.)
    */
   private async latestHealthFor(ids: string[]): Promise<Map<string, HealthStatus>> {
     if (ids.length === 0) return new Map();
-    const newest = await this.prisma.healthEvent.groupBy({
-      by: ["entityId"],
-      where: { entityType: HealthEntityType.CARRIER, entityId: { in: ids } },
-      _max: { id: true },
-    });
-    const newestIds = newest.map((g) => g._max.id).filter((id): id is string => id !== null);
-    if (newestIds.length === 0) return new Map();
     const rows = await this.prisma.healthEvent.findMany({
-      where: { id: { in: newestIds } },
+      where: { entityType: HealthEntityType.CARRIER, entityId: { in: ids } },
+      orderBy: { id: "desc" }, // uuidv7 id is time-ordered → newest first
       select: { entityId: true, toStatus: true },
     });
-    return new Map(rows.map((r) => [r.entityId, r.toStatus]));
+    const latest = new Map<string, HealthStatus>();
+    for (const r of rows) if (!latest.has(r.entityId)) latest.set(r.entityId, r.toStatus);
+    return latest;
   }
 
   private view(c: CarrierRow, latestHealth: HealthStatus | null = null) {

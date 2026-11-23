@@ -70,6 +70,21 @@ Format: Keep a Changelog; SemVer once releases begin.
   contract, no web change.
 
 ### Fixed
+- 2026-11-23 — Carrier **list 500** (regression from 12O-2aw, caught by the first remote CI
+  run). `CarriersService.latestHealthFor` derived per-carrier health with a Prisma
+  `groupBy({ _max: { id } })`, but `id` is a **uuid** and Postgres has no `max(uuid)` — so any
+  carrier-list request where a listed carrier had health events errored (`42883: function
+  max(uuid) does not exist`). The unit tests stubbed Prisma, so the real SQL never ran.
+  Replaced with a single `findMany` ordered newest-first by the uuidv7 id + an in-process
+  first-per-carrier dedupe (health events are transition-only, so the row count is small) — no
+  `max(uuid)`, same no-N+1 shape. Also corrected e2e health-status expectations that wrongly
+  assumed ACTIVE entities (nodes/carriers default to `DISABLED`, so the honest probe is
+  DISABLED): the carrier probe/history e2e now create ACTIVE carriers (to exercise
+  UNCONFIGURED → UNKNOWN), and the node e2e runs the evaluator on the fresh node then asserts
+  the health-check reports DISABLED. Full e2e suite now green against live Postgres + Redis.
+- 2026-11-23 — CI: dropped the redundant `version:` input from `pnpm/action-setup@v4` (it
+  conflicts with `packageManager: pnpm@9.12.0` in package.json and failed the pnpm-setup step
+  on the workflow's first remote run).
 - 2026-11-23 — Phase 12O-2ay — operator-action POSTs now return **HTTP 200** to
   match their OpenAPI contracts (they were returning NestJS's default **201** on
   success, a runtime-vs-contract drift). Aligned `POST
