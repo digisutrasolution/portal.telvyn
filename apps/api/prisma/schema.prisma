@@ -86,6 +86,9 @@ model Tenant {
   lcrPolicies               LcrPolicy[]
   engineResourceAssignments EngineResourceAssignment[]
 
+  // Fraud control plane (Phase 12R). Back-relation only — no new column on Tenant.
+  fraudEvents FraudEvent[]
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -953,4 +956,50 @@ model TelecomConfigVersion {
 
   @@index([entityType, entityId, createdAt])
   @@index([tenantId, createdAt])
+}
+
+// --- Fraud control plane (Phase 12R, ADR-0021) -----------------------------
+// Append-only, immutable, tenant-scoped record of fraud-relevant occurrences.
+// This slice (12R-1) establishes the event store + a read API only — there is
+// NO enforcement (no spend/velocity/geo/destination/kill-switch control, no
+// call authorization, no engine wiring). Mirrors the HealthEvent/SecurityEvent
+// append-only pattern. Deliberately has no updatedAt/deletedAt and no mutable
+// status, to stay tamper-evident (ADR-0021 §5).
+enum FraudEventType {
+  AUTHORIZATION_DENIED
+  LIMIT_WARNING
+  KILL_SWITCH
+  POLICY_CHANGE
+  ANOMALY
+}
+
+enum FraudEventSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model FraudEvent {
+  id            String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId      String             @db.Uuid
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type          FraudEventType
+  severity      FraudEventSeverity @default(WARNING)
+  // The control that raised it, e.g. "velocity" | "spend" | "geo" | "kill-switch".
+  source        String
+  // Short machine reason code, e.g. "DAILY_SPEND_EXCEEDED".
+  code          String
+  // Safe human-readable text (bounded; never secrets or PII).
+  reason        String?
+  // Ties to a call attempt / request; set by future producers.
+  correlationId String?
+  // The user whose action raised it, when applicable; system-raised events = null.
+  actorId       String?            @db.Uuid
+  // Bounded, structured context; never secrets or unnecessary PII.
+  metadata      Json?
+  createdAt     DateTime           @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, type, createdAt])
+  @@index([tenantId, severity, createdAt])
 }

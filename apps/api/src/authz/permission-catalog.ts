@@ -34,6 +34,7 @@ export const PERMISSION_GROUPS: PermissionGroupDef[] = [
   { key: "billing", name: "Billing", description: "Wallet, invoices, ledger" },
   { key: "audit", name: "Audit", description: "Audit and security trails" },
   { key: "telecom", name: "Telecom", description: "Engines, nodes, carriers, trunks, routing, health" },
+  { key: "fraud", name: "Fraud", description: "Fraud & abuse controls" },
 ];
 
 export const PERMISSIONS: PermissionDef[] = [
@@ -73,6 +74,11 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: "sip_trunk.delete", resource: "sip_trunk", action: "delete", description: "Delete SIP trunks", group: "telecom" },
   { key: "routing.read", resource: "routing", action: "read", description: "View routing profiles", group: "telecom" },
   { key: "routing.manage", resource: "routing", action: "manage", description: "Manage routing profiles & rules", group: "telecom" },
+  // fraud control plane (Phase 12R, ADR-0021). Foundation slice: read-only
+  // access to the tenant's own fraud events. Enforcement permissions
+  // (fraud.policy.manage, fraud.killswitch, platform read_all) land with their
+  // slices — declared there, never as a `fraud.*` wildcard, so no escalation.
+  { key: "fraud.events.read", resource: "fraud.events", action: "read", description: "View fraud events", group: "fraud" },
 ];
 
 export const SYSTEM_ROLES: SystemRoleDef[] = [
@@ -89,6 +95,8 @@ export const SYSTEM_ROLES: SystemRoleDef[] = [
     permissions: [
       "tenant.*", "member.*", "role.*", "did.*", "audit.read",
       "carrier.*", "sip_trunk.*", "routing.*", "telecom.read", "telecom.health.read",
+      // Explicit (not fraud.*) — oversight read only; no enforcement perms by wildcard.
+      "fraud.events.read",
     ],
   },
   {
@@ -107,6 +115,7 @@ export const SYSTEM_ROLES: SystemRoleDef[] = [
     permissions: [
       "tenant.read", "member.read", "role.read", "did.read", "wallet.read", "cdr.read", "audit.read",
       "carrier.read", "sip_trunk.read", "routing.read", "telecom.read", "telecom.health.read",
+      "fraud.events.read",
     ],
   },
 ];
