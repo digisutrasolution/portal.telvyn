@@ -1046,6 +1046,230 @@ export interface paths {
         patch: operations["updateSpendLimit"];
         trace?: never;
     };
+    "/v1/fraud/policies/velocity-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List velocity limits (tenant)
+         * @description The tenant's own velocity limits (Phase 12R-2b, ADR-0021), cursor-paginated. DECLARATIVE config only — nothing counts or enforces these yet. Strictly tenant-scoped. Optional `metric` / `enabled` filters. Requires `fraud.policy.read`.
+         */
+        get: operations["listVelocityLimits"];
+        put?: never;
+        /**
+         * Create a velocity limit
+         * @description Create a tenant-owned velocity limit (declarative config only — no enforcement). Ownership (tenantId) is server-derived. `limit` is an integer count (calls per window, or the concurrent-call cap). At most one active limit per (tenant, metric) — a duplicate is a 409. Requires `fraud.policy.manage`.
+         */
+        post: operations["createVelocityLimit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/policies/velocity-limits/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a velocity limit
+         * @description A tenant's own velocity limit by id (foreign/removed → 404, IDOR-safe). Requires `fraud.policy.read`.
+         */
+        get: operations["getVelocityLimit"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a velocity limit (soft delete)
+         * @description Soft-delete a tenant-owned velocity limit (sets deletedAt). A foreign tenant's limit is 404 (IDOR-safe). Requires `fraud.policy.manage`.
+         */
+        delete: operations["deleteVelocityLimit"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a velocity limit
+         * @description Update a tenant-owned velocity limit (limit / enabled). `metric` is immutable (the business key). Pass `expectedVersion` for optimistic concurrency — a mismatch is a 409. A foreign tenant's limit is 404. Requires `fraud.policy.manage`.
+         */
+        patch: operations["updateVelocityLimit"];
+        trace?: never;
+    };
+    "/v1/fraud/policies/destination-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List geo/destination rules (tenant)
+         * @description The tenant's own geo/destination rules (Phase 12R-2c, ADR-0021), cursor-paginated. DECLARATIVE config only — nothing evaluates or enforces these yet. A rule matches by COUNTRY (ISO-3166-1 alpha-2) or by dial PREFIX, with an ALLOW/DENY action + risk class. Strictly tenant-scoped. Optional `matchType` / `action` / `riskClass` / `enabled` filters. Requires `fraud.policy.read`.
+         */
+        get: operations["listDestinationRules"];
+        put?: never;
+        /**
+         * Create a geo/destination rule
+         * @description Create a tenant-owned rule (declarative config only — no enforcement). Ownership (tenantId) is server-derived. `matchValue` must be an ISO-3166-1 alpha-2 country (COUNTRY) or a dial prefix of up to 15 digits (PREFIX); it is normalized server-side (country → uppercase, prefix → no leading +). At most one active rule per (tenant, matchType, matchValue) — a duplicate is a 409. Requires `fraud.policy.manage`.
+         */
+        post: operations["createDestinationRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/policies/destination-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a geo/destination rule
+         * @description A tenant's own rule by id (foreign/removed → 404, IDOR-safe). Requires `fraud.policy.read`.
+         */
+        get: operations["getDestinationRule"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a geo/destination rule (soft delete)
+         * @description Soft-delete a tenant-owned rule (sets deletedAt). A foreign tenant's rule is 404 (IDOR-safe). Requires `fraud.policy.manage`.
+         */
+        delete: operations["deleteDestinationRule"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a geo/destination rule
+         * @description Update a tenant-owned rule (action / riskClass / enabled). `matchType` and `matchValue` are immutable (the business key). Pass `expectedVersion` for optimistic concurrency — a mismatch is a 409. A foreign tenant's rule is 404. Requires `fraud.policy.manage`.
+         */
+        patch: operations["updateDestinationRule"];
+        trace?: never;
+    };
+    "/v1/fraud/kill-switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the tenant kill-switch state
+         * @description The caller tenant's emergency kill-switch state (Phase 12R-3, ADR-0021). STATE only — nothing is enforced yet. Defaults to inactive before the switch has ever been toggled. Requires `fraud.policy.read`.
+         */
+        get: operations["getKillSwitch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/kill-switch/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate the tenant kill-switch
+         * @description Activate the caller tenant's kill-switch (audited; emits a KILL_SWITCH fraud event). Requires `fraud.killswitch`.
+         */
+        post: operations["activateKillSwitch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/kill-switch/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate the tenant kill-switch
+         * @description Deactivate the caller tenant's kill-switch (audited; emits a KILL_SWITCH fraud event). Requires `fraud.killswitch`.
+         */
+        post: operations["deactivateKillSwitch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/kill-switch/global": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the global kill-switch state (platform)
+         * @description The platform-wide kill-switch state. PLATFORM tenant only. Requires `fraud.policy.read`.
+         */
+        get: operations["getGlobalKillSwitch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/kill-switch/global/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate the global kill-switch (platform)
+         * @description Activate the platform-wide kill-switch (audited; emits a KILL_SWITCH fraud event). PLATFORM tenant only. Requires `fraud.killswitch`.
+         */
+        post: operations["activateGlobalKillSwitch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/fraud/kill-switch/global/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate the global kill-switch (platform)
+         * @description Deactivate the platform-wide kill-switch (audited; emits a KILL_SWITCH fraud event). PLATFORM tenant only. Requires `fraud.killswitch`.
+         */
+        post: operations["deactivateGlobalKillSwitch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1531,6 +1755,116 @@ export interface components {
             enabled?: boolean;
             /** @description Optimistic concurrency — a mismatch is a 409. */
             expectedVersion?: number;
+        };
+        /** @description A tenant's velocity limit (Phase 12R-2b). Declarative config — not enforced yet. `limit` is an integer count. */
+        VelocityLimit: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            metric: "CALLS_PER_MINUTE" | "CALLS_PER_HOUR" | "CALLS_PER_DAY" | "CONCURRENT_CALLS";
+            /** @description Max count per the metric's window, or the concurrent-call cap. */
+            limit: number;
+            enabled: boolean;
+            /** @description Optimistic-concurrency version; pass as expectedVersion on update. */
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        VelocityLimitPage: {
+            items: components["schemas"]["VelocityLimit"][];
+            /**
+             * Format: uuid
+             * @description Pass as `cursor` to fetch the next (older) page; null when exhausted.
+             */
+            nextCursor: string | null;
+        };
+        CreateVelocityLimit: {
+            /** @enum {string} */
+            metric: "CALLS_PER_MINUTE" | "CALLS_PER_HOUR" | "CALLS_PER_DAY" | "CONCURRENT_CALLS";
+            limit: number;
+            /** @default true */
+            enabled: boolean;
+        };
+        /** @description `metric` is immutable and cannot be changed here. */
+        UpdateVelocityLimit: {
+            limit?: number;
+            enabled?: boolean;
+            /** @description Optimistic concurrency — a mismatch is a 409. */
+            expectedVersion?: number;
+        };
+        /** @description A tenant's geo/destination rule (Phase 12R-2c). Declarative config — not evaluated or enforced yet. Matches by COUNTRY (ISO-3166-1 alpha-2) or dial PREFIX; `matchValue` is stored normalized. */
+        DestinationRule: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            matchType: "COUNTRY" | "PREFIX";
+            /** @description Normalized: COUNTRY = uppercase alpha-2; PREFIX = digits, no leading +. */
+            matchValue: string;
+            /** @enum {string} */
+            action: "ALLOW" | "DENY";
+            /** @enum {string} */
+            riskClass: "STANDARD" | "HIGH_COST" | "PREMIUM";
+            enabled: boolean;
+            /** @description Optimistic-concurrency version; pass as expectedVersion on update. */
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        DestinationRulePage: {
+            items: components["schemas"]["DestinationRule"][];
+            /**
+             * Format: uuid
+             * @description Pass as `cursor` to fetch the next (older) page; null when exhausted.
+             */
+            nextCursor: string | null;
+        };
+        CreateDestinationRule: {
+            /** @enum {string} */
+            matchType: "COUNTRY" | "PREFIX";
+            /** @description COUNTRY = ISO-3166-1 alpha-2; PREFIX = up to 15 digits (optional leading +). Normalized server-side. */
+            matchValue: string;
+            /** @enum {string} */
+            action: "ALLOW" | "DENY";
+            /**
+             * @default STANDARD
+             * @enum {string}
+             */
+            riskClass: "STANDARD" | "HIGH_COST" | "PREMIUM";
+            /** @default true */
+            enabled: boolean;
+        };
+        /** @description `matchType` and `matchValue` are immutable and cannot be changed here. */
+        UpdateDestinationRule: {
+            /** @enum {string} */
+            action?: "ALLOW" | "DENY";
+            /** @enum {string} */
+            riskClass?: "STANDARD" | "HIGH_COST" | "PREMIUM";
+            enabled?: boolean;
+            /** @description Optimistic concurrency — a mismatch is a 409. */
+            expectedVersion?: number;
+        };
+        /** @description Kill-switch state (Phase 12R-3). STATE only — not enforced yet. version is 0 before the switch has ever been toggled. */
+        KillSwitch: {
+            /** @enum {string} */
+            scope: "GLOBAL" | "TENANT";
+            active: boolean;
+            /** @description Safe reason from the last toggle — never secrets/PII. */
+            reason?: string | null;
+            version: number;
+            /** Format: date-time */
+            activatedAt?: string | null;
+            /** Format: date-time */
+            deactivatedAt?: string | null;
+            /** Format: date-time */
+            updatedAt?: string | null;
+        };
+        ToggleKillSwitch: {
+            /** @description Optional safe reason recorded with the toggle. */
+            reason?: string;
         };
         /** @description One append-only engine config-version record (secret-free snapshot metadata). */
         ConfigVersion: {
@@ -3970,6 +4304,430 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    listVelocityLimits: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+                metric?: "CALLS_PER_MINUTE" | "CALLS_PER_HOUR" | "CALLS_PER_DAY" | "CONCURRENT_CALLS";
+                enabled?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Velocity limits */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VelocityLimitPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    createVelocityLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVelocityLimit"];
+            };
+        };
+        responses: {
+            /** @description Velocity limit created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VelocityLimit"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getVelocityLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Velocity limit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VelocityLimit"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteVelocityLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Velocity limit deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateVelocityLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVelocityLimit"];
+            };
+        };
+        responses: {
+            /** @description Velocity limit updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VelocityLimit"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listDestinationRules: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+                matchType?: "COUNTRY" | "PREFIX";
+                action?: "ALLOW" | "DENY";
+                riskClass?: "STANDARD" | "HIGH_COST" | "PREMIUM";
+                enabled?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Destination rules */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DestinationRulePage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    createDestinationRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDestinationRule"];
+            };
+        };
+        responses: {
+            /** @description Destination rule created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DestinationRule"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getDestinationRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Destination rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DestinationRule"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteDestinationRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Destination rule deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateDestinationRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDestinationRule"];
+            };
+        };
+        responses: {
+            /** @description Destination rule updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DestinationRule"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Kill-switch state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    activateKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ToggleKillSwitch"];
+            };
+        };
+        responses: {
+            /** @description Kill-switch state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    deactivateKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ToggleKillSwitch"];
+            };
+        };
+        responses: {
+            /** @description Kill-switch state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getGlobalKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Kill-switch state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    activateGlobalKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ToggleKillSwitch"];
+            };
+        };
+        responses: {
+            /** @description Kill-switch state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    deactivateGlobalKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ToggleKillSwitch"];
+            };
+        };
+        responses: {
+            /** @description Kill-switch state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
 }

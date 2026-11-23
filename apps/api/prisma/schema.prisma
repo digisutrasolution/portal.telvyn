@@ -87,8 +87,11 @@ model Tenant {
   engineResourceAssignments EngineResourceAssignment[]
 
   // Fraud control plane (Phase 12R). Back-relations only — no new column on Tenant.
-  fraudEvents FraudEvent[]
-  spendLimits SpendLimit[]
+  fraudEvents      FraudEvent[]
+  spendLimits      SpendLimit[]
+  velocityLimits   VelocityLimit[]
+  destinationRules DestinationRule[]
+  killSwitches     KillSwitch[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1035,4 +1038,115 @@ model SpendLimit {
 
   @@index([tenantId, period])
   @@index([tenantId])
+}
+
+// --- Fraud control plane (Phase 12R-2b, ADR-0021) --------------------------
+// Tenant-authored velocity limits — DECLARATIVE CONFIG ONLY. Stores and manages
+// the limits; NOTHING reads, counts, or enforces them yet (no call rate check,
+// no concurrent-call gauge — later slices). `limit` is an integer count (not
+// money). Optimistic concurrency via `version`; soft-delete. At most one active
+// limit per (tenant, metric), enforced in the service.
+enum VelocityMetric {
+  CALLS_PER_MINUTE
+  CALLS_PER_HOUR
+  CALLS_PER_DAY
+  CONCURRENT_CALLS
+}
+
+model VelocityLimit {
+  id        String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String         @db.Uuid
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  metric    VelocityMetric
+  // Max count per the metric's window (or the concurrent-call cap). Integer.
+  limit     Int
+  enabled   Boolean        @default(true)
+  version   Int            @default(1)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId, metric])
+  @@index([tenantId])
+}
+
+// --- Fraud control plane (Phase 12R-2c, ADR-0021) --------------------------
+// Tenant-authored geo + destination rules — DECLARATIVE CONFIG ONLY. Stores and
+// manages allow/deny rules keyed by COUNTRY (ISO-3166-1 alpha-2) or by dial
+// PREFIX (E.164 prefix), with an optional risk class. NOTHING evaluates, matches,
+// or enforces these yet (no call normalization, no geo/destination decision —
+// later slices). Optimistic concurrency via `version`; soft-delete. At most one
+// active rule per (tenant, matchType, matchValue), enforced in the service. The
+// per-tenant default action (allow/deny when no rule matches) is a later policy
+// envelope, not modelled here.
+enum DestinationMatchType {
+  COUNTRY
+  PREFIX
+}
+
+enum DestinationAction {
+  ALLOW
+  DENY
+}
+
+enum DestinationRiskClass {
+  STANDARD
+  HIGH_COST
+  PREMIUM
+}
+
+model DestinationRule {
+  id         String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId   String               @db.Uuid
+  tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  matchType  DestinationMatchType
+  // COUNTRY → ISO-3166-1 alpha-2 (uppercase). PREFIX → digits (no leading +),
+  // normalized in the service before storage/uniqueness.
+  matchValue String
+  action     DestinationAction
+  riskClass  DestinationRiskClass @default(STANDARD)
+  enabled    Boolean              @default(true)
+  version    Int                  @default(1)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  deletedAt  DateTime?
+
+  @@index([tenantId, matchType])
+  @@index([tenantId])
+}
+
+// --- Fraud control plane (Phase 12R-3, ADR-0021) ---------------------------
+// Emergency kill-switch STATE — stores and toggles the switch; NOTHING reads or
+// enforces it at call time yet (no call authorization — that is the later
+// Authorization Decision Service). Two scopes: GLOBAL (platform-wide, tenantId
+// null, platform-operator only) and TENANT (a tenant's own calling). Dual-nature
+// nullable tenantId → NOT in TENANT_SCOPED_MODELS; scoping is explicit in the
+// service. Each toggle is audited and emits a KILL_SWITCH FraudEvent (12R-1).
+// Step-up MFA on activation is a later enforcement/auth concern (deferred).
+enum KillSwitchScope {
+  GLOBAL
+  TENANT
+}
+
+model KillSwitch {
+  id            String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  scope         KillSwitchScope
+  // GLOBAL → null (platform-wide); TENANT → the owning tenant.
+  tenantId      String?         @db.Uuid
+  tenant        Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  active        Boolean         @default(false)
+  // Safe human-readable reason (bounded; never secrets/PII).
+  reason        String?
+  activatedAt   DateTime?
+  activatedBy   String?         @db.Uuid
+  deactivatedAt DateTime?
+  deactivatedBy String?         @db.Uuid
+  version       Int             @default(1)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  // One switch per tenant (TENANT scope). GLOBAL singleton (tenantId null) is
+  // enforced in the service — Postgres treats NULLs as distinct here.
+  @@unique([scope, tenantId])
+  @@index([scope])
 }
