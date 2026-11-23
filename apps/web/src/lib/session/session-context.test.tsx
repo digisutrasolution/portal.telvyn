@@ -14,7 +14,13 @@ vi.mock("@/lib/api/token-store", () => ({
 import { api } from "@/lib/api/client";
 import { getAccessToken, setAccessToken, clearAccessToken } from "@/lib/api/token-store";
 import { logout, refresh } from "@/lib/auth/auth-actions";
-import { SessionProvider, defaultSessionLoader, useSession, type SessionLoader } from "./session-context";
+import {
+  SessionProvider,
+  UnauthenticatedError,
+  defaultSessionLoader,
+  useSession,
+  type SessionLoader,
+} from "./session-context";
 
 function ctx(overrides: Partial<MeContext> = {}): MeContext {
   return {
@@ -88,6 +94,21 @@ describe("SessionProvider", () => {
   it("maps a non-API failure to error", async () => {
     renderWith(async () => {
       throw new Error("network down");
+    });
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("error"));
+  });
+
+  it("maps an UnauthenticatedError (session gate) to unauthenticated, not error", async () => {
+    renderWith(async () => {
+      throw new UnauthenticatedError();
+    });
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("unauthenticated"));
+    expect(screen.getByTestId("tenant").textContent).toBe("none");
+  });
+
+  it("maps a 5xx failure to error, not unauthenticated", async () => {
+    renderWith(async () => {
+      throw new ApiError({ title: "Internal Server Error", status: 500 });
     });
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("error"));
   });
@@ -169,5 +190,41 @@ describe("defaultSessionLoader", () => {
 
     expect(refresh).not.toHaveBeenCalled();
     expect(api.get).toHaveBeenCalledWith("/v1/me/context", expect.anything());
+  });
+
+  it("throws UnauthenticatedError when refresh returns 400 (missing/invalid refresh cookie)", async () => {
+    vi.mocked(getAccessToken).mockReturnValue(null);
+    vi.mocked(refresh).mockRejectedValue(new ApiError({ title: "Bad Request", status: 400 }));
+
+    await expect(defaultSessionLoader(new AbortController().signal)).rejects.toBeInstanceOf(
+      UnauthenticatedError,
+    );
+    expect(setAccessToken).not.toHaveBeenCalled();
+    expect(api.get).not.toHaveBeenCalled();
+  });
+
+  it("throws UnauthenticatedError when refresh returns 401", async () => {
+    vi.mocked(getAccessToken).mockReturnValue(null);
+    vi.mocked(refresh).mockRejectedValue(new ApiError({ title: "Unauthorized", status: 401 }));
+
+    await expect(defaultSessionLoader(new AbortController().signal)).rejects.toBeInstanceOf(
+      UnauthenticatedError,
+    );
+  });
+
+  it("re-throws a 5xx from refresh unchanged (real server error, not a sign-in signal)", async () => {
+    vi.mocked(getAccessToken).mockReturnValue(null);
+    const serverError = new ApiError({ title: "Internal Server Error", status: 500 });
+    vi.mocked(refresh).mockRejectedValue(serverError);
+
+    await expect(defaultSessionLoader(new AbortController().signal)).rejects.toBe(serverError);
+  });
+
+  it("re-throws a network failure from refresh unchanged", async () => {
+    vi.mocked(getAccessToken).mockReturnValue(null);
+    const netError = new Error("fetch failed");
+    vi.mocked(refresh).mockRejectedValue(netError);
+
+    await expect(defaultSessionLoader(new AbortController().signal)).rejects.toBe(netError);
   });
 });

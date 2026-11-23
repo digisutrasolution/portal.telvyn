@@ -44,10 +44,35 @@ export interface SessionState {
 /** Loads the authorization context. Injectable so tests need no network. */
 export type SessionLoader = (signal: AbortSignal) => Promise<MeContext>;
 
+/**
+ * Raised when the session gate (the refresh exchange) says "not signed in" — an
+ * HTTP 401, or an HTTP 400 for a missing/invalid refresh token. The provider maps
+ * it to `unauthenticated` (→ the sign-in screen), NOT to a connectivity error.
+ * The backend returns 400 on a missing refresh cookie; we do not change that — we
+ * classify it correctly on the client.
+ */
+export class UnauthenticatedError extends Error {
+  constructor() {
+    super("No valid session");
+    this.name = "UnauthenticatedError";
+  }
+}
+
 /** Default bootstrap: refresh (if needed) → fetch context. */
 export const defaultSessionLoader: SessionLoader = async (signal) => {
   if (!getAccessToken()) {
-    const pair = await refresh(signal); // throws ApiError 401 when there is no valid refresh cookie
+    let pair: Awaited<ReturnType<typeof refresh>>;
+    try {
+      pair = await refresh(signal);
+    } catch (err) {
+      // The refresh exchange IS the session gate: a 401 — or a 400 for a
+      // missing/invalid refresh token — means "not signed in" → show sign-in.
+      // Real failures (5xx, network, aborted) propagate unchanged → error.
+      if (err instanceof ApiError && (err.status === 400 || err.status === 401)) {
+        throw new UnauthenticatedError();
+      }
+      throw err;
+    }
     setAccessToken(pair.accessToken);
   }
   return api.get<MeContext>("/v1/me/context", { signal });
@@ -79,7 +104,8 @@ export function SessionProvider({
       .catch((err: unknown) => {
         if (!active || ac.signal.aborted) return;
         setContext(null);
-        if (err instanceof ApiError && err.status === 401) setStatus("unauthenticated");
+        if (err instanceof UnauthenticatedError || (err instanceof ApiError && err.status === 401))
+          setStatus("unauthenticated");
         else if (err instanceof ApiError && err.status === 403) setStatus("forbidden");
         else setStatus("error");
       });
