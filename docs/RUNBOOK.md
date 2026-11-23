@@ -247,3 +247,32 @@ attempt), and bounded non-PII `metadata` (e.g. `destinationCountry`).
 (`/v1/fraud/kill-switch/global/activate`, platform-admin) halts all of it. Both
 are audited and emit a `KILL_SWITCH` event. Deactivate only once the cause is
 understood.
+
+## Fraud maintenance sweep (Phase 12R-9) — scheduled reconcile
+
+Call authorization (12R-8) holds two resources per in-flight call: a spend
+reservation and one concurrent-call gauge count. The call path returns both on
+`POST /v1/fraud/authorize/complete` or `…/abandon`. When a call is authorized but
+never finalized (a crash, or the engine never reports the end), those holds leak —
+left alone, leaked concurrent counts would slowly wedge a tenant's concurrent-call
+cap at the ceiling and deny good calls.
+
+The sweep is the backstop. `POST /v1/fraud/maintenance/sweep` (platform-only,
+`fraud.maintenance.run`) marks reservations past their TTL (6 h) as EXPIRED,
+returns their spend hold, AND releases the matching concurrent-gauge count. It is
+system-wide (all tenants), idempotent, and safe to run concurrently. Response:
+`{ "expiredReservations": N, "concurrentReleased": N }`.
+
+**Schedule it externally** — the service runs no in-process timer on purpose (one
+would fire on every instance of the stateless, horizontally scaled API). Point an
+ops cron / k8s CronJob at the endpoint every few minutes with a platform identity:
+
+```bash
+# every 5 minutes — adjust to call volume
+*/5 * * * * curl -fsS -X POST https://api.portal.telvyn.co/v1/fraud/maintenance/sweep \
+  -H "Authorization: Bearer $TELVYN_PLATFORM_TOKEN" >/dev/null
+```
+
+A sweep that repeatedly reports a high `concurrentReleased` means calls are being
+authorized but not finalized — check the call path's complete/abandon reporting,
+not the sweep.

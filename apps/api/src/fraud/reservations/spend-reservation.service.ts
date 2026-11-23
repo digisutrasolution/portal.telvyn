@@ -88,6 +88,12 @@ export class SpendReservationService {
     }
   }
 
+  /** The active tenant's reservation for this key, or null — the enforcing hook's idempotency lookup. */
+  async find(_ctx: TenantContext, idempotencyKey: string): Promise<SpendReservationView | null> {
+    const row = await this.prisma.scoped.spendReservation.findFirst({ where: { idempotencyKey } });
+    return row ? this.view(row) : null;
+  }
+
   /**
    * Hold `amountMicros` for the active tenant. Idempotent on `idempotencyKey`:
    * an existing hold for the key is returned unchanged (never double-counted).
@@ -152,27 +158,29 @@ export class SpendReservationService {
 
   /**
    * TTL sweeper — a SYSTEM (cross-tenant) job: mark ACTIVE holds past their TTL
-   * as EXPIRED and return each one's gauge hold. Uses the base (unscoped) client
-   * because it spans tenants. Returns how many were expired. Wired to a job in a
-   * later slice; built + tested now, inert.
+   * as EXPIRED and return each one's SPEND gauge hold. Uses the base (unscoped)
+   * client because it spans tenants. Returns the tenantId of every reservation it
+   * expired (one entry per hold — a tenant with several overdue holds appears
+   * several times), so the caller can also return the matching concurrent-call
+   * gauge hold (the FraudSweeperService does, 12R-9).
    */
-  async expireDue(now: Date = new Date(), batch = 500): Promise<number> {
+  async expireDue(now: Date = new Date(), batch = 500): Promise<string[]> {
     const due = await this.prisma.spendReservation.findMany({
       where: { status: "ACTIVE", expiresAt: { lte: now } },
       take: batch,
     });
-    let expired = 0;
+    const expiredTenantIds: string[] = [];
     for (const row of due) {
       const res = await this.prisma.spendReservation.updateMany({
         where: { id: row.id, status: "ACTIVE" }, // guard against a concurrent settle/release
         data: { status: "EXPIRED" },
       });
       if (res.count === 1) {
-        expired += 1;
+        expiredTenantIds.push(row.tenantId);
         await this.releaseGauge(row.tenantId, row.amountMicros);
       }
     }
-    return expired;
+    return expiredTenantIds;
   }
 
   /** Lower the hot gauge for a returned hold across every window. Best-effort. */
