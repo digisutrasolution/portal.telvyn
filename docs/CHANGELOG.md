@@ -6,6 +6,21 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-23 — Phase 12R-7 — **fraud alerting** (ROADMAP Phase 12 toll-fraud rails, ADR-0021;
+  PR #11). The "alert → RUNBOOK" path (SEC-002) — **records only, enforces nothing**.
+  `FraudAlertService.alertOnDecision` turns a toll-fraud decision **DENY** into an append-only
+  `AUTHORIZATION_DENIED` `FraudEvent` mapped from the decisive reason (source = control, code,
+  safe message, bounded non-PII metadata). Severity: kill-switch + the fail-closed store-outage
+  codes (`COUNTERS_UNAVAILABLE` / `SPEND_RESERVATIONS_UNAVAILABLE`) → CRITICAL, else WARNING.
+  **Throttled** to one alert per (tenant, code) per 60s (`SET NX EX`) so a flood of identical
+  denials cannot firehose the event store; **FAIL-OPEN** (the deliberate inverse of the
+  enforcement path — a throttle-store outage records the alert anyway; a dropped fraud signal is
+  worse than a duplicate). System-raised → `FraudEvent` only, no per-event AuditLog firehose
+  (ADR-0010). `docs/RUNBOOK.md` gained a "Toll-fraud alerts" section (every type/code → severity
+  → on-call response, incl. the Redis-down fail-closed incident path + kill-switch escalation).
+  **Inert** — nothing calls it at decision time yet; the preview is a dry run and deliberately
+  does NOT alert. No schema/migration/contract/permission change (Redis + existing `FraudEvent`
+  store; `AUTHORIZATION_DENIED` already in the enum). +9 unit.
 - 2026-11-23 — Phase 12R-6 — **spend-reservation ledger** (ROADMAP Phase 12 toll-fraud rails,
   ADR-0021; PR #9). Backs the decision's **period-spend** check with real reserved spend —
   **state/mechanism only, NO call-time enforcement** (nothing places a reservation at call time
