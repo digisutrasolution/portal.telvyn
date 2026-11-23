@@ -6,6 +6,57 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-23 — Phase 12R-3 — **kill-switch state** (ROADMAP Phase 12 toll-fraud rails,
+  ADR-0021; PR #8). The emergency brake — **STATE only, nothing enforced at call time yet**.
+  New `KillSwitch` model + `KillSwitchScope` enum with **GLOBAL** (platform-wide, PlatformGuard)
+  and **TENANT** scopes; additive migration (zero destructive); dual-nature nullable `tenantId`
+  scoped explicitly in the service. Each toggle (activate/deactivate) is **audited** and emits a
+  `KILL_SWITCH` **FraudEvent** (CRITICAL on activate, WARNING on deactivate). New permission
+  **`fraud.killswitch.manage`** (owner/admin only; read state via `fraud.policy.read`); step-up
+  MFA on activation deferred. Tenant surface `GET`/`POST …/activate`/`…/deactivate` at
+  `/v1/fraud/kill-switch`; global surface at `/v1/fraud/kill-switch/global` (+PlatformGuard).
+  +4 unit +4 e2e.
+- 2026-11-23 — Phase 12R-2c — **geo/destination-rule authoring** (ROADMAP Phase 12 toll-fraud
+  rails, ADR-0021; PR #8). Declarative config, **no enforcement**. New `DestinationRule` model
+  unifies geo + destination: match by **COUNTRY** (ISO-3166-1 alpha-2) or dial **PREFIX**, with
+  an ALLOW/DENY action + risk class (STANDARD/HIGH_COST/PREMIUM). Match value normalized before
+  storage (country→uppercase, prefix→no leading +); cross-field validation; at most one active
+  rule per (tenant, matchType, matchValue) → 409; optimistic concurrency; soft-delete. Reuses
+  `fraud.policy.read`/`manage`; every mutation audited. `GET`/`POST
+  /v1/fraud/policies/destination-rules` + `GET`/`PATCH`/`DELETE /{id}` (tenant-scoped). Additive
+  migration (zero destructive). +6 unit +6 e2e.
+- 2026-11-23 — Phase 12R-2b — **velocity-limit authoring** (ROADMAP Phase 12 toll-fraud rails,
+  ADR-0021; PR #8). Declarative config, **no enforcement**. New `VelocityLimit` model +
+  `VelocityMetric` enum (CALLS_PER_MINUTE/HOUR/DAY, CONCURRENT_CALLS); `limit` is an integer
+  count. Full tenant-scoped CRUD; optimistic concurrency; soft-delete; at most one active limit
+  per (tenant, metric) → 409. Reuses `fraud.policy.read`/`manage`; every mutation audited.
+  `GET`/`POST /v1/fraud/policies/velocity-limits` + `GET`/`PATCH`/`DELETE /{id}` (tenant-scoped).
+  Additive migration (zero destructive). +5 unit +6 e2e.
+- 2026-11-23 — Phase 12R-2a — **spend-limit authoring** (ROADMAP Phase 12 toll-fraud rails,
+  ADR-0021; PR #6). Tenant-authored spend limits as **declarative fraud-policy config** — a
+  full CRUD API with **no enforcement** (nothing reads or applies these limits: no call
+  authorization, reservation, or balance gate). New `SpendLimit` model + `SpendLimitPeriod`
+  enum (PER_CALL / DAILY / MONTHLY); additive migration (zero destructive); registered in
+  `TENANT_SCOPED_MODELS` (deny-by-default, IDOR-safe). Money is **integer micros** (`BigInt`),
+  currency-tagged, never float; optimistic concurrency via `version`/`expectedVersion`;
+  soft-delete; at most one active limit per (tenant, period) → 409 on duplicate. New
+  permissions `fraud.policy.read` (owner/admin/auditor) + `fraud.policy.manage` (owner/admin
+  only — not auditor/operator); no `fraud.*` wildcard → no escalation; every mutation audited.
+  `GET`/`POST /v1/fraud/policies/spend-limits` + `GET`/`PATCH`/`DELETE /{id}` (tenant-scoped,
+  no PlatformGuard; `period` immutable on update). Contract-first + regenerated web types.
+  +5 unit +6 e2e (RBAC read-vs-manage, CRUD, duplicate 409, optimistic-concurrency 409,
+  invalid input, tenant isolation, money precision). Full API suite 382 passed / 2 skipped.
+- 2026-11-23 — Phase 12R-1 — **fraud-event foundation** (ROADMAP Phase 12 toll-fraud rails,
+  ADR-0021 Accepted; PR #5). The append-only, tenant-scoped `FraudEvent` store + a read-only
+  API — the foundation for the toll-fraud rails, with **no enforcement**. Additive migration
+  (zero destructive); `FraudEvent` registered in `TENANT_SCOPED_MODELS` (deny-by-default,
+  IDOR-safe); append-only and immutable (no mutable status, tamper-evident). New permission
+  `fraud.events.read` (new `fraud` group; owner/admin/auditor only; no `fraud.*` wildcard →
+  no escalation). `FraudEventsService.record` writes one `AuditService` entry only for an
+  actor-driven event (system-raised events avoid the AuditLog firehose, ADR-0010); bounded
+  metadata validation. `GET /v1/fraud/events` (cursor-paginated, type/severity filters;
+  tenant-scoped safe view, no creation endpoint). The owner-gated engine-enforcement boundary
+  is documented as deferred. +9 unit +5 e2e.
 - 2026-11-23 — Phase 12O-2bd — **node-agent credential UI** (NOC). The Nodes list gained a
   per-row **"Credential"** action (gated `telecom.manage`, alongside the health-read
   Check/History) opening a dialog to **attach / rotate / detach** a node's mTLS heartbeat
