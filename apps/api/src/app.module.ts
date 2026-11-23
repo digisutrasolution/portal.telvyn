@@ -2,6 +2,7 @@ import { Controller, Get, MiddlewareConsumer, Module, NestModule } from "@nestjs
 import { AuthModule } from "./auth/auth.module";
 import { AuthzModule } from "./authz/authz.module";
 import { TelecomModule } from "./telecom/telecom.module";
+import { FraudModule } from "./fraud/fraud.module";
 import { TenantContextMiddleware } from "./authz/tenant-context.middleware";
 
 @Controller()
@@ -13,7 +14,7 @@ class HealthController {
 }
 
 @Module({
-  imports: [AuthModule, AuthzModule, TelecomModule],
+  imports: [AuthModule, AuthzModule, TelecomModule, FraudModule],
   controllers: [HealthController],
 })
 export class AppModule implements NestModule {

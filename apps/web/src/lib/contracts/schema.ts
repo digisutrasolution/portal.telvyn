@@ -974,6 +974,26 @@ export interface paths {
         patch: operations["updateLcrPolicy"];
         trace?: never;
     };
+    "/v1/fraud/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List fraud events (tenant)
+         * @description The active tenant's own fraud events (Phase 12R-1, ADR-0021), newest first, cursor-paginated. Append-only, read-only foundation — there is NO enforcement here (no spend/velocity/geo/destination/kill-switch control, no call authorization). Strictly tenant-scoped (other tenants' events are never returned); the safe view never echoes the tenant linkage. Optional `type` / `severity` filters. Requires `fraud.events.read`.
+         */
+        get: operations["listFraudEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1363,6 +1383,42 @@ export interface components {
         };
         HealthEventPage: {
             items: components["schemas"]["HealthEvent"][];
+            /**
+             * Format: uuid
+             * @description Pass as `cursor` to fetch the next (older) page; null when exhausted.
+             */
+            nextCursor: string | null;
+        };
+        /** @description One append-only, immutable fraud event (Phase 12R-1, ADR-0021). Tenant linkage is never echoed. No secrets or unnecessary personal data appear in `reason` or `metadata`. */
+        FraudEvent: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            type: "AUTHORIZATION_DENIED" | "LIMIT_WARNING" | "KILL_SWITCH" | "POLICY_CHANGE" | "ANOMALY";
+            /** @enum {string} */
+            severity: "INFO" | "WARNING" | "CRITICAL";
+            /** @description The control that raised it, e.g. velocity | spend | geo | kill-switch. */
+            source: string;
+            /** @description Short machine reason code, e.g. DAILY_SPEND_EXCEEDED. */
+            code: string;
+            /** @description Safe human-readable text — never secrets or PII. */
+            reason?: string | null;
+            /** @description Ties to a call attempt / request (future producers). */
+            correlationId?: string | null;
+            /**
+             * Format: uuid
+             * @description The user whose action raised it; null for system-raised events.
+             */
+            actorId?: string | null;
+            /** @description Bounded structured context; never secrets or unnecessary PII. */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        FraudEventPage: {
+            items: components["schemas"]["FraudEvent"][];
             /**
              * Format: uuid
              * @description Pass as `cursor` to fetch the next (older) page; null when exhausted.
@@ -3644,6 +3700,34 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    listFraudEvents: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description nextCursor from a prior page. */
+                cursor?: string;
+                type?: "AUTHORIZATION_DENIED" | "LIMIT_WARNING" | "KILL_SWITCH" | "POLICY_CHANGE" | "ANOMALY";
+                severity?: "INFO" | "WARNING" | "CRITICAL";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fraud events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FraudEventPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
 }
