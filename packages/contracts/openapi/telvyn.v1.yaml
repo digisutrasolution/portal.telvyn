@@ -1397,6 +1397,110 @@ paths:
               schema: { $ref: "#/components/schemas/FraudEventPage" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/fraud/policies/spend-limits:
+    get:
+      tags: [fraud]
+      summary: List spend limits (tenant)
+      description: >-
+        The tenant's own spend limits (Phase 12R-2a, ADR-0021), cursor-paginated.
+        DECLARATIVE config only — nothing reads or enforces these yet. Strictly
+        tenant-scoped. Optional `period` / `enabled` filters. Requires
+        `fraud.policy.read`.
+      operationId: listSpendLimits
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: cursor, in: query, required: false, schema: { type: string, format: uuid }, description: "nextCursor from a prior page." }
+        - { name: period, in: query, required: false, schema: { type: string, enum: [PER_CALL, DAILY, MONTHLY] } }
+        - { name: enabled, in: query, required: false, schema: { type: boolean } }
+      responses:
+        "200":
+          description: Spend limits
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpendLimitPage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [fraud]
+      summary: Create a spend limit
+      description: >-
+        Create a tenant-owned spend limit (declarative config only — no
+        enforcement). Ownership (tenantId) is server-derived, never a client
+        field. `amountMicros` is an integer in millionths of a currency unit (no
+        float). At most one active limit per (tenant, period) — a duplicate is a
+        409. Requires `fraud.policy.manage`.
+      operationId: createSpendLimit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSpendLimit" }
+      responses:
+        "201":
+          description: Spend limit created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpendLimit" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /v1/fraud/policies/spend-limits/{id}:
+    get:
+      tags: [fraud]
+      summary: Get a spend limit
+      description: "A tenant's own spend limit by id (foreign/removed → 404, IDOR-safe). Requires `fraud.policy.read`."
+      operationId: getSpendLimit
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Spend limit
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpendLimit" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [fraud]
+      summary: Update a spend limit
+      description: >-
+        Update a tenant-owned spend limit (amount / currency / enabled). `period`
+        is immutable (the business key). Pass `expectedVersion` for optimistic
+        concurrency — a mismatch is a 409. A foreign tenant's limit is 404.
+        Requires `fraud.policy.manage`.
+      operationId: updateSpendLimit
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSpendLimit" }
+      responses:
+        "200":
+          description: Spend limit updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpendLimit" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [fraud]
+      summary: Delete a spend limit (soft delete)
+      description: "Soft-delete a tenant-owned spend limit (sets deletedAt). A foreign tenant's limit is 404 (IDOR-safe). Requires `fraud.policy.manage`."
+      operationId: deleteSpendLimit
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Spend limit deleted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -1808,6 +1912,47 @@ components:
           type: array
           items: { $ref: "#/components/schemas/FraudEvent" }
         nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next (older) page; null when exhausted." }
+    SpendLimit:
+      type: object
+      required: [id, period, amountMicros, currency, enabled, version, createdAt, updatedAt]
+      description: >-
+        A tenant's spend limit (Phase 12R-2a). Declarative config — not enforced
+        yet. `amountMicros` is an integer in millionths of a currency unit.
+      properties:
+        id: { type: string, format: uuid }
+        period: { type: string, enum: [PER_CALL, DAILY, MONTHLY] }
+        amountMicros: { type: integer, format: int64, minimum: 0, description: "Integer micros (millionths of a currency unit); never float." }
+        currency: { type: string, enum: [USD, EUR, GBP, INR, AUD, CAD, JPY] }
+        enabled: { type: boolean }
+        version: { type: integer, description: "Optimistic-concurrency version; pass as expectedVersion on update." }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SpendLimitPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SpendLimit" }
+        nextCursor: { type: string, format: uuid, nullable: true, description: "Pass as `cursor` to fetch the next (older) page; null when exhausted." }
+    CreateSpendLimit:
+      type: object
+      required: [period, amountMicros]
+      additionalProperties: false
+      properties:
+        period: { type: string, enum: [PER_CALL, DAILY, MONTHLY] }
+        amountMicros: { type: integer, format: int64, minimum: 0, maximum: 1000000000000000, description: "Integer micros; never float." }
+        currency: { type: string, enum: [USD, EUR, GBP, INR, AUD, CAD, JPY], default: USD }
+        enabled: { type: boolean, default: true }
+    UpdateSpendLimit:
+      type: object
+      additionalProperties: false
+      description: "`period` is immutable and cannot be changed here."
+      properties:
+        amountMicros: { type: integer, format: int64, minimum: 0, maximum: 1000000000000000 }
+        currency: { type: string, enum: [USD, EUR, GBP, INR, AUD, CAD, JPY] }
+        enabled: { type: boolean }
+        expectedVersion: { type: integer, minimum: 0, description: "Optimistic concurrency — a mismatch is a 409." }
     ConfigVersion:
       type: object
       required: [id, changeType, kind, version, previousVersion, summary, actorId, correlationId, createdAt]
