@@ -66,11 +66,17 @@ export interface FraudDecisionInput {
   spendLimits: SpendLimitSnapshot[];
   /** Enabled velocity limits only. */
   velocityLimits: VelocityLimitSnapshot[];
-  /** Current usage. Zero/empty until the live counters land (12R-5/6). */
+  /** Current usage. `counts` are live velocity counters (12R-5); `spentMicros` stays zero until the reservation ledger lands (12R-6). */
   usage: {
     spentMicros: Partial<Record<SpendLimitPeriod, number>>;
     counts: Partial<Record<VelocityMetric, number>>;
   };
+  /**
+   * Whether the live velocity counters could be read. Default true. When false
+   * AND velocity limits exist, the decision fails closed (DENY) rather than
+   * evaluating against unknown usage.
+   */
+  countersAvailable?: boolean;
   request: {
     /** Raw dialled destination (normalized here). */
     destinationRaw: string;
@@ -168,8 +174,13 @@ export function decideFraud(input: FraudDecisionInput): FraudDecision {
     }
   }
 
-  // 5. Velocity limits. CONCURRENT_CALLS is a live gauge (deny when already at cap);
-  // the rate metrics deny when adding this call would exceed the window limit.
+  // 5. Velocity limits. Fail closed: if limits are configured but the live
+  // counters could not be read, deny rather than evaluate against unknown usage.
+  if (input.velocityLimits.length > 0 && input.countersAvailable === false) {
+    return deny("velocity", "COUNTERS_UNAVAILABLE", "velocity counters are unavailable — failing closed", e164, country);
+  }
+  // CONCURRENT_CALLS is a live gauge (deny when already at cap); the rate metrics
+  // deny when adding this call would exceed the window limit.
   for (const vl of input.velocityLimits) {
     const count = input.usage.counts[vl.metric] ?? 0;
     const over = vl.metric === "CONCURRENT_CALLS" ? count >= vl.limit : count + 1 > vl.limit;

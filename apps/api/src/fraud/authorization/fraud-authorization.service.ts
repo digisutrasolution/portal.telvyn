@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { KillSwitchScope } from "@prisma/client";
 import { PrismaService } from "@/infra/prisma.service";
 import type { TenantContext } from "@/authz/tenant-context";
+import { VelocityCounterService, type VelocityCounts } from "../counters/velocity-counter.service";
 import { decideFraud, type FraudDecision } from "./fraud-decision";
 
 /**
@@ -18,7 +19,10 @@ import { decideFraud, type FraudDecision } from "./fraud-decision";
  */
 @Injectable()
 export class FraudAuthorizationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly velocityCounters: VelocityCounterService,
+  ) {}
 
   async preview(ctx: TenantContext, request: { destinationRaw: string; estimatedCostMicros?: number }): Promise<FraudDecision> {
     const [destinationRules, spendLimits, velocityLimits, tenantKs, globalKs] = await Promise.all([
@@ -28,6 +32,18 @@ export class FraudAuthorizationService {
       this.prisma.killSwitch.findFirst({ where: { scope: KillSwitchScope.TENANT, tenantId: ctx.tenantId } }),
       this.prisma.killSwitch.findFirst({ where: { scope: KillSwitchScope.GLOBAL, tenantId: null } }),
     ]);
+
+    // Live velocity counters — only read when velocity limits exist. Fail-closed:
+    // if the read fails, flag it so the decision denies rather than guessing.
+    let counts: Partial<VelocityCounts> = {};
+    let countersAvailable = true;
+    if (velocityLimits.length > 0) {
+      try {
+        counts = await this.velocityCounters.read(ctx.tenantId);
+      } catch {
+        countersAvailable = false;
+      }
+    }
 
     return decideFraud({
       killSwitch: { global: globalKs?.active ?? false, tenant: tenantKs?.active ?? false },
@@ -39,7 +55,8 @@ export class FraudAuthorizationService {
       })),
       spendLimits: spendLimits.map((s) => ({ period: s.period, amountMicros: Number(s.amountMicros), currency: s.currency })),
       velocityLimits: velocityLimits.map((v) => ({ metric: v.metric, limit: v.limit })),
-      usage: { spentMicros: {}, counts: {} }, // zero until live counters land (12R-5/6)
+      usage: { spentMicros: {}, counts }, // spentMicros zero until the reservation ledger lands (12R-6)
+      countersAvailable,
       request,
     });
   }

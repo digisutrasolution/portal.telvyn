@@ -145,6 +145,18 @@ describe("decideFraud — velocity limits", () => {
   });
 });
 
+describe("decideFraud — velocity fail-closed", () => {
+  it("DENYs when velocity limits exist but the counters are unavailable", () => {
+    const d = decideFraud(base({ velocityLimits: [{ metric: "CALLS_PER_MINUTE", limit: 5 }], countersAvailable: false }));
+    expect(d.decision).toBe("DENY");
+    expect(d.reasons[0]).toMatchObject({ control: "velocity", code: "COUNTERS_UNAVAILABLE" });
+  });
+  it("ALLOWs when counters are unavailable but no velocity limit is configured", () => {
+    const d = decideFraud(base({ countersAvailable: false }));
+    expect(d.decision).toBe("ALLOW");
+  });
+});
+
 describe("decideFraud — ordering", () => {
   it("kill-switch is reported even when other controls would also fail", () => {
     const d = decideFraud(

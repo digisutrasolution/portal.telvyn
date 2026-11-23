@@ -55,6 +55,9 @@ beforeAll(async () => {
 });
 beforeEach(flushRateLimits);
 afterAll(async () => {
+  const velKeys = await redis.keys("fraud:vel:*");
+  const concKeys = await redis.keys("fraud:conc:*");
+  if (velKeys.length || concKeys.length) await redis.del(...velKeys, ...concKeys);
   await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
   await prisma.tenant.deleteMany({ where: { name: { in: NAMES } } }); // policies + tenant kill-switch cascade
   await prisma.$disconnect();
@@ -110,5 +113,16 @@ describe("consumes real policies + kill-switch", () => {
     const r = await request(http).post(PREVIEW).set(auth(a.token)).send({ destination: "+14155550123" }).expect(200);
     expect(r.body.decision).toBe("DENY");
     expect(r.body.reasons[0].code).toBe("TENANT_KILL_SWITCH_ACTIVE");
+  });
+
+  it("DENYs when the live velocity counter is already at the configured limit", async () => {
+    const a = await provision("aza", "admin");
+    // Seed the live per-minute counter directly (the real call path that would
+    // increment it is a later slice); the preview must read it.
+    await redis.set(`fraud:vel:${a.tenantId}:CALLS_PER_MINUTE`, "5");
+    await request(http).post("/v1/fraud/policies/velocity-limits").set(auth(a.token)).send({ metric: "CALLS_PER_MINUTE", limit: 5 }).expect(201);
+    const r = await request(http).post(PREVIEW).set(auth(a.token)).send({ destination: "+14155550123" }).expect(200);
+    expect(r.body.decision).toBe("DENY");
+    expect(r.body.reasons[0].code).toBe("CALLS_PER_MINUTE_EXCEEDED");
   });
 });
