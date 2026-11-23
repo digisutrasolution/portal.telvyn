@@ -16,6 +16,8 @@ import { KillSwitchService } from "./kill-switch.service";
 import { FraudAuthorizationController } from "./authorization/authorization.controller";
 import { FraudAuthorizationService } from "./authorization/fraud-authorization.service";
 import { CallAuthorizationService } from "./authorization/call-authorization.service";
+import { FraudMaintenanceController } from "./maintenance/fraud-maintenance.controller";
+import { FraudSweeperService } from "./maintenance/fraud-sweeper.service";
 import { VelocityCounterService } from "./counters/velocity-counter.service";
 import { SpendReservationService } from "./reservations/spend-reservation.service";
 import { FraudAlertService } from "./alerts/fraud-alert.service";
@@ -43,9 +45,15 @@ import { FraudAlertService } from "./alerts/fraud-alert.service";
  *          fail-closed, idempotent) and on DENY alert; plus the settle/release
  *          lifecycle. Exposed as POST /v1/fraud/authorize (+ /complete,/abandon),
  *          gated by `fraud.call.authorize`. Policy-only (no wallet gate — DB-003).
- * The decision is now ENFORCED through that hook; what remains is wiring a LIVE
+ * 12R-9  — maintenance sweeper (FraudSweeperService): the SYSTEM reconcile that
+ *          expires overdue holds AND returns their leaked concurrent-gauge counts,
+ *          so an unfinalized call can't wedge a tenant's concurrent cap. Exposed
+ *          PLATFORM-only as POST /v1/fraud/maintenance/sweep (`fraud.maintenance.run`),
+ *          driven by an external scheduler (no in-process timer — it would fan out
+ *          across instances).
+ * The decision is ENFORCED through the 12R-8 hook; what remains is wiring a LIVE
  * call path to it (the SBC/softswitch behind the delivery model, TELECOM #2) —
- * no engine is contacted yet — and the reservation TTL sweeper job.
+ * no engine is contacted yet.
  * AuthzModule provides the guards + AuditService; the tenant-scoping Prisma
  * client enforces isolation.
  */
@@ -59,6 +67,7 @@ import { FraudAlertService } from "./alerts/fraud-alert.service";
     KillSwitchController,
     GlobalKillSwitchController,
     FraudAuthorizationController,
+    FraudMaintenanceController,
   ],
   providers: [
     PrismaService,
@@ -73,6 +82,7 @@ import { FraudAlertService } from "./alerts/fraud-alert.service";
     VelocityCounterService,
     SpendReservationService,
     FraudAlertService,
+    FraudSweeperService,
   ],
   exports: [
     FraudEventsService,

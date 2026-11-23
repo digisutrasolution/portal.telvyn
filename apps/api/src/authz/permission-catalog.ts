@@ -92,6 +92,10 @@ export const PERMISSIONS: PermissionDef[] = [
   // tenant's trusted call-origination identity (the real SBC/engine identity is
   // wired behind the delivery model). Not a read/oversight perm — never auditor.
   { key: "fraud.call.authorize", resource: "fraud.call", action: "authorize", description: "Authorize live calls (enforcing fraud gate)", group: "fraud" },
+  // Fraud maintenance sweep (Phase 12R-9) — PLATFORM-only system reconcile that
+  // returns resources leaked by unfinalized calls. Additionally gated by
+  // PlatformGuard; an external scheduler with a platform identity runs it.
+  { key: "fraud.maintenance.run", resource: "fraud.maintenance", action: "run", description: "Run fraud maintenance sweeps (platform)", group: "fraud" },
 ];
 
 export const SYSTEM_ROLES: SystemRoleDef[] = [
@@ -110,7 +114,7 @@ export const SYSTEM_ROLES: SystemRoleDef[] = [
       "carrier.*", "sip_trunk.*", "routing.*", "telecom.read", "telecom.health.read",
       // Explicit (not fraud.*) — events read + policy authoring + kill-switch +
       // call authorization; each enforcement perm is granted explicitly, never by wildcard.
-      "fraud.events.read", "fraud.policy.read", "fraud.policy.manage", "fraud.killswitch.manage", "fraud.call.authorize",
+      "fraud.events.read", "fraud.policy.read", "fraud.policy.manage", "fraud.killswitch.manage", "fraud.call.authorize", "fraud.maintenance.run",
     ],
   },
   {

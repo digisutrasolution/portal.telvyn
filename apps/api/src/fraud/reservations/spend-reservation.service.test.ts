@@ -154,7 +154,7 @@ describe("SpendReservationService.expireDue", () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const evalFn = vi.fn().mockResolvedValue(0);
     const svc = makeService({ findMany, updateMany, evalFn });
-    expect(await svc.expireDue(new Date())).toBe(2);
+    expect(await svc.expireDue(new Date())).toEqual(["t1", "t2"]); // one tenantId per expired hold
     expect(evalFn).toHaveBeenCalledTimes(4); // 2 rows × 2 periods
   });
 
@@ -162,7 +162,7 @@ describe("SpendReservationService.expireDue", () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 0 });
     const evalFn = vi.fn();
     const svc = makeService({ findMany: vi.fn().mockResolvedValue([row()]), updateMany, evalFn });
-    expect(await svc.expireDue(new Date())).toBe(0);
+    expect(await svc.expireDue(new Date())).toEqual([]);
     expect(evalFn).not.toHaveBeenCalled();
   });
 });
