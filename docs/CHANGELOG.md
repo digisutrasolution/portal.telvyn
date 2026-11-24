@@ -6,6 +6,24 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-25 — Phase 13-1A — **isolated ledger development + restricted-role regression environment**
+  (PR #16 → `main` @`c3ca6e5`). A dedicated, non-production data plane for the Ledger Foundation,
+  **infrastructure + test-harness only — no production logic, Prisma schema, migration, or ledger
+  implementation.** Components: an isolated **PostgreSQL 18** cluster (`docker-compose.ledger-dev.yml`;
+  `127.0.0.1:5434`; own Compose project/network/volume), a **disposable Redis** (`127.0.0.1:6381`,
+  no persistence), and a **disposable E2E database** (`telvyn_ledger_e2e`). A **least-privilege role
+  model** — `telvyn_migrator` (DDL/owner), `telvyn_ledger_fn` (NOLOGIN; future SECURITY DEFINER
+  owner, no privileges yet), `telvyn_app` (restricted runtime) — via fail-closed, whitelisted,
+  idempotent bootstrap scripts (`scripts/db/ledger-dev-bootstrap.sql`, `ledger-dev-grants.sql`);
+  audit/event tables are immutable to the runtime role; no blanket future-table grants (future ledger
+  tables stay outside runtime CRUD). **E2E fixture/runtime separation**: dedicated
+  `apps/api/vitest.e2e.config.ts` + fail-closed `test/setup-e2e.ts` target guard + `test/fixture-db.ts`
+  privileged fixture connection, so the application runs as `telvyn_app` while setup/teardown uses
+  `telvyn_migrator`; CI is unaffected (the guard is not loaded by the base config and `fixture-db.ts`
+  falls back to `DATABASE_URL`). Local verification against the isolated cluster: 16/16 migrations,
+  unit **338/338**, E2E **24 files / 162 tests** (2 opt-in live-Kamailio skips), restricted-role
+  enforcement **12/12**, typecheck/lint/build green; **remote CI green**. The ledger models and
+  `ledger_post` remain Phase 13-1B+C (ADR-0022). Ops recipe: `docs/DEVOPS.md`.
 - 2026-11-23 — Phase 12R-9 — **fraud maintenance sweeper** (ROADMAP Phase 12 toll-fraud rails,
   ADR-0021; PR #13). Operational hardening for the enforcing hook. `FraudSweeperService.sweep()`
   expires overdue ACTIVE reservations (their TTL is the backstop) AND releases the matching
