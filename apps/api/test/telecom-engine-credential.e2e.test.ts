@@ -1,3 +1,4 @@
+import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12M-1 — Engine credential reference (additive schema) integration test.
  *
@@ -11,12 +12,12 @@
  * exercises the FK/enum/relation only, with a placeholder non-secret value.
  */
 import { afterAll, describe, expect, it } from "vitest";
-import { PrismaClient, TelecomCredentialType, TelecomEngineType } from "@prisma/client";
+import { TelecomCredentialType, TelecomEngineType } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
 
-const prisma = new PrismaClient();
+const prisma = fixturePrisma;
 const TAG = `tmc1-${Date.now()}`;
 
 afterAll(async () => {

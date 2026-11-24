@@ -1,3 +1,4 @@
+import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12N-3 — desired config intent from assignments (real Postgres + Redis).
  * Proves GET :id/status.desired reflects the engine's ENABLED resource
@@ -9,7 +10,7 @@ import request from "supertest";
 import * as argon2 from "argon2";
 import Redis from "ioredis";
 import type { NestExpressApplication } from "@nestjs/platform-express";
-import { PrismaClient, TenantType, TelecomEngineType, EngineResourceKind } from "@prisma/client";
+import { TenantType, TelecomEngineType, EngineResourceKind } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
@@ -20,7 +21,7 @@ process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 import { createApp } from "../src/main";
 import { ARGON2_OPTIONS } from "../src/auth/account-flows.service";
 
-const prisma = new PrismaClient();
+const prisma = fixturePrisma;
 const redis = new Redis(process.env.REDIS_URL!);
 let app: NestExpressApplication;
 let http: ReturnType<NestExpressApplication["getHttpServer"]>;
