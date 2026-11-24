@@ -1,0 +1,69 @@
+# Telvyn — ISOLATED Ledger Foundation dev/test data plane (Phase 13-1, Slice 13-1A).
+#
+# DEDICATED, NON-PRODUCTION, localhost-only. Completely SEPARATE from
+# docker-compose.dev.yml (project `telvyn-dev`, port 5433) and from the unrelated
+# `fmc-dev` project — its own Compose project, network and named volume. Nothing
+# here touches, adopts, or overwrites any existing database, volume or service.
+#
+# Provision (Slice 13-1A.2):
+#   docker compose --env-file .env.ledger-dev -p telvyn-ledger-dev \
+#     -f docker-compose.ledger-dev.yml up -d
+#
+# Image: postgres:18-alpine — PG18 declares VOLUME /var/lib/postgresql and
+# PGDATA=/var/lib/postgresql/18/docker, so the named volume is mounted at
+# /var/lib/postgresql (NOT the PG16/17 /var/lib/postgresql/data convention).
+name: telvyn-ledger-dev
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: telvyn-ledger-dev-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-telvyn_ledger_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-telvyn_ledger_admin}
+      # Bootstrap admin password — supplied only via .env.ledger-dev (gitignored).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.ledger-dev}
+    ports:
+      - "127.0.0.1:5434:5432"            # localhost-only; never 0.0.0.0, never public
+    volumes:
+      - telvyn_ledger_dev_pgdata:/var/lib/postgresql   # PG18 image VOLUME
+    networks:
+      - ledger_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-telvyn_ledger_admin} -d ${POSTGRES_DB:-telvyn_ledger_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    # Hardening: no host networking, no privileged mode, no docker socket mount.
+
+  # Dedicated DISPOSABLE Redis for the E2E regression suite (Slice 13-1A.4b).
+  # localhost-only, no persistence (RDB + AOF off), ephemeral container storage —
+  # a fresh, throwaway instance that never touches the shared dev Redis (:6380)
+  # or any other project. Network isolation is the control for this loopback-only,
+  # non-persistent test instance; production Redis auth is a separate deploy concern.
+  redis:
+    image: redis:7-alpine
+    container_name: telvyn-ledger-dev-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6381:6379"            # localhost-only; never 0.0.0.0, never public
+    networks:
+      - ledger_net
+    # No named volume: disposable test state, intentionally non-persistent.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+networks:
+  ledger_net:
+    name: telvyn-ledger-dev_net
+
+volumes:
+  telvyn_ledger_dev_pgdata:
+    name: telvyn_ledger_dev_pgdata

@@ -1,3 +1,4 @@
+import { fixturePrisma } from "./fixture-db";
 /**
  * Authorization integration suite (ADR-0004) — real Postgres + Redis.
  * Proves the attacks in scope are refused: cross-tenant access, IDOR,
@@ -9,7 +10,6 @@ import request from "supertest";
 import * as argon2 from "argon2";
 import Redis from "ioredis";
 import type { NestExpressApplication } from "@nestjs/platform-express";
-import { PrismaClient } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL ??= "postgresql://telvyn:change_me_local_dev@localhost:5433/telvyn?schema=public";
@@ -20,7 +20,7 @@ process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 import { createApp } from "../src/main";
 import { ARGON2_OPTIONS } from "../src/auth/account-flows.service";
 
-const prisma = new PrismaClient();
+const prisma = fixturePrisma;
 const redis = new Redis(process.env.REDIS_URL!);
 let app: NestExpressApplication;
 let http: ReturnType<NestExpressApplication["getHttpServer"]>;

@@ -1,3 +1,4 @@
+import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12D — platform telecom infrastructure (Region / Engine / Node) e2e.
  * Real Postgres + Redis. Proves: PLATFORM-scope enforcement (a customer tenant
@@ -9,7 +10,7 @@ import request from "supertest";
 import * as argon2 from "argon2";
 import Redis from "ioredis";
 import type { NestExpressApplication } from "@nestjs/platform-express";
-import { PrismaClient, TenantType } from "@prisma/client";
+import { TenantType } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
@@ -42,7 +43,7 @@ fvVkRwc4w/i6MTzz2gnwJOGgfFwZ73/Zgk79X4KEjTl93sVY4oOqoK3LcUUSEsMT
 JylZ0shd2lodH+dX+TYu+aa6SXWWkxiy5N+eHwnmxEDZ8HreJjsZ
 -----END CERTIFICATE-----`;
 
-const prisma = new PrismaClient();
+const prisma = fixturePrisma;
 const redis = new Redis(process.env.REDIS_URL!);
 let app: NestExpressApplication;
 let http: ReturnType<NestExpressApplication["getHttpServer"]>;

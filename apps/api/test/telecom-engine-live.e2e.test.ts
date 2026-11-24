@@ -1,3 +1,4 @@
+import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12M-4 — live Kamailio engine integration (OPT-IN).
  *
@@ -14,7 +15,7 @@
  *   corepack pnpm exec vitest run test/telecom-engine-live.e2e.test.ts
  */
 import { describe, it, expect } from "vitest";
-import { PrismaClient, TelecomCredentialType, TelecomEngineType } from "@prisma/client";
+import { TelecomCredentialType, TelecomEngineType } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -38,7 +39,7 @@ describe.skipIf(!DIR)("Phase 12M-4 — live Kamailio engine (opt-in)", () => {
   it("probes the real engine over mTLS and reports HEALTHY with the live version", async () => {
     process.env.ENGINE_MGMT_ALLOWLIST = ALLOW;
     const env = loadEnv();
-    const prisma = new PrismaClient();
+    const prisma = fixturePrisma;
     try {
       const bundle = JSON.stringify({
         cert: readFileSync(`${DIR}/client.crt`, "utf8"),

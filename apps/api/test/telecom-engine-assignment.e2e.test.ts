@@ -1,3 +1,4 @@
+import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12N-1 — Engine↔resource assignment (additive schema) integration test.
  *
@@ -8,12 +9,12 @@
  * engine or a resource is hard-deleted. Pure data-layer — no app/Redis.
  */
 import { afterAll, describe, expect, it } from "vitest";
-import { PrismaClient, EngineResourceKind, TelecomEngineType } from "@prisma/client";
+import { EngineResourceKind, TelecomEngineType } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
 
-const prisma = new PrismaClient();
+const prisma = fixturePrisma;
 const TAG = `tnra-${Date.now()}`;
 let seq = 0;
 

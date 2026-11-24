@@ -1,3 +1,4 @@
+import { fixturePrisma } from "./fixture-db";
 /**
  * Auth integration suite — runs against the REAL Postgres + Redis from
  * docker-compose.dev.yml (constitution: real backend, no mocks). Covers:
@@ -11,7 +12,6 @@ import { authenticator } from "otplib";
 import * as argon2 from "argon2";
 import Redis from "ioredis";
 import type { NestExpressApplication } from "@nestjs/platform-express";
-import { PrismaClient } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL ??= "postgresql://telvyn:change_me_local_dev@localhost:5433/telvyn?schema=public";
@@ -23,7 +23,7 @@ process.env.COOKIE_SECURE ??= "false";
 import { createApp } from "../src/main";
 import { ARGON2_OPTIONS } from "../src/auth/account-flows.service";
 
-const prisma = new PrismaClient();
+const prisma = fixturePrisma;
 const redis = new Redis(process.env.REDIS_URL!);
 let app: NestExpressApplication;
 let http: ReturnType<NestExpressApplication["getHttpServer"]>;
