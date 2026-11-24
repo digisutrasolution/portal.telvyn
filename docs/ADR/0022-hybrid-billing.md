@@ -640,10 +640,16 @@ Resolved before acceptance; detailed in `docs/LEDGER_FOUNDATION.md`.
   **PostgreSQL RLS (ADR-0005) is deferred, NOT active** — a production activation
   gate, not a current claim.
 - **Idempotency insertion sequence (resolved).** The key is **claimed** with
-  `resultTransactionId = NULL` before the transaction exists, then linked; a
-  **deferred `NOT NULL` constraint rejects any incomplete record at COMMIT**, so
-  an incomplete idempotency record can never commit. Column nullable (claim
-  window) + deferred NOT-NULL + FK + `UNIQUE` — **no circular/contradictory
+  `resultTransactionId = NULL` before the transaction exists, then linked (claim →
+  insert transaction + legs → `UPDATE` the key's `resultTransactionId`).
+  Completeness is enforced by a **`DEFERRABLE INITIALLY DEFERRED` constraint
+  trigger** that, at COMMIT, **re-reads the final persisted `IdempotencyKey` row**
+  (not the `NEW` image captured at the initial INSERT) and raises if
+  `resultTransactionId IS NULL` — so the valid claim-then-complete sequence passes
+  while an **incomplete record can never commit**. This is **not** a native
+  deferrable `NOT NULL`/`CHECK` (PostgreSQL does not support deferring those; only
+  PK/UNIQUE/FK/EXCLUDE are deferrable). Column nullable (claim window) + the
+  deferred completeness trigger + FK + `UNIQUE` → **no circular/contradictory
   FK/nullability**. Exactly one authoritative relationship
   (`IdempotencyKey.resultTransactionId`).
 

@@ -113,7 +113,7 @@ Index `(transactionId)`, `(accountId)`.
 | key | text | no | |
 | requestFingerprint | text | no | server-generated hash |
 | fingerprintVersion | int | no | |
-| resultTransactionId | uuid | **yes (mid-txn) → NOT NULL at commit** | FK→LedgerTransaction; **UNIQUE**; deferred NOT-NULL (§16) |
+| resultTransactionId | uuid | **yes (mid-txn) → required at commit** | FK→LedgerTransaction; **UNIQUE**; completeness via a deferred constraint trigger (§16) |
 | createdAt | timestamptz | no | |
 Unique: `(tenantId, operation, key) NULLS NOT DISTINCT`; `UNIQUE(resultTransactionId)`.
 No expiry.
@@ -259,7 +259,7 @@ table:
 | cross-tenant posting | deferred ownership check |
 | add legs after finalization / reopen | current-`txid` leg-insert trigger |
 | update/delete posted txn/leg | immutability trigger + revoked DML |
-| incomplete idempotency commit | deferred `resultTransactionId NOT NULL` |
+| incomplete idempotency commit | deferred completeness **constraint trigger** (re-reads row; `resultTransactionId IS NOT NULL`) |
 
 Rollback: any raised exception aborts the whole transaction. Performance: deferred
 checks run once per transaction over its few legs (index `LedgerLeg(transactionId)`).
@@ -270,11 +270,17 @@ checks run once per transaction over its few legs (index `LedgerLeg(transactionI
 transaction exists. Within one DB transaction: (1) `INSERT IdempotencyKey` with
 `resultTransactionId = NULL` (claim), (2) insert transaction + legs, (3) `UPDATE`
 the key's `resultTransactionId`. The column is **nullable** (to allow the claim
-window) **but a deferred constraint asserts `resultTransactionId IS NOT NULL` at
-COMMIT** — so an **incomplete idempotency record can never commit** (no circular
-or contradictory FK/nullability: nullable column + deferred NOT-NULL + FK +
-UNIQUE). **Exactly one authoritative relationship:** `IdempotencyKey.resultTransactionId`
-(unique); `LedgerTransaction.idempotencyKeyId` is **not used**.
+window); completeness is enforced by a **`DEFERRABLE INITIALLY DEFERRED`
+constraint trigger** that at COMMIT **re-reads the final persisted row**
+(`SELECT … WHERE id = NEW.id` — the current state after the link UPDATE, **not**
+the `NEW` image from the initial INSERT) and raises if `resultTransactionId IS
+NULL` — so claim-then-complete passes and an **incomplete idempotency record can
+never commit**. This is **not** a native deferrable `NOT NULL`/`CHECK` (PostgreSQL
+does not support deferring those; only PK/UNIQUE/FK/EXCLUDE are deferrable). No
+circular/contradictory FK/nullability: nullable column + the deferred completeness
+trigger + FK + `UNIQUE`. **Exactly one authoritative relationship:**
+`IdempotencyKey.resultTransactionId` (unique); `LedgerTransaction.idempotencyKeyId`
+is **not used**.
 - Uniqueness `(tenantId, operation, key) NULLS NOT DISTINCT` (PG18) — platform
   (null tenant) ops deduped without a sentinel-FK.
 - The function sets the key's `tenantId`/`operation` to the transaction's →
