@@ -26,3 +26,5 @@ ADR that references the old one. Template: `template.md`.
 | 0018 | NOC read pages: telecom read contract + data-fetching | Accepted |
 | 0019 | NOC mutating actions (engine health-check / sync / rollback) | Accepted |
 | 0020 | Node & carrier liveness health: heartbeat vs reachability probe | Accepted |
+| 0021 | Fraud-event foundation & authorization-infrastructure direction | Accepted |
+| 0022 | Hybrid prepaid wallet & postpaid credit billing | Accepted |
