@@ -56,7 +56,14 @@ jobs:
       # Postgres service superuser. Used ONLY by the verify/bootstrap/grant
       # steps; it is NOT exported as DATABASE_URL, so ordinary test/build steps
       # cannot connect as the bootstrap administrator.
-      CI_PG_ADMIN_URL: postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public
+      #
+      # NO `?schema=public`: this URL is handed to `psql` (libpq), which rejects
+      # `schema` as an unknown URI query parameter (it is a Prisma-only option).
+      # Prisma defaults to the `public` schema and libpq's default search_path
+      # already resolves to `public`, so both tools behave identically without it.
+      # Do NOT re-add `?schema=public` here or on the exported role URLs below —
+      # it breaks every `psql` step (verify / bootstrap / grants / privilege-check).
+      CI_PG_ADMIN_URL: postgresql://telvyn:telvyn_dev@localhost:5432/telvyn
       REDIS_URL: redis://localhost:6379
       JWT_ACCESS_SECRET: ci-secret-ci-secret-ci-secret-ci-secret-01
       APP_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
@@ -118,9 +125,12 @@ jobs:
             -c "ALTER ROLE telvyn_migrator PASSWORD '$MIG_PW'" \
             -c "ALTER ROLE telvyn_app PASSWORD '$APP_PW'"
           # Export the restricted connection strings for later steps (masked).
+          # No `?schema=public` (see CI_PG_ADMIN_URL note): APP_DATABASE_URL is
+          # consumed by BOTH psql (privilege-check) and Prisma (test runtime),
+          # so it must be libpq-valid; Prisma defaults to the public schema.
           {
-            echo "MIGRATOR_DATABASE_URL=postgresql://telvyn_migrator:$MIG_PW@localhost:5432/telvyn?schema=public"
-            echo "APP_DATABASE_URL=postgresql://telvyn_app:$APP_PW@localhost:5432/telvyn?schema=public"
+            echo "MIGRATOR_DATABASE_URL=postgresql://telvyn_migrator:$MIG_PW@localhost:5432/telvyn"
+            echo "APP_DATABASE_URL=postgresql://telvyn_app:$APP_PW@localhost:5432/telvyn"
           } >> "$GITHUB_ENV"
 
       - name: Typecheck
