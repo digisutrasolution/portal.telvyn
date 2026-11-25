@@ -1,6 +1,16 @@
 # Telvyn CI — the SEC-003 enforcement gate. Runs on every push and PR.
 # Blocks the merge unless typecheck, lint, the FULL test suite (unit + e2e
 # against real Postgres + Redis), and the web production build all pass.
+#
+# Restricted-role model (Slice 13-1A.7A/7B): the fresh ephemeral Postgres service
+# starts with only its bootstrap admin (telvyn). CI verifies the target, then
+# creates the least-privilege ledger roles (telvyn_migrator / telvyn_ledger_fn /
+# telvyn_app), runs migrations + seed as telvyn_migrator, applies runtime grants,
+# and runs the application + e2e suite as the restricted telvyn_app (fixtures as
+# telvyn_migrator) — so the same role separation proven in the isolated dev
+# cluster is exercised here. Per-run role passwords are ephemeral and masked.
+# The privileged bootstrap target is constructed explicitly (CI_PG_ADMIN_URL);
+# DATABASE_URL is never job-wide, so test/build steps cannot use admin creds.
 name: CI
 
 on:
@@ -42,7 +52,11 @@ jobs:
           --health-retries 10
 
     env:
-      DATABASE_URL: postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public
+      # Explicitly-constructed privileged bootstrap target = the ephemeral
+      # Postgres service superuser. Used ONLY by the verify/bootstrap/grant
+      # steps; it is NOT exported as DATABASE_URL, so ordinary test/build steps
+      # cannot connect as the bootstrap administrator.
+      CI_PG_ADMIN_URL: postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public
       REDIS_URL: redis://localhost:6379
       JWT_ACCESS_SECRET: ci-secret-ci-secret-ci-secret-ci-secret-01
       APP_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
@@ -62,7 +76,52 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Prisma generate
+        env:
+          DATABASE_URL: ${{ env.CI_PG_ADMIN_URL }} # generate reads the var; it does not connect
         run: pnpm --filter @telvyn/api exec prisma generate
+
+      - name: Verify CI database target
+        # Fail closed unless this is the expected ephemeral PG18 CI service.
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_ACTIONS:-}" != "true" ]; then
+            echo "Refusing: not running in GitHub Actions."; exit 1
+          fi
+          psql "$CI_PG_ADMIN_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN
+            IF current_setting('server_version_num')::int < 180000 THEN
+              RAISE EXCEPTION 'CI target: PostgreSQL % (< 18)', current_setting('server_version');
+            END IF;
+            IF current_database() <> 'telvyn' THEN
+              RAISE EXCEPTION 'CI target: wrong database %', current_database();
+            END IF;
+            IF current_user <> 'telvyn' THEN
+              RAISE EXCEPTION 'CI target: wrong bootstrap user %', current_user;
+            END IF;
+          END $$;
+          SQL
+
+      - name: Bootstrap least-privilege database roles (ephemeral CI)
+        # Fail-closed (set -e + ON_ERROR_STOP). No shell tracing around credentials.
+        run: |
+          set -euo pipefail
+          # Per-run ephemeral role passwords (hex → URL-safe); masked in logs.
+          MIG_PW="$(openssl rand -hex 24)"
+          APP_PW="$(openssl rand -hex 24)"
+          echo "::add-mask::$MIG_PW"
+          echo "::add-mask::$APP_PW"
+          # Create the three roles in the verified FRESH ephemeral CI database.
+          psql "$CI_PG_ADMIN_URL" -v ON_ERROR_STOP=1 -v ci_ephemeral=1 -v db_name=telvyn \
+            -f scripts/db/ci-bootstrap-roles.sql
+          # Set per-run passwords on the two login roles.
+          psql "$CI_PG_ADMIN_URL" -v ON_ERROR_STOP=1 \
+            -c "ALTER ROLE telvyn_migrator PASSWORD '$MIG_PW'" \
+            -c "ALTER ROLE telvyn_app PASSWORD '$APP_PW'"
+          # Export the restricted connection strings for later steps (masked).
+          {
+            echo "MIGRATOR_DATABASE_URL=postgresql://telvyn_migrator:$MIG_PW@localhost:5432/telvyn?schema=public"
+            echo "APP_DATABASE_URL=postgresql://telvyn_app:$APP_PW@localhost:5432/telvyn?schema=public"
+          } >> "$GITHUB_ENV"
 
       - name: Typecheck
         run: pnpm -r typecheck
@@ -70,12 +129,35 @@ jobs:
       - name: Lint
         run: pnpm -r lint
 
-      - name: Apply migrations + seed
+      - name: Apply migrations + seed (as telvyn_migrator)
+        env:
+          DATABASE_URL: ${{ env.MIGRATOR_DATABASE_URL }}
         run: |
           pnpm --filter @telvyn/api exec prisma migrate deploy
           pnpm --filter @telvyn/api exec prisma db seed
 
-      - name: Test (unit + e2e against live Postgres + Redis)
+      - name: Apply runtime grants (telvyn_app)
+        run: |
+          set -euo pipefail
+          psql "$CI_PG_ADMIN_URL" -v ON_ERROR_STOP=1 -v ci_ephemeral=1 -v db_name=telvyn \
+            -f scripts/db/ci-bootstrap-grants.sql
+
+      - name: Verify restricted runtime-role privileges (negatives)
+        # Runs as telvyn_app; fails closed if the runtime role is over-privileged.
+        env:
+          APP_DATABASE_URL: ${{ env.APP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/db/ci-privilege-check.sql
+
+      - name: Test (unit + restricted-role e2e against live Postgres + Redis)
+        env:
+          # Application runtime = restricted telvyn_app; privileged e2e fixtures
+          # (setup/teardown) = telvyn_migrator. Fixture creds are NOT injected
+          # into the application runtime configuration. No admin fallback: if
+          # bootstrap did not export these, they are empty and the lane fails.
+          DATABASE_URL: ${{ env.APP_DATABASE_URL }}
+          E2E_FIXTURE_DATABASE_URL: ${{ env.MIGRATOR_DATABASE_URL }}
         run: pnpm -r test
 
       - name: Web production build
