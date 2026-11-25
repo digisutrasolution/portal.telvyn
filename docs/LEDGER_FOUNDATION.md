@@ -4,8 +4,9 @@
 > the Phase-13 billing ledger foundation (Slice 13-1). It implements **ADR-0022**
 > (Accepted) and does not introduce new financial architecture decisions beyond it.
 >
-> **Implementation status (2026-11-25): Slice 13-1B+C IMPLEMENTED and VERIFIED on
-> the isolated PostgreSQL 18 environment — NOT deployed to any production or shared
+> **Implementation status (2026-11-25): Slices 13-1B+C and 13-1D+E MERGED to `main`
+> (PR #21 and PR #22; `main` `68d4da2`), including the CI-002 F04 URL-portability fix
+> (`0b0d33e`); technically accepted; NOT deployed to any production or shared
 > environment.** The four ledger models (`LedgerAccount`, `LedgerTransaction`,
 > `LedgerLeg`, `IdempotencyKey`), the enums, the `billing` schema, the deferred
 > balancing/completeness constraint triggers, the immutability triggers, the
@@ -438,7 +439,7 @@ PG features present; (future) **RLS activation** on ledger tables (ADR-0005);
 full role-privilege + drift verification. **No live charging or call
 authorization** is activated by this foundation.
 
-## 27. Application integration — Slice 13-1D (implemented, pending acceptance)
+## 27. Application integration — Slice 13-1D+E (merged, `main`, PR #22)
 
 The TypeScript money utility and the internal posting adapter that complete the
 13-1 foundation at the application boundary. Internal infrastructure only — no

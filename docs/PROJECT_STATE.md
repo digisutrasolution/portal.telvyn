@@ -24,8 +24,8 @@
 
 ## Current phase
 
-**Phase 13-1B+C COMPLETE (on the isolated environment) — atomic financial ledger foundation
-IMPLEMENTED + VERIFIED; NOT deployed, NOT committed (owner review pending).** Implements
+**Phase 13-1B+C MERGED (`main`, PR #21) — atomic financial ledger foundation
+IMPLEMENTED + VERIFIED; NOT deployed to production.** Implements
 ADR-0022 (Accepted) / `LEDGER_FOUNDATION.md` (LF-01..LF-10, R1..R6). One additive migration
 `20261125163000_ledger_foundation`: four models (`LedgerAccount`/`LedgerTransaction`/`LedgerLeg`/
 `IdempotencyKey`) + 3 enums (Prisma), plus raw-SQL `billing` schema, `NULLS NOT DISTINCT` uniques,
@@ -41,7 +41,7 @@ Verified on the isolated PG18 env: **43/43 ledger DB tests**, drift green, typec
 rating, invoicing, payments, UI, public posting API, live charging; **RLS deferred (ADR-0005),
 NOT active.** Generic balancing never implies sufficient funds (13-3+).
 
-**Phase 13-1D IMPLEMENTED locally, pending owner acceptance (NOT committed).** Application
+**Phase 13-1D+E MERGED (`main`, PR #22; incl. CI-002 fix `0b0d33e`).** Application
 integration (`apps/api/src/billing/`): exact **money utility** (BigInt micros, strict decimal
 parse/serialize, no floats), typed posting contract + **canonical SHA-256 idempotency fingerprint**,
 the unforgeable **TrustedLedgerContext** authorization boundary, and the internal
@@ -54,9 +54,11 @@ rollback — direct lock evidence, not timing), uncertain-commit recovery, singl
 (full matrix incl. direct tenant-A→tenant-B, reverts after commit+rollback), and fresh `LEDGER_DRIFT_OK`
 + ledger privilege negatives on e2e. Residual (reported, not closed): which
 operations/owners may post = DEFERRED commercial RBAC; the service is inert. Verified: **53 unit + 17
-integration** + unchanged 43 ledger DB tests; regression **API 613/2-skip, web 257, build 19/19**,
-typecheck/lint green; no DB/migration/CI/privilege change. **13-1F** (final acceptance) pending.
-**NEXT (owner-gated):** 13-1F acceptance, then 13-2 BillingAccount + per-account lock anchor + chart of accounts.
+integration** + unchanged 43 ledger DB tests; post-merge CI `45684728547` **API 619/2-skip, web 257, build 19/19**
+(613 at `9ed2c04`; +6 CI-002 portability tests in `0b0d33e`); typecheck/lint green; no DB/migration/CI/privilege
+change. Phase 13-1 is **technically accepted** (`main` `68d4da2`); **13-1F** documentation closure prepared,
+pending PR merge + final owner acceptance.
+**NEXT (owner-gated):** push + PR the 13-1F docs closure, then 13-2 BillingAccount + per-account lock anchor + chart of accounts.
 
 ---
 

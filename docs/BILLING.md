@@ -17,7 +17,7 @@ action. Those are later, owner-gated slices.
   `IdempotencyKey`), deferred balancing/immutability triggers, the restricted
   `billing.ledger_post` SECURITY DEFINER function, and the least-privilege role
   model. Verified; NOT deployed to production.
-- **13-1D — IMPLEMENTED locally, pending owner acceptance (NOT committed).** The
+- **13-1D — MERGED (`main`, PR #22).** The
   application integration: the exact **money utility** (`src/billing/money.ts` —
   BigInt micros, strict decimal parsing/serialization, no floats), the typed
   posting contract + **canonical SHA-256 idempotency fingerprint**, the unforgeable
@@ -27,11 +27,17 @@ action. Those are later, owner-gated slices.
   commercial action, inert until an authorized operation calls it. **Trust limit:**
   the GUCs are caller-settable by the runtime role; this protects the trusted app
   path, it is not RLS (ADR-0005 deferred).
-- **13-1E — verification/hardening done (local, pending acceptance).** Trusted-context provenance
+- **13-1E — MERGED (`main`, PR #22).** Trusted-context provenance
   hardened (module-private WeakSet + frozen fields; forgery rejected), deterministic concurrency +
   connection-isolation coverage, uncertain-commit recovery, fresh drift + privilege verification.
   Residual: commercial authorization (which operations/owners may post) is deferred RBAC; the service
-  stays inert. **13-1F** (final acceptance) — pending owner review.
+  stays inert.
+- **CI-002 — MERGED (`main`, PR #22, `0b0d33e`).** Test-only fix: the F04 concurrency test now builds its
+  single-connection DB URL with the WHATWG `URL` API (exactly one `connection_limit=1`, query-free or not;
+  fail-closed), with six colocated portability tests. No ledger/schema/privilege/CI change.
+- **Phase 13-1 is technically accepted** — merged to `main` (`68d4da2`); post-merge CI `45684728547` green
+  (**API 619 passed / 2 skipped**, web 257, build 19/19). **13-1F** documentation closure prepared, pending
+  PR merge + final owner acceptance. NOT deployed to production.
 - **13-2** (BillingAccount + per-account lock anchor + chart of accounts) — not started.
 
 **No money has moved and no balance exists** — a balanced ledger post never
