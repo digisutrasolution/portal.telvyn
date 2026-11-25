@@ -39,6 +39,14 @@ DECLARE
   immutable_tables text[] := ARRAY[
     'AuditLog', 'SecurityEvent', 'LoginAttempt', 'HealthEvent', 'FraudEvent'
   ];
+  -- Financial ledger tables (Phase 13-1B+C): runtime gets NO direct DML at all —
+  -- the ONLY sanctioned write path is EXECUTE billing.ledger_post (SECURITY
+  -- DEFINER), granted by the ledger migration itself; reads are via restricted
+  -- projections in a later slice. They are explicitly EXCLUDED from this generic
+  -- runtime grant loop so telvyn_app can never INSERT/UPDATE/DELETE/SELECT them.
+  ledger_tables text[] := ARRAY[
+    'LedgerAccount', 'LedgerTransaction', 'LedgerLeg', 'IdempotencyKey'
+  ];
 BEGIN
   IF current_database() <> target THEN
     RAISE EXCEPTION 'ABORT: connected to %, expected %. Refusing to grant.', current_database(), target;
@@ -49,7 +57,9 @@ BEGIN
     WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'
     ORDER BY tablename
   LOOP
-    IF t = ANY(immutable_tables) THEN
+    IF t = ANY(ledger_tables) THEN
+      CONTINUE;  -- ledger tables: runtime has EXECUTE on ledger_post only, no table DML
+    ELSIF t = ANY(immutable_tables) THEN
       EXECUTE format('GRANT SELECT, INSERT ON public.%I TO telvyn_app', t);
     ELSE
       EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO telvyn_app', t);

@@ -58,6 +58,23 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'PRIV_FAIL: a managed role holds a role membership';
   END IF;
+
+  -- Ledger (Phase 13-1B+C): runtime may EXECUTE the posting function and NOTHING
+  -- else on the ledger. PUBLIC must not execute it. (Guarded so this check is a
+  -- no-op before the ledger migration exists.)
+  IF to_regprocedure('billing.ledger_post(jsonb)') IS NOT NULL THEN
+    IF NOT has_function_privilege('telvyn_app','billing.ledger_post(jsonb)','EXECUTE') THEN
+      RAISE EXCEPTION 'PRIV_FAIL: telvyn_app lacks EXECUTE on billing.ledger_post';
+    END IF;
+    IF has_function_privilege('public','billing.ledger_post(jsonb)','EXECUTE') THEN
+      RAISE EXCEPTION 'PRIV_FAIL: PUBLIC has EXECUTE on billing.ledger_post';
+    END IF;
+    IF has_table_privilege('telvyn_app','public."LedgerLeg"','INSERT')
+       OR has_table_privilege('telvyn_app','public."LedgerTransaction"','SELECT')
+       OR has_table_privilege('telvyn_app','public."IdempotencyKey"','UPDATE') THEN
+      RAISE EXCEPTION 'PRIV_FAIL: telvyn_app has a direct privilege on a ledger table';
+    END IF;
+  END IF;
 END
 $$;
 
@@ -93,6 +110,39 @@ BEGIN
         RAISE EXCEPTION 'PRIV_FAIL: % errored with a NON-privilege class % (not a valid denial)', stmt, SQLSTATE;
     END;
     -- (a privilege-adjacent class other than 42501 re-raises and fails via ON_ERROR_STOP)
+  END LOOP;
+END
+$$;
+
+-- ---- Ledger-specific runtime negatives (Phase 13-1B+C) ------------------
+-- Guarded: a no-op before the ledger migration. Each forbidden op MUST fail with
+-- 42501 (permission is checked before any constraint/trigger), proving the runtime
+-- role has NO direct access to the financial ledger — only EXECUTE ledger_post.
+DO $$
+DECLARE
+  stmt text;
+  forbidden text[] := ARRAY[
+    'SELECT 1 FROM "LedgerTransaction"',
+    'INSERT INTO "LedgerLeg"("id","transactionId","accountId","currency","amountMicros") VALUES (uuidv7(),uuidv7(),uuidv7(),''USD'',1)',
+    'UPDATE "LedgerLeg" SET "amountMicros"=1 WHERE false',
+    'DELETE FROM "LedgerTransaction" WHERE false',
+    'TRUNCATE TABLE "LedgerLeg"',
+    'ALTER TABLE "LedgerTransaction" DISABLE TRIGGER ALL',
+    'DROP FUNCTION billing.ledger_post(jsonb)'
+  ];
+BEGIN
+  IF to_regprocedure('billing.ledger_post(jsonb)') IS NULL THEN
+    RETURN;  -- ledger not migrated yet; nothing to probe
+  END IF;
+  FOREACH stmt IN ARRAY forbidden LOOP
+    BEGIN
+      EXECUTE stmt;
+      RAISE EXCEPTION 'PRIV_FAIL: runtime role unexpectedly ALLOWED on ledger: %', stmt;
+    EXCEPTION
+      WHEN insufficient_privilege THEN NULL;  -- 42501: the expected denial
+      WHEN undefined_object OR undefined_table OR undefined_function OR syntax_error THEN
+        RAISE EXCEPTION 'PRIV_FAIL: ledger op % errored with a NON-privilege class % (not a valid denial)', stmt, SQLSTATE;
+    END;
   END LOOP;
 END
 $$;

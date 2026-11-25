@@ -143,8 +143,15 @@ GRANT USAGE, CREATE ON SCHEMA public TO telvyn_migrator;
 GRANT CONNECT ON DATABASE :"db_name" TO telvyn_app;
 GRANT USAGE ON SCHEMA public         TO telvyn_app;
 
--- telvyn_ledger_fn: intentionally no database/schema/table privileges yet.
--- (Function ownership + restricted EXECUTE land in 13-1B+C, under new authorization.)
+-- Ledger function owner (telvyn_ledger_fn, Phase 13-1B+C): CONNECT + USAGE on
+-- public so the SECURITY DEFINER billing.ledger_post (owned by this role) can
+-- reach the public ledger tables and the public "Currency" enum. This is an
+-- ADMIN-granted persistent ROLE privilege: telvyn_migrator does NOT own schema
+-- public and cannot grant USAGE on it, so the ledger migration deliberately does
+-- not. Still NO table/DDL privileges here — the ledger per-table DML grants and
+-- the function ownership transfer are performed by the ledger migration itself.
+GRANT CONNECT ON DATABASE :"db_name" TO telvyn_ledger_fn;
+GRANT USAGE ON SCHEMA public         TO telvyn_ledger_fn;
 
 -- NOTE: No ALTER DEFAULT PRIVILEGES are set here. Future ledger tables must NOT
 -- be auto-exposed to runtime CRUD; per-table grants are applied explicitly in

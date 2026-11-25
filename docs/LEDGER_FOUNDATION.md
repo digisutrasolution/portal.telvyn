@@ -1,10 +1,23 @@
 # LEDGER_FOUNDATION.md — Telvyn billing ledger foundation (design)
 
 > Status taxonomy: see `PROJECT_STATE.md`. This is the **technical design** for
-> the Phase-13 billing ledger foundation (Slice 13-1). It is **design only** — no
-> ledger code, schema, migration, trigger, or role exists yet. It implements
-> **ADR-0022** (Accepted) and does not introduce new financial architecture
-> decisions beyond it.
+> the Phase-13 billing ledger foundation (Slice 13-1). It implements **ADR-0022**
+> (Accepted) and does not introduce new financial architecture decisions beyond it.
+>
+> **Implementation status (2026-11-25): Slice 13-1B+C IMPLEMENTED and VERIFIED on
+> the isolated PostgreSQL 18 environment — NOT deployed to any production or shared
+> environment.** The four ledger models (`LedgerAccount`, `LedgerTransaction`,
+> `LedgerLeg`, `IdempotencyKey`), the enums, the `billing` schema, the deferred
+> balancing/completeness constraint triggers, the immutability triggers, the
+> `billing.ledger_post` SECURITY DEFINER function (owned by `telvyn_ledger_fn`),
+> the ownership-transfer deployment lifecycle, the least-privilege grants, the
+> drift check, and the database test matrix all exist as of migration
+> `20261125163000_ledger_foundation`. **Still deferred / NOT built:** BillingAccount,
+> Wallet, CreditProfile, UsageReservation, account locking, CDR/rating, invoicing,
+> payments, UI, any public posting API, live charging (§24). **RLS on the ledger
+> tables remains deferred (ADR-0005), NOT active** — the application layer is the
+> read-isolation boundary today (§9/§26). Generic balancing never implies
+> sufficient funds (that is 13-3+).
 
 ## 1. Purpose and scope
 

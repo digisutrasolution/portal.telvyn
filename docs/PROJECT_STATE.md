@@ -24,6 +24,26 @@
 
 ## Current phase
 
+**Phase 13-1B+C COMPLETE (on the isolated environment) — atomic financial ledger foundation
+IMPLEMENTED + VERIFIED; NOT deployed, NOT committed (owner review pending).** Implements
+ADR-0022 (Accepted) / `LEDGER_FOUNDATION.md` (LF-01..LF-10, R1..R6). One additive migration
+`20261125163000_ledger_foundation`: four models (`LedgerAccount`/`LedgerTransaction`/`LedgerLeg`/
+`IdempotencyKey`) + 3 enums (Prisma), plus raw-SQL `billing` schema, `NULLS NOT DISTINCT` uniques,
+amount CHECK (±1e15, MIN-BIGINT rejected), deferred balancing/completeness constraint triggers,
+immutability triggers, and the restricted **`billing.ledger_post` SECURITY DEFINER** function
+(owner `telvyn_ledger_fn`, hardened search_path, PUBLIC EXECUTE revoked, EXECUTE→`telvyn_app` only).
+Trusted-context authorization (`app.tenant_id`/`app.is_platform`/`app.actor_id`), claim→complete
+idempotency with concurrent `ON CONFLICT` + fingerprint replay/409. Runtime has **EXECUTE on
+`ledger_post` only** (no ledger DML/SELECT). Ownership-transfer deployment lifecycle
+(`ledger-migration-pre/-post.sql`) + drift check (`ledger-drift-check.sql`), wired into CI.
+Verified on the isolated PG18 env: **43/43 ledger DB tests**, drift green, typecheck/lint green.
+**Deferred / NOT built:** BillingAccount, Wallet, CreditProfile, UsageReservation, locking, CDR/
+rating, invoicing, payments, UI, public posting API, live charging; **RLS deferred (ADR-0005),
+NOT active.** Generic balancing never implies sufficient funds (13-3+). **NEXT (owner-gated):**
+13-2 BillingAccount + per-account lock anchor + chart of accounts.
+
+---
+
 **Phase 12M COMPLETE — real Kamailio engine adapter delivered and LIVE-PROVEN.** The
 `KamailioJsonRpcConnector` was validated end-to-end against the disposable Kamailio 6.1.5
 test engine (dedicated VPS `167.114.98.53`) with no mocks: vault decrypt →

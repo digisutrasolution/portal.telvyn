@@ -304,3 +304,31 @@ non-empty. Purely additive (reviewed; no existing table changed):
   `tenantId`, `kind`.
 
 Platform-managed (PlatformGuard, in 12N-2). No service/API/behavior yet.
+
+## Billing ledger foundation — EXISTING (Phase 13-1B+C, 2026-11-25, ADR-0022)
+
+Additive migration `20261125163000_ledger_foundation` — the append-only, double-entry
+**ledger spine** (`LEDGER_FOUNDATION.md`). **IMPLEMENTED + VERIFIED on the isolated PG18
+environment; NOT deployed to production/shared; NOT committed.** Resolves the DB-003/DB-004
+*implementation* (the architecture was resolved by ADR-0022). Four Prisma tables (UUIDv7 PK,
+`timestamptz`): `LedgerAccount` (dual-nature nullable tenant; immutable identity; retire-never-
+delete), `LedgerTransaction` (immutable; one owner tenant; no `updatedAt`), `LedgerLeg`
+(signed `BIGINT` micros; composite FK `(accountId,currency)→LedgerAccount(id,currency)`),
+`IdempotencyKey` (non-partitioned; claim→complete). 3 enums. Dual-nature (ADR-0008), **NOT**
+in `TENANT_SCOPED_MODELS`; all FKs **ON DELETE RESTRICT** (financial history never cascades).
+
+Raw SQL in the same `migration.sql` (not expressible in `schema.prisma`, verified by
+`scripts/db/ledger-drift-check.sql` not Prisma diff): a `billing` schema; `NULLS NOT DISTINCT`
+natural-identity unique indexes (PG18); amount CHECK (`<>0` and within ±1e15 micros, rejecting
+MIN-BIGINT); **deferred `DEFERRABLE INITIALLY DEFERRED` constraint triggers** (≥2 non-zero legs,
+Σ=0 via NUMERIC, single currency, ownership consistency; idempotency completeness re-reading the
+final row); **immutability triggers** (no UPDATE/DELETE of posted rows, no late-leg/reopen via
+`age(xmin)=0`, immutable account identity, immutable completed idempotency keys); and the restricted
+**`billing.ledger_post(jsonb)` SECURITY DEFINER** function (owner `telvyn_ledger_fn`, hardened
+`search_path`, PUBLIC EXECUTE revoked, EXECUTE only to `telvyn_app`). Role model (R6): runtime
+`telvyn_app` has **EXECUTE on `ledger_post` only — no direct DML/SELECT** on ledger tables
+(grant scripts exclude them); the function owner `telvyn_ledger_fn` holds minimal DML (no
+UPDATE/DELETE on posted history). Deployment uses a temporary ownership-transfer lifecycle
+(`ledger-migration-pre.sql`/`-post.sql`, fail-closed cleanup) wired into CI. **`prisma db push`
+prohibited** on the ledger DB; after financial data exists, recovery is **forward-only**. RLS on
+ledger tables stays **deferred (ADR-0005), NOT active** — application-layer read isolation today.
