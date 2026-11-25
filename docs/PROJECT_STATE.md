@@ -39,8 +39,24 @@ idempotency with concurrent `ON CONFLICT` + fingerprint replay/409. Runtime has 
 Verified on the isolated PG18 env: **43/43 ledger DB tests**, drift green, typecheck/lint green.
 **Deferred / NOT built:** BillingAccount, Wallet, CreditProfile, UsageReservation, locking, CDR/
 rating, invoicing, payments, UI, public posting API, live charging; **RLS deferred (ADR-0005),
-NOT active.** Generic balancing never implies sufficient funds (13-3+). **NEXT (owner-gated):**
-13-2 BillingAccount + per-account lock anchor + chart of accounts.
+NOT active.** Generic balancing never implies sufficient funds (13-3+).
+
+**Phase 13-1D IMPLEMENTED locally, pending owner acceptance (NOT committed).** Application
+integration (`apps/api/src/billing/`): exact **money utility** (BigInt micros, strict decimal
+parse/serialize, no floats), typed posting contract + **canonical SHA-256 idempotency fingerprint**,
+the unforgeable **TrustedLedgerContext** authorization boundary, and the internal
+**`LedgerPostingService`** (the only app path to `ledger_post`; transaction-local `app.*` GUCs;
+no public endpoint/commercial action; inert until authorized). Honest trust limit: GUCs are
+caller-settable by the runtime role — not RLS. **13-1E hardening done:** trusted-context provenance via
+a module-private **WeakSet registry + frozen fields** (forgery proven rejected), full fingerprint
+sensitivity coverage, `pg_blocking_pids`-verified real-PG concurrency (blocked-writer replay / waiting-writer
+rollback — direct lock evidence, not timing), uncertain-commit recovery, single-connection GUC isolation
+(full matrix incl. direct tenant-A→tenant-B, reverts after commit+rollback), and fresh `LEDGER_DRIFT_OK`
++ ledger privilege negatives on e2e. Residual (reported, not closed): which
+operations/owners may post = DEFERRED commercial RBAC; the service is inert. Verified: **53 unit + 17
+integration** + unchanged 43 ledger DB tests; regression **API 613/2-skip, web 257, build 19/19**,
+typecheck/lint green; no DB/migration/CI/privilege change. **13-1F** (final acceptance) pending.
+**NEXT (owner-gated):** 13-1F acceptance, then 13-2 BillingAccount + per-account lock anchor + chart of accounts.
 
 ---
 
