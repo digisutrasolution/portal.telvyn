@@ -309,7 +309,7 @@ Platform-managed (PlatformGuard, in 12N-2). No service/API/behavior yet.
 
 Additive migration `20261125163000_ledger_foundation` — the append-only, double-entry
 **ledger spine** (`LEDGER_FOUNDATION.md`). **IMPLEMENTED + VERIFIED on the isolated PG18
-environment; NOT deployed to production/shared; NOT committed.** Resolves the DB-003/DB-004
+environment; **merged to `main` in PR #21**; NOT deployed to production/shared.** Resolves the DB-003/DB-004
 *implementation* (the architecture was resolved by ADR-0022). Four Prisma tables (UUIDv7 PK,
 `timestamptz`): `LedgerAccount` (dual-nature nullable tenant; immutable identity; retire-never-
 delete), `LedgerTransaction` (immutable; one owner tenant; no `updatedAt`), `LedgerLeg`

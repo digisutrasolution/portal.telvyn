@@ -6,10 +6,22 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-25 — **CI-002 — F04 test database-URL portability fix** (`fix(test)`, `0b0d33e`). The Phase
+  13-1D+E concurrency e2e test built the F04 single-connection client URL as
+  `` `${DATABASE_URL}&connection_limit=1` ``; a query-free CI `DATABASE_URL` made the `&` fuse into the
+  database name (`telvyn&connection_limit=1`), failing PR CI run `45665876957` at the test step **before**
+  any financial-isolation assertion ran (it passed locally only because the mapped local DSN already
+  carried a query). Fix: a module-local `singleConnectionUrl()` using the WHATWG `URL` API +
+  `searchParams.set("connection_limit","1")` — exactly one `connection_limit=1` whether or not a query is
+  present, host/port/db + unrelated params preserved, fail-closed on a missing/malformed DSN; six colocated
+  credential-free portability tests added; **all original F04 assertions preserved**. Query-free and
+  query-bearing real-PostgreSQL runs both pass. Corrected PR CI `45679868661` green; **merged to `main` in
+  PR #22** (merge commit `68d4da2`); post-merge CI `45684728547` green (**API 619 passed / 2 skipped**,
+  web 257, build 19/19). Test-only: no ledger behavior, schema, privilege, dependency, or CI-workflow change.
 - 2026-11-25 — Phase 13-1D+E — **exact money utilities + secure internal ledger integration, with
   financial-security/concurrency hardening** (ADR-0022; `docs/LEDGER_FOUNDATION.md`). **Application-layer
-  only; implemented locally, pending owner acceptance; NOT committed, NOT deployed; the merged DB
-  foundation is unchanged.** 13-1E additions: trusted-context provenance hardened to a **module-private
+  only; **merged to `main` in PR #22** (`9ed2c04`; later corrected by CI-002 `0b0d33e`), NOT deployed; the
+  merged DB foundation is unchanged.** 13-1E additions: trusted-context provenance hardened to a **module-private
   WeakSet capability registry + deep-frozen fields** (not merely a Symbol brand a spread/clone/
   `getOwnPropertySymbols` copy could carry — forgery proven rejected); fingerprint full-field-sensitivity
   + leg-multiplicity + order-insensitivity coverage; **deterministic real-PG concurrency proven by
@@ -49,13 +61,15 @@ Format: Keep a Changelog; SemVer once releases begin.
   cross-tenant + unbalanced rejection, idempotent replay + changed-payload conflict, clean rollback,
   `pg_blocking_pids`-verified concurrency, full connection-isolation matrix incl. direct tenant-A→tenant-B
   adjacency, runtime still 42501-restricted) alongside the
-  unchanged 43 ledger DB tests; full regression **API 613 passed / 2 skipped (73 files)**, **web 257
+  unchanged 43 ledger DB tests; full regression **API 619 passed / 2 skipped (73 files)** (613 at `9ed2c04`;
+  +6 CI-002 portability tests in `0b0d33e`), **web 257
   passed (39)**, **web build 19/19** (BUILD-001 preserved), typecheck/lint green; fresh
-  `LEDGER_DRIFT_OK` + ledger privilege negatives on e2e. **13-1F** (final acceptance) remains **pending
-  owner review**. No new dependency; no DB/migration/CI/privilege change.
+  `LEDGER_DRIFT_OK` + ledger privilege negatives on e2e. Phase 13-1 is **technically accepted** (post-merge
+  CI `45684728547` green; `main` `68d4da2`); **13-1F** documentation closure prepared, pending PR merge +
+  final owner acceptance. No new dependency; no DB/migration/CI/privilege change.
 - 2026-11-25 — Phase 13-1B+C — **atomic financial ledger foundation** (ADR-0022 Accepted;
   `docs/LEDGER_FOUNDATION.md` LF-01..LF-10 / R1..R6). **IMPLEMENTED + VERIFIED on the isolated
-  PostgreSQL 18 environment; NOT deployed to production or any shared environment; NOT committed.**
+  PostgreSQL 18 environment; **merged to `main` in PR #21**; NOT deployed to production or any shared environment.**
   The append-only, double-entry ledger spine: four Prisma models (`LedgerAccount`,
   `LedgerTransaction`, `LedgerLeg`, `IdempotencyKey`) + 3 enums, in one additive migration
   `20261125163000_ledger_foundation`. Dual-nature ownership (ADR-0008, nullable tenant;
