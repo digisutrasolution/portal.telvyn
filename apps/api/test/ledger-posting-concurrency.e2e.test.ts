@@ -39,6 +39,23 @@ function deferred<T = void>() {
 const platformCtx = () => createTrustedLedgerContext({ owner: { kind: "platform" } as LedgerOwner, actorId: null, operation: "fund" });
 const tenantCtx = (tid: string) => createTrustedLedgerContext({ owner: { kind: "tenant", tenantId: tid }, actorId: null, operation: "fund" });
 
+/**
+ * Build the F04 single-physical-connection Prisma URL by setting connection_limit=1
+ * on the approved DATABASE_URL without corrupting the DSN — works whether or not the
+ * URL already carries query parameters (CI's DATABASE_URL is query-free because some
+ * workflow steps feed it to psql, while a locally mapped URL may carry a query). Fails
+ * closed on a missing/malformed URL. Test-only; not a production utility, and it never
+ * mutates process.env or any shared connection config.
+ */
+function singleConnectionUrl(databaseUrl: string | undefined): string {
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is required for the F04 integration test");
+  }
+  const parsed = new URL(databaseUrl); // throws on a malformed DSN → fail closed
+  parsed.searchParams.set("connection_limit", "1"); // set, not append → exactly one
+  return parsed.toString();
+}
+
 function pInput(key: string, decimal = "1"): LedgerPostInput {
   return {
     currency: Currency.USD, effectiveAt: new Date("2026-11-25T00:00:00Z"), idempotencyKey: key,
@@ -176,7 +193,7 @@ describe("F03-C — waiting-writer rollback (the blocked writer then succeeds)",
 
 describe("F04 — transaction-local context isolation on connection reuse", () => {
   it("uses one physical connection and never leaks a stale GUC into a later posting", async () => {
-    const url = `${process.env.DATABASE_URL}&connection_limit=1`;
+    const url = singleConnectionUrl(process.env.DATABASE_URL);
     const single = new PrismaClient({ datasources: { db: { url } } });
     const svc = new LedgerPostingService(single as unknown as PrismaService);
     try {
@@ -228,5 +245,47 @@ describe("F04 — transaction-local context isolation on connection reuse", () =
   it("rejects a missing context (null / undefined) with no DB effect", async () => {
     await expect(svcA.post(null as never, pInput(`${RUN}-null`))).rejects.toMatchObject({ kind: "MISSING_AUTHORIZATION_CONTEXT" });
     await expect(svcA.post(undefined as never, pInput(`${RUN}-undef`))).rejects.toMatchObject({ kind: "MISSING_AUTHORIZATION_CONTEXT" });
+  });
+});
+
+/**
+ * Permanent regression for the F04 DATABASE_URL construction (CI-002). Synthetic,
+ * credential-free DSNs only — no real connection — guarding against the query-separator
+ * corruption that made the dedicated single-connection client target a nonexistent
+ * database when DATABASE_URL carried no query string (CI's shape).
+ */
+describe("F04 DATABASE_URL portability — connection_limit without corrupting the DSN", () => {
+  it("A. adds connection_limit to a query-free URL (CI shape) and preserves host/port/db", () => {
+    const u = new URL(singleConnectionUrl("postgresql://u@h:5432/telvyn"));
+    expect(u.hostname).toBe("h");
+    expect(u.port).toBe("5432");
+    expect(u.pathname).toBe("/telvyn");
+    expect(u.searchParams.getAll("connection_limit")).toEqual(["1"]);
+  });
+  it("B. preserves an existing unrelated query parameter", () => {
+    const u = new URL(singleConnectionUrl("postgresql://u@h:5432/telvyn?schema=public"));
+    expect(u.pathname).toBe("/telvyn");
+    expect(u.searchParams.get("schema")).toBe("public");
+    expect(u.searchParams.getAll("connection_limit")).toEqual(["1"]);
+  });
+  it("C. overrides an existing connection_limit to exactly one =1", () => {
+    const u = new URL(singleConnectionUrl("postgresql://u@h:5432/telvyn?connection_limit=10"));
+    expect(u.searchParams.getAll("connection_limit")).toEqual(["1"]);
+  });
+  it("D. preserves multiple existing parameters and host/port/db", () => {
+    const u = new URL(singleConnectionUrl("postgresql://u@h:6543/telvyn?schema=public&sslmode=require"));
+    expect(u.hostname).toBe("h");
+    expect(u.port).toBe("6543");
+    expect(u.pathname).toBe("/telvyn");
+    expect(u.searchParams.get("schema")).toBe("public");
+    expect(u.searchParams.get("sslmode")).toBe("require");
+    expect(u.searchParams.getAll("connection_limit")).toEqual(["1"]);
+  });
+  it("E. fails closed on a missing DATABASE_URL", () => {
+    expect(() => singleConnectionUrl(undefined)).toThrow(/DATABASE_URL is required/);
+    expect(() => singleConnectionUrl("")).toThrow(/DATABASE_URL is required/);
+  });
+  it("F. fails closed on a malformed DATABASE_URL", () => {
+    expect(() => singleConnectionUrl("not a url")).toThrow();
   });
 });
