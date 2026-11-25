@@ -83,6 +83,60 @@ on the base `vitest.config.ts` (the guard is not loaded) and `fixture-db.ts` fal
 back to `DATABASE_URL`. Remote CI runs the suite as a single privileged role and
 does **not** prove the restricted-role enforcement — that is verified locally only.
 
+## CI restricted-role bootstrap (Phase 13-1A.7A) — EXISTING
+
+Ordinary remote CI (`.github/workflows/ci.yml`) spins a **fresh ephemeral**
+`postgres:18-alpine` with only its bootstrap admin (`telvyn`). To exercise the
+same least-privilege model as the isolated dev cluster — and so the future
+financial migration's role-specific DDL works in CI — the workflow bootstraps the
+ledger roles before migrating. No financial ledger objects are created in this
+slice; `ledger_post` and the four ledger models remain Phase 13-1B+C.
+
+The privileged bootstrap target is **constructed explicitly** (`CI_PG_ADMIN_URL`),
+not a job-wide `DATABASE_URL`, so ordinary test/build steps cannot connect as the
+bootstrap admin. A **Verify CI database target** step asserts PostgreSQL ≥ 18 +
+`current_database=telvyn` + `current_user=telvyn` + GitHub-Actions context before
+bootstrapping, and the bootstrap script additionally fails closed on a missing
+`ci_ephemeral=1` flag, a mismatched DB name, an already-migrated database
+(`_prisma_migrations` present), or a pre-existing role with unexpected
+attributes/memberships. (A SQL script cannot itself establish Docker/GitHub
+service identity — that is the workflow's responsibility.)
+
+CI sequence (`build-test` job):
+1. `scripts/db/ci-bootstrap-roles.sql` (as `telvyn` admin, `-v ci_ephemeral=1 -v
+   db_name=telvyn`) creates `telvyn_migrator` (LOGIN, owns schema objects),
+   `telvyn_ledger_fn` (NOLOGIN, future SECURITY DEFINER function owner — no
+   privileges yet), `telvyn_app` (restricted runtime); fail-closed on unexpected
+   role state; PUBLIC hardened; no blanket/default future-table grants.
+2. Per-run **ephemeral** passwords (`openssl rand -hex`, GitHub-masked) are set on
+   the login roles; restricted connection strings are exported (masked).
+3. `prisma migrate deploy` + `db seed` run **as `telvyn_migrator`**.
+4. `scripts/db/ci-bootstrap-grants.sql` grants `telvyn_app` the runtime matrix
+   (SELECT/INSERT/UPDATE/DELETE on business tables; SELECT+INSERT only on
+   audit/event tables; nothing on `_prisma_migrations`).
+5. `scripts/db/ci-privilege-check.sql` runs **as `telvyn_app`** and fails closed
+   if the runtime role is over-privileged (SQLSTATE-precise negatives).
+6. The test suite runs with `DATABASE_URL`=`telvyn_app` and
+   `E2E_FIXTURE_DATABASE_URL`=`telvyn_migrator` (app = restricted runtime,
+   setup/teardown = migrator fixture; no bootstrap-admin fallback).
+
+This whole sequence is validated against a **faithful fresh disposable cluster**
+(`postgres:18-alpine`, db/user `telvyn`) that mirrors the CI service — local
+CI-equivalent verification; it has **not** yet run in an actual GitHub Actions
+execution (that requires a push). No financial ledger objects exist yet.
+
+**Future financial-migration ownership transfer (13-1B+C), proven on PG 18:** a
+`SECURITY DEFINER` function is transferred to `telvyn_ledger_fn` by (a) granting
+`telvyn_ledger_fn TO telvyn_migrator WITH INHERIT FALSE, SET TRUE` (required —
+`ALTER FUNCTION … OWNER TO` needs SET-membership; this is a *privileged deployment*
+capability that the runtime role must never receive), (b) granting the fn owner
+**temporary** `CREATE` on its schema (PG requires the new owner to have schema
+CREATE to receive ownership) plus persistent `USAGE`, (c) transferring ownership,
+(d) revoking the temporary `CREATE`, (e) managing the ACL (`REVOKE EXECUTE FROM
+PUBLIC`, `GRANT EXECUTE TO telvyn_app`) as the owner. The `WITH SET TRUE`
+membership is established just-in-time for the migration window and removed by the
+bootstrap admin afterward; the runtime role (`telvyn_app`) never holds it.
+
 ## To fill in as they land
 
 Dockerfiles / production compose · deploy runbook (RUNBOOK.md) · staging/prod hosting
