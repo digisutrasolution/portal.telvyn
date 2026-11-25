@@ -139,6 +139,16 @@ jobs:
       - name: Lint
         run: pnpm -r lint
 
+      - name: Grant ledger deployment capabilities (pre-migration)
+        # The protected ledger migration (Phase 13-1B+C) needs TEMPORARY CREATE ON
+        # DATABASE + a SET-membership of telvyn_ledger_fn for telvyn_migrator, to
+        # CREATE SCHEMA billing and ALTER FUNCTION billing.ledger_post OWNER. These
+        # are revoked in the post-migration step. Run as the ephemeral CI admin.
+        run: |
+          set -euo pipefail
+          psql "$CI_PG_ADMIN_URL" -v ON_ERROR_STOP=1 -v db_name=telvyn -v allow_ci=1 \
+            -f scripts/db/ledger-migration-pre.sql
+
       - name: Apply migrations + seed (as telvyn_migrator)
         env:
           DATABASE_URL: ${{ env.MIGRATOR_DATABASE_URL }}
@@ -146,14 +156,30 @@ jobs:
           pnpm --filter @telvyn/api exec prisma migrate deploy
           pnpm --filter @telvyn/api exec prisma db seed
 
+      - name: Revoke ledger deployment capabilities (post-migration)
+        # Fail-closed: a security cleanup failure fails the build. Runs whether or
+        # not the migration step succeeded, so the temporary grants never persist.
+        if: always()
+        run: |
+          set -euo pipefail
+          psql "$CI_PG_ADMIN_URL" -v ON_ERROR_STOP=1 -v db_name=telvyn -v allow_ci=1 \
+            -f scripts/db/ledger-migration-post.sql
+
       - name: Apply runtime grants (telvyn_app)
         run: |
           set -euo pipefail
           psql "$CI_PG_ADMIN_URL" -v ON_ERROR_STOP=1 -v ci_ephemeral=1 -v db_name=telvyn \
             -f scripts/db/ci-bootstrap-grants.sql
 
+      - name: Verify ledger schema + privilege drift (as admin)
+        # Semantic drift check for the protected ledger objects (LF §19 / R6).
+        run: |
+          set -euo pipefail
+          psql "$CI_PG_ADMIN_URL" -v ON_ERROR_STOP=1 -f scripts/db/ledger-drift-check.sql
+
       - name: Verify restricted runtime-role privileges (negatives)
-        # Runs as telvyn_app; fails closed if the runtime role is over-privileged.
+        # Runs as telvyn_app; fails closed if the runtime role is over-privileged
+        # (includes the ledger runtime negatives — EXECUTE ledger_post only).
         env:
           APP_DATABASE_URL: ${{ env.APP_DATABASE_URL }}
         run: |

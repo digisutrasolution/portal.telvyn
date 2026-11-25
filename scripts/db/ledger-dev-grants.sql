@@ -42,6 +42,13 @@ DECLARE
   immutable_tables text[] := ARRAY[
     'AuditLog', 'SecurityEvent', 'LoginAttempt', 'HealthEvent', 'FraudEvent'
   ];
+  -- Financial ledger tables (Phase 13-1B+C): runtime gets NO direct DML — the
+  -- only write path is EXECUTE billing.ledger_post (granted by the ledger
+  -- migration). Excluded from this generic loop so telvyn_app can never
+  -- INSERT/UPDATE/DELETE/SELECT them directly.
+  ledger_tables text[] := ARRAY[
+    'LedgerAccount', 'LedgerTransaction', 'LedgerLeg', 'IdempotencyKey'
+  ];
 BEGIN
   -- Identity + whitelist assertion — fail closed.
   IF current_database() <> target THEN
@@ -58,7 +65,9 @@ BEGIN
       AND tablename <> '_prisma_migrations'
     ORDER BY tablename
   LOOP
-    IF t = ANY(immutable_tables) THEN
+    IF t = ANY(ledger_tables) THEN
+      CONTINUE;  -- ledger tables: EXECUTE on ledger_post only, no runtime table DML
+    ELSIF t = ANY(immutable_tables) THEN
       EXECUTE format('GRANT SELECT, INSERT ON public.%I TO telvyn_app', t);
     ELSE
       EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO telvyn_app', t);

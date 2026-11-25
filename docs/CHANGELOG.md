@@ -6,6 +6,35 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-25 — Phase 13-1B+C — **atomic financial ledger foundation** (ADR-0022 Accepted;
+  `docs/LEDGER_FOUNDATION.md` LF-01..LF-10 / R1..R6). **IMPLEMENTED + VERIFIED on the isolated
+  PostgreSQL 18 environment; NOT deployed to production or any shared environment; NOT committed.**
+  The append-only, double-entry ledger spine: four Prisma models (`LedgerAccount`,
+  `LedgerTransaction`, `LedgerLeg`, `IdempotencyKey`) + 3 enums, in one additive migration
+  `20261125163000_ledger_foundation`. Dual-nature ownership (ADR-0008, nullable tenant;
+  **NOT** in `TENANT_SCOPED_MODELS`); FKs **ON DELETE RESTRICT**; signed **BIGINT micros**
+  (debit +, credit −) bounded ±1e15 (CHECK, rejecting MIN-BIGINT); timestamptz. Raw-SQL
+  financial integrity (not expressible in `schema.prisma`): `NULLS NOT DISTINCT` natural-identity
+  unique indexes (PG18); a `billing` schema; **deferred `DEFERRABLE INITIALLY DEFERRED` constraint
+  triggers** enforcing ≥2 non-zero legs / Σ=0 (NUMERIC, overflow-safe) / single currency /
+  ownership consistency at COMMIT, plus idempotency-completeness (re-reads the final row);
+  **immutability triggers** (no UPDATE/DELETE of posted transactions/legs, no late-leg/reopen via
+  `age(xmin)=0`, immutable account identity, immutable completed idempotency keys). The ONLY write
+  path is **`billing.ledger_post(jsonb)` SECURITY DEFINER**, owned by the dedicated NOLOGIN
+  non-superuser **`telvyn_ledger_fn`**, hardened `search_path`, schema-qualified, PUBLIC EXECUTE
+  revoked, EXECUTE granted only to `telvyn_app`; authorization is against the trusted server-derived
+  session context (`app.tenant_id`/`app.is_platform`/`app.actor_id`), never caller-supplied ids
+  alone. Idempotency: claim (null result) → insert → finalize, with concurrent `ON CONFLICT DO
+  NOTHING` + fingerprint replay/409. Deployment: a temporary ownership-transfer lifecycle
+  (`scripts/db/ledger-migration-pre.sql` / `-post.sql`, fail-closed cleanup verification), wired
+  into `.github/workflows/ci.yml`; a semantic drift check (`ledger-drift-check.sql`); runtime grant
+  scripts updated to **exclude** ledger tables (runtime has EXECUTE on `ledger_post` only, no table
+  DML/SELECT); CI privilege negatives extended. Verification on the isolated env: **43/43** ledger
+  DB tests (positive posting, every SQLSTATE validation contract, trusted-context authorization,
+  immutability, deferred COMMIT-time integrity, runtime privilege negatives, concurrency/atomicity),
+  drift check green, typecheck/lint green. **Deferred (NOT built):** BillingAccount, Wallet,
+  CreditProfile, UsageReservation, account locking, CDR/rating, invoicing, payments, UI, public
+  posting API, live charging; **RLS on ledger tables stays deferred (ADR-0005), NOT active.**
 - 2026-11-25 — Phase 13-1A — **isolated ledger development + restricted-role regression environment**
   (PR #16 → `main` @`c3ca6e5`). A dedicated, non-production data plane for the Ledger Foundation,
   **infrastructure + test-harness only — no production logic, Prisma schema, migration, or ledger

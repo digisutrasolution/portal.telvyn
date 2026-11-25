@@ -94,6 +94,15 @@ model Tenant {
   killSwitches      KillSwitch[]
   spendReservations SpendReservation[]
 
+  // Billing ledger foundation (Phase 13, Slice 13-1; ADR-0022 / LEDGER_FOUNDATION).
+  // Back-relations only — no new column on Tenant. Dual-nature ledger (ADR-0008):
+  // these relations carry only the TENANT-owned ledger rows; platform-owned rows
+  // (null tenant) have no Tenant parent. FKs are ON DELETE RESTRICT (financial
+  // history is never cascade-deleted).
+  ledgerAccounts     LedgerAccount[]
+  ledgerTransactions LedgerTransaction[]
+  idempotencyKeys    IdempotencyKey[]
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -1196,4 +1205,141 @@ model SpendReservation {
   @@index([tenantId, status, createdAt])
   // Drives the TTL sweeper (find overdue ACTIVE holds across tenants).
   @@index([status, expiresAt])
+}
+
+// ===========================================================================
+// Billing ledger foundation — Phase 13, Slice 13-1 (ADR-0022 Accepted;
+// design: docs/LEDGER_FOUNDATION.md). The append-only, double-entry ledger
+// spine every billing operation posts to. These four models are the ONLY
+// Prisma-managed ledger objects; the restricted SECURITY DEFINER posting
+// function `billing.ledger_post`, the deferred balancing/immutability triggers,
+// the NULLS NOT DISTINCT unique indexes, the amount CHECK bounds, and the
+// `billing` schema are created as raw SQL in the same migration (not expressible
+// in schema.prisma — LEDGER_FOUNDATION §20). The runtime role holds NO direct
+// DML on these tables; the posting function is the only write path (§14/§17).
+//
+// Dual-nature ownership (ADR-0008, NOT in TENANT_SCOPED_MODELS): nullable tenant
+// (null = platform). Delete is RESTRICT everywhere (financial history is never
+// cascade-deleted). Money = signed BIGINT micros (debit +, credit −), never
+// float (LF-01/R5). Timestamps are timestamptz (financial-record precision).
+// ===========================================================================
+
+enum LedgerAccountType {
+  ASSET
+  LIABILITY
+  REVENUE
+  EXPENSE
+  EQUITY
+}
+
+enum LedgerNormalBalance {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerAccountStatus {
+  ACTIVE
+  RETIRED // never deleted; delete is RESTRICT (R1)
+}
+
+/// A chart-of-accounts node. Dual-nature (ADR-0008): tenant-owned (customer
+/// liability) when tenantId is set, platform-owned (revenue/COGS/promo/suspense)
+/// when null. Identity attributes (ownership, currency, type, normalBalance,
+/// code) are IMMUTABLE once created — enforced by a BEFORE-UPDATE trigger AND by
+/// denying the runtime role UPDATE (R1). Retired, never deleted.
+model LedgerAccount {
+  id            String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId      String?             @db.Uuid
+  tenant        Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  currency      Currency // immutable
+  code          String // chart-of-accounts code; immutable
+  name          String // descriptive; mutable
+  type          LedgerAccountType // immutable
+  normalBalance LedgerNormalBalance // immutable
+  status        LedgerAccountStatus @default(ACTIVE)
+  retiredAt     DateTime?           @db.Timestamptz(6)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(6)
+
+  legs LedgerLeg[]
+
+  // Natural identity, deduped per owner (platform = null). The raw-SQL migration
+  // makes this UNIQUE ... NULLS NOT DISTINCT (PG18) so platform accounts (null
+  // tenant) are also deduped without a sentinel (LF §16).
+  @@unique([tenantId, currency, code])
+  // Composite-FK target for LedgerLeg(accountId, currency) — pins a leg's
+  // currency to its account's currency at the database level.
+  @@unique([id, currency])
+  @@index([tenantId, type])
+}
+
+/// An atomic, IMMUTABLE financial event grouping legs. No updatedAt — a posted
+/// transaction is never edited; corrections are compensating transactions
+/// (reversalOfId). One tenant owner at most (ownerTenantId; null = platform).
+model LedgerTransaction {
+  id            String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  operation     String // e.g. fund / adjust / reverse / settle (per-op matrix is 13-3+)
+  ownerTenantId String?             @db.Uuid
+  ownerTenant   Tenant?             @relation(fields: [ownerTenantId], references: [id], onDelete: Restrict)
+  currency      Currency // single currency for the whole transaction (decision 2)
+  effectiveAt   DateTime            @db.Timestamptz(6)
+  correlationId String?
+  sourceType    String? // provenance
+  sourceRef     String?
+  // Actor attribution (adjustments require it). Plain uuid, matching the repo's
+  // audit-actor convention (AuditLog/FraudEvent): no FK — a system identity has no User row.
+  actorId       String?             @db.Uuid
+  reversalOfId  String?             @db.Uuid
+  reversalOf    LedgerTransaction?  @relation("LedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversals     LedgerTransaction[] @relation("LedgerReversal")
+  createdAt     DateTime            @default(now()) @db.Timestamptz(6)
+
+  legs           LedgerLeg[]
+  idempotencyKey IdempotencyKey? // 1:1 via IdempotencyKey.resultTransactionId (unique)
+
+  @@index([ownerTenantId, effectiveAt])
+  @@index([correlationId])
+}
+
+/// A signed posting against a LedgerAccount. Posted legs are IMMUTABLE. The
+/// composite FK (accountId, currency) → LedgerAccount(id, currency) pins the
+/// leg's currency to its account. amountMicros is signed and CHECK'd <> 0 and
+/// within ±1e15 micros (raw SQL) — debit +, credit − (LF-01/R5).
+model LedgerLeg {
+  id            String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  transactionId String            @db.Uuid
+  transaction   LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  accountId     String            @db.Uuid
+  currency      Currency
+  account       LedgerAccount     @relation(fields: [accountId, currency], references: [id, currency], onDelete: Restrict)
+  amountMicros  BigInt // signed micros; raw-SQL CHECK (<> 0 AND within ±1e15)
+  createdAt     DateTime          @default(now()) @db.Timestamptz(6)
+
+  @@index([transactionId])
+  @@index([accountId])
+}
+
+/// The single, non-time-partitioned financial idempotency registry (D4). A key
+/// is CLAIMED (resultTransactionId NULL) before the transaction exists, then
+/// linked; a deferred constraint trigger re-reads the final row at COMMIT and
+/// rejects an incomplete claim (LF §16). Completed records are immutable; no
+/// expiry (no historical double-posting).
+model IdempotencyKey {
+  id                  String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId            String?            @db.Uuid
+  tenant              Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  operation           String
+  key                 String
+  requestFingerprint  String // server-generated canonical payload hash
+  fingerprintVersion  Int
+  // Nullable only inside the posting transaction (claim window); a deferred
+  // constraint trigger forbids an incomplete record from committing. UNIQUE so a
+  // transaction is claimed by exactly one key.
+  resultTransactionId String?            @unique @db.Uuid
+  resultTransaction   LedgerTransaction? @relation(fields: [resultTransactionId], references: [id], onDelete: Restrict)
+  createdAt           DateTime           @default(now()) @db.Timestamptz(6)
+
+  // Deduped per (owner, operation). The raw-SQL migration makes this
+  // UNIQUE ... NULLS NOT DISTINCT (PG18) so platform (null tenant) ops dedupe
+  // without a sentinel (D4 / R4).
+  @@unique([tenantId, operation, key])
 }
