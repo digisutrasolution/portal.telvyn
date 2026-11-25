@@ -6,6 +6,53 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-25 — Phase 13-1D+E — **exact money utilities + secure internal ledger integration, with
+  financial-security/concurrency hardening** (ADR-0022; `docs/LEDGER_FOUNDATION.md`). **Application-layer
+  only; implemented locally, pending owner acceptance; NOT committed, NOT deployed; the merged DB
+  foundation is unchanged.** 13-1E additions: trusted-context provenance hardened to a **module-private
+  WeakSet capability registry + deep-frozen fields** (not merely a Symbol brand a spread/clone/
+  `getOwnPropertySymbols` copy could carry — forgery proven rejected); fingerprint full-field-sensitivity
+  + leg-multiplicity + order-insensitivity coverage; **deterministic real-PG concurrency proven by
+  direct `pg_blocking_pids` lock evidence** (a distinct backend observed blocked specifically BY the
+  holder, not by timing alone): the blocked second writer replays the committed txn → one claim;
+  waiting-writer rollback → the blocked writer then commits, no orphans; uncertain-commit recovery
+  (reissue returns the original, simulated result-loss — not a network partition), and single-connection
+  **transaction-local GUC isolation** (one `pg_backend_pid`, GUC reverts after commit AND rollback — no
+  stale value); fresh `LEDGER_DRIFT_OK` + ledger `PRIV_CHECK` on the isolated e2e DB. Honest residual
+  (reported, not closed): *which* operations/owners may post is the DEFERRED commercial RBAC — the service
+  stays inert (no production caller; the only `ledger_post` call site is the adapter). A pure,
+  dependency-free **money utility** (`apps/api/src/billing/money.ts`): signed **BigInt micros**
+  (1 unit = 1e6 micros), strict decimal-string parsing (optional sign, ≤6 fractional digits; rejects
+  `number`/NaN/Infinity/scientific/hex/separators/empty/oversized/>6-digits/out-of-±1e15 incl.
+  MIN-BIGINT), canonical decimal + exact integer-micros serialization (never a JS `number`, never
+  raw BigInt to JSON), exact add/sub/negate/compare and overflow-safe aggregate `sum`, with per-leg
+  (non-zero, ±1e15) vs general (zero-allowed) vs aggregate (unbounded) bounds. A typed **posting
+  contract** (`ledger-contract.ts`) matching the merged `billing.ledger_post(jsonb)` exactly: an
+  **unforgeable, Symbol-branded `TrustedLedgerContext`** (the fail-closed authorization boundary —
+  owner/actor/operation come from validated server state, never request input), a **canonical SHA-256
+  idempotency fingerprint** (v1: fixed-key canonical JSON, decimal-string amounts, leg order
+  insignificant) computed at the trusted boundary (the DB stores+compares it, it does not compute it),
+  and a validated jsonb payload builder (amounts as exact integer strings). An internal
+  **`LedgerPostingService`** (`ledger-posting.service.ts`, `BillingModule`): the **only** application
+  path to `ledger_post`, **no HTTP/DTO/public endpoint, no commercial action** — inert until a future
+  authorized operation invokes it. It requires a trusted context (rejects forged/plain objects),
+  establishes `app.tenant_id`/`app.is_platform`/`app.actor_id` **explicitly + transaction-locally**
+  (`set_config(..., true)`, parameterized, same tx client as `ledger_post` — no cross-connection, no
+  inheritance), supports composable (`postInTransaction`, pending until the caller commits) and
+  committed (`post`) results so success is never reported before deferred commit checks pass, and maps
+  SQLSTATEs (LG001..LG033 / 23xxx / 42501 / 40001 / 40P01) to a **stable typed error hierarchy**
+  (`ledger-errors.ts`) that never leaks SQL/credentials/payloads. **Honest trust limit:** `app.*` GUCs
+  are caller-settable by `telvyn_app` — this adapter protects the normal trusted path, it is NOT RLS
+  and does not defend against arbitrary SQL under a compromised runtime credential; RLS stays deferred
+  (ADR-0005). Verified on the isolated PG18 env: **53 unit + 17 real-PG integration tests** (money/contract/
+  adapter/provenance + authorized platform/tenant posts, exact micros, forged/missing/spread/cloned-context +
+  cross-tenant + unbalanced rejection, idempotent replay + changed-payload conflict, clean rollback,
+  `pg_blocking_pids`-verified concurrency, full connection-isolation matrix incl. direct tenant-A→tenant-B
+  adjacency, runtime still 42501-restricted) alongside the
+  unchanged 43 ledger DB tests; full regression **API 613 passed / 2 skipped (73 files)**, **web 257
+  passed (39)**, **web build 19/19** (BUILD-001 preserved), typecheck/lint green; fresh
+  `LEDGER_DRIFT_OK` + ledger privilege negatives on e2e. **13-1F** (final acceptance) remains **pending
+  owner review**. No new dependency; no DB/migration/CI/privilege change.
 - 2026-11-25 — Phase 13-1B+C — **atomic financial ledger foundation** (ADR-0022 Accepted;
   `docs/LEDGER_FOUNDATION.md` LF-01..LF-10 / R1..R6). **IMPLEMENTED + VERIFIED on the isolated
   PostgreSQL 18 environment; NOT deployed to production or any shared environment; NOT committed.**

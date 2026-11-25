@@ -437,3 +437,73 @@ for testing; runtime vs migration role separation is real in the target; require
 PG features present; (future) **RLS activation** on ledger tables (ADR-0005);
 full role-privilege + drift verification. **No live charging or call
 authorization** is activated by this foundation.
+
+## 27. Application integration — Slice 13-1D (implemented, pending acceptance)
+
+The TypeScript money utility and the internal posting adapter that complete the
+13-1 foundation at the application boundary. Internal infrastructure only — no
+public endpoint, no DTO, no commercial action; inert until an authorized operation
+invokes it. The merged DB foundation (§1–§26) is unchanged.
+
+- **Money representation** (`src/billing/money.ts`). Canonical = signed **BigInt
+  micros** (1 unit = 1,000,000 micros). Never a JS `number`; no
+  `parseFloat`/`parseInt`/`Number`/`toFixed`/`Math.round`/float ×÷. Bounds: a
+  **ledger leg** is non-zero and within ±1e15 micros; a **general** amount may be
+  zero (still ±1e15); **aggregates** are exact unbounded `bigint`. A branded
+  `Micros` type keeps `number` out at compile time.
+- **Decimal grammar (pinned, conservative — §8).** `^[+-]?\d+(\.\d{1,6})?$` with a
+  length cap. Rejects `number` inputs, NaN/Infinity, scientific/hex, separators,
+  whitespace, empty, >6 fractional digits, and out-of-range. Leading integer zeros
+  tolerated; negative zero normalized to `0`. Never silently rounds/truncates.
+- **Serialization.** Monetary values cross JSON as exact **integer-micros strings**
+  (never BigInt/number); canonical **decimal strings** for display. The DB
+  `ledger_post` jsonb contract accepts amount strings (`(l->>'amountMicros')::bigint`)
+  with no precision loss and **no DB change**.
+- **Idempotency fingerprint (v1).** Server-computed at the trusted boundary (the DB
+  **stores + compares** a supplied fingerprint; it does not compute one). SHA-256
+  over a canonical form: fixed key order, amounts as decimal strings, and **legs
+  sorted** (a double-entry transaction is an unordered balanced set — leg input
+  order is insignificant; documented choice). Any financially significant field
+  change (operation/owner/actor/currency/effectiveAt/reversal/source/leg account or
+  amount) changes the fingerprint. Retries MUST reuse the same key **and** payload.
+- **Trusted context + authorization boundary** (`TrustedLedgerContext`). An
+  unforgeable token carrying the **server-established** owner (tenant | platform),
+  actor, and operation. Provenance is enforced at runtime by a **module-private
+  WeakSet capability registry** (13-1E hardening) — not merely a Symbol brand,
+  which a spread/clone/`getOwnPropertySymbols` copy could carry: only a context
+  this module minted is accepted, and the fields are **deeply frozen** (no
+  post-authorization mutation). A request DTO / plain / spread / cloned object is
+  rejected. **Honest residual:** minting a context is a privileged packaging
+  primitive, not an authorization decision — **which operations/owners may post is
+  the DEFERRED commercial RBAC** (ADR-0022 "Open decisions"). In 13-1D/E no
+  production code constructs a context (the service is inert; verified — the only
+  `ledger_post` call site is the adapter); only a future authorized operation
+  (13-2+) or a test fixture does.
+- **Trusted-context GUCs + transaction locality** (§15–§16). The service sets
+  `app.tenant_id` / `app.is_platform` / `app.actor_id` **all three explicitly**
+  (no inheritance), **transaction-locally** (`pg_catalog.set_config(name, value,
+  true)`, parameterized — never interpolated), on the **same** Prisma interactive
+  transaction client used to call `ledger_post`. Verified no cross-request leak on
+  pooled-connection reuse.
+- **Transaction composition** (§17). `postInTransaction(tx, …)` posts inside a
+  caller transaction (future: open tx → BillingAccount lock → validate → post →
+  commit) and returns a **pending** result; `post(…)` runs its own transaction and
+  returns a **committed** result — success is never reported before the deferred
+  commit checks pass.
+- **Error contract** (`ledger-errors.ts`). SQLSTATEs (LG001..LG033, 23xxx, 42501,
+  40001/40P01) and app-side money errors map to a stable typed hierarchy
+  (`INVALID_MONEY_INPUT` / `INVALID_LEDGER_STRUCTURE` / `CURRENCY_MISMATCH` /
+  `OWNERSHIP_MISMATCH` / `MISSING_AUTHORIZATION_CONTEXT` / `IDEMPOTENCY_CONFLICT` /
+  `DEFERRED_INVARIANT` / `IMMUTABLE_HISTORY` / `DATABASE_PRIVILEGE` / `CONCURRENCY`
+  / `CONSTRAINT` / `SERIALIZATION` / `UNKNOWN`). Never leaks SQL, parameters, or
+  credentials; unknown errors are surfaced as `UNKNOWN`, never swallowed.
+- **Trust limitation (honest).** `app.*` GUCs are **caller-settable** by
+  `telvyn_app`. The adapter secures the normal trusted application path; it does
+  **not** implement RLS and does **not** defend against arbitrary SQL executed
+  under a compromised runtime credential. RLS activation on ledger tables stays
+  deferred (ADR-0005). Four distinct layers are preserved and not conflated:
+  (A) app authentication, (B) app financial authorization [commercial matrix
+  deferred], (C) DB structural integrity, (D) DB role privileges.
+- **Open commercial decisions** (unchanged, ADR-0022 "Open decisions"): the
+  per-operation posting matrix + seeded chart of accounts, BillingAccount lifecycle
+  + locking (13-2), credit/limits, invoicing/tax, payment rails. None blocks 13-1.

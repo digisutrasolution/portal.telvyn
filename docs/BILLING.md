@@ -4,12 +4,38 @@
 
 ## Current state — EXISTING
 
-**No billing code, ledger, or payment integration exists.**
+**No COMMERCIAL billing exists** — no BillingAccount, Wallet, CreditProfile,
+UsageReservation, invoicing, payments, pricing, or customer-facing billing
+action. Those are later, owner-gated slices.
 
-**Architecture decided (not implemented):** the billing model is resolved as
-**HYBRID** prepaid wallet + postpaid credit — **ADR-0022** (Accepted, resolves
-DB-003). The ledger-foundation technical design is `LEDGER_FOUNDATION.md`.
-Implementation is Phase-13 (Slice 13-1+) and **has not started**.
+**The billing model is HYBRID** prepaid wallet + postpaid credit — **ADR-0022**
+(Accepted, resolves DB-003); technical design in `LEDGER_FOUNDATION.md`.
+
+**Phase 13-1 progress:**
+- **13-1B+C — MERGED (`main`, PR #21).** The database ledger foundation: the four
+  append-only, double-entry tables (`LedgerAccount`/`LedgerTransaction`/`LedgerLeg`/
+  `IdempotencyKey`), deferred balancing/immutability triggers, the restricted
+  `billing.ledger_post` SECURITY DEFINER function, and the least-privilege role
+  model. Verified; NOT deployed to production.
+- **13-1D — IMPLEMENTED locally, pending owner acceptance (NOT committed).** The
+  application integration: the exact **money utility** (`src/billing/money.ts` —
+  BigInt micros, strict decimal parsing/serialization, no floats), the typed
+  posting contract + **canonical SHA-256 idempotency fingerprint**, the unforgeable
+  **TrustedLedgerContext** authorization boundary, and the internal
+  **`LedgerPostingService`** that establishes trusted context (transaction-local
+  `app.*` GUCs) and invokes `ledger_post`. INTERNAL only — no public endpoint, no
+  commercial action, inert until an authorized operation calls it. **Trust limit:**
+  the GUCs are caller-settable by the runtime role; this protects the trusted app
+  path, it is not RLS (ADR-0005 deferred).
+- **13-1E — verification/hardening done (local, pending acceptance).** Trusted-context provenance
+  hardened (module-private WeakSet + frozen fields; forgery rejected), deterministic concurrency +
+  connection-isolation coverage, uncertain-commit recovery, fresh drift + privilege verification.
+  Residual: commercial authorization (which operations/owners may post) is deferred RBAC; the service
+  stays inert. **13-1F** (final acceptance) — pending owner review.
+- **13-2** (BillingAccount + per-account lock anchor + chart of accounts) — not started.
+
+**No money has moved and no balance exists** — a balanced ledger post never
+implies sufficient funds; that is 13-3+.
 
 ## Principles — PLANNED (locked by constitution)
 
