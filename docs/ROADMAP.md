@@ -32,7 +32,7 @@
 | 10 | **Carriers** | Carrier management module, vaulted credentials (references only), per-carrier adapter implementations, carrier health signals | Carrier contracts; secret store (SEC-006) | Not started |
 | 11 | **SIP** | SIP trunk/delivery configuration (if delivery model includes SIP): trunk entities, IP ACLs, credential handling. **Public-IP constraint applies — never behind CDN** | **Delivery-model decision** (TELECOM.md UNKNOWN #2) | Not started |
 | 12 | **Routing** | Per-DID routing config (versioned/audited — "what routed at time T"), routing UI, **toll-fraud rails ship here**: spend/velocity/geo limits, balance gates, kill-switch (SEC-002 spec) | Toll-fraud spec written & approved | Not started |
-| 13 | **Billing** | Double-entry ledger spine + idempotency guard, wallet OR invoicing per ADR, NRC/MRC charge cycles, reconciliation job + drift alert, ledger drill-down UI | ✔ ADR-0022 (DB-003) | **13-1 ledger foundation CLOSED AND ACCEPTED (merged, not deployed)** — spine + idempotency guard (13-1B+C, PR #21) and exact money + secure internal posting integration (13-1D+E, PR #22, incl. CI-002 fix) **merged to `main`** (`68d4da2`); 13-1F doc closure merged (PR #23, final baseline `d24a142`); NOT deployed; **13-2A design gate NOT STARTED — owner approval required** (see below); wallet/charge-cycles/reconciliation/UI not started |
+| 13 | **Billing** | Double-entry ledger spine + idempotency guard, wallet OR invoicing per ADR, NRC/MRC charge cycles, reconciliation job + drift alert, ledger drill-down UI | ✔ ADR-0022 (DB-003) | **Phase 13 IN PROGRESS.** **13-1 ledger foundation CLOSED AND ACCEPTED (merged, not deployed)** — spine + idempotency guard (13-1B+C, PR #21) and exact money + secure internal posting integration (13-1D+E, PR #22, incl. CI-002 fix) **merged to `main`** (`68d4da2`); 13-1F doc closure merged (PR #23, final baseline `d24a142`); NOT deployed; **13-2A design gate NOT STARTED — owner approval required** (see below); **13-2 through 13-9 not implemented** (wallet/charge-cycles/reconciliation/UI not started) |
 | 14 | **CDR** | Ingest workers (dedupe by carrier record id), monthly-partitioned storage + automated partition management, CDR viewer + filters + export | CDR source + volume (DB-005) | Not started |
 | 15 | **Payments** | Payment rails per ADR (manual/crypto/PSP), signed webhooks + replay dedupe, top-up/settlement flows, compliance posture documented | **Rails ADR (SEC-005)**; AML/KYC ownership | Not started |
 | 16 | **NOC** | The operational cockpit: work queues (stuck orders/ports, failed provisioning), system health tiles, **Fraud Center** (limit trips, lock-down), alert → runbook wiring, notification center | Phases 8–14 emitting signals | Not started |
@@ -63,14 +63,29 @@ Proposed deliverables (design topics, not decisions). The "Finalize" column is a
 | BA-05 | Billing mode (PREPAID/POSTPAID; no in-place flip — owner decision 5) | 13-2A |
 | BA-06 | Account lifecycle | 13-2A |
 | BA-07 | Account-level locking (D3 lock anchor) | 13-2A |
-| BA-08 | Financial RBAC | 13-2A: permissions needed by 13-2 account actions · full matrix before 13-9 |
+| BA-08 | Financial RBAC | 13-2A: permissions needed by 13-2 account actions · full matrix before 13-9 — **timing OPEN (OB-2)** |
 | BA-09 | Authorized ledger-context minting | 13-2A: boundary · before any commercial ledger caller |
-| BA-10 | Chart of accounts | 13-2A: structure · seeded prepaid COA before 13-3 |
+| BA-10 | Chart of accounts | 13-2A: architecture design — **timing OPEN (OB-1)** |
 | BA-11 | Posting-matrix boundaries | 13-2A: boundaries only · per-operation matrix before 13-3 / 13-4 |
-| BA-12 | Financial read visibility | 13-2A: principles (D1) · detailed policy before 13-9 |
+| BA-12 | Financial read visibility | 13-2A: principles (D1) · detailed policy before 13-9 — **timing OPEN (OB-2)** |
 | BA-13 | Platform vs tenant boundaries | 13-2A |
-| BA-14 | Financial audit requirements | 13-2A: account-lifecycle events · ledger audit policy before 13-9 |
-| BA-15 | Financial step-up authentication | 13-2A: which 13-2 actions need it · full policy before 13-9 |
+| BA-14 | Financial audit requirements | 13-2A: account-lifecycle events · ledger audit policy before 13-9 — **timing OPEN (OB-2)** |
+| BA-15 | Financial step-up authentication | 13-2A: which 13-2 actions need it · full policy before 13-9 — **timing OPEN (OB-2)** |
+
+**Open boundary decisions (owner approval required — not resolved here):**
+
+- **OB-1 — Chart-of-accounts timing.** ADR-0022 is internally inconsistent: its
+  dependency matrix places the chart of accounts **before 13-2** ("BillingAccount +
+  COA"), while its "Open decisions" list places it **before 13-3**. Proposed
+  boundary, **for owner review only (not accepted)**: 13-2A — chart-of-accounts
+  architecture, ownership, taxonomy and provisioning design; 13-2 implementation —
+  the approved chart-of-accounts foundation; before 13-3 — prepaid posting matrix;
+  before 13-4 — postpaid posting matrix.
+- **OB-2 — Financial-authorization timing.** ADR-0022's matrix places full financial
+  RBAC, step-up MFA, ledger visibility and audit policy **before 13-9** (ledger admin
+  UI), but **13-3** (prepaid funding and adjustments) is the first slice that would
+  move money and depends on them. Owner to decide whether each must be finalized
+  before the **first** implementation that depends on it.
 
 Out of 13-2A (later billing slices / phases, per ADR-0022): wallet projections
 (13-3), CreditProfile and credit limits/approval (13-4), reservation TTL defaults

@@ -6,6 +6,16 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-26 — **DOC-013A — DOC-013 follow-up clarifications** (docs only, no policy change).
+  `ROADMAP.md` row 13 now states **Phase 13 IN PROGRESS** and that 13-2 through 13-9 are not
+  implemented; two open boundary decisions added to the 13-2A gate — **OB-1** chart-of-accounts timing
+  (the ADR-0022 "before 13-2" vs "before 13-3" inconsistency, with a proposed boundary for owner review
+  only) and **OB-2** financial-authorization timing (RBAC / step-up / visibility / audit "before 13-9" vs
+  the first money-moving slice, 13-3); BA-08/10/12/14/15 marked timing OPEN. ADR-0022 Amendment 4
+  clarified: account-level currency and the D3 account lock relabelled **ACCEPTED BUT NOT IMPLEMENTED**;
+  the D3 lock-anchor policy and owner decision 3 (configurable TTL, per-account exposure limits) no
+  longer read as unapproved; the chart-of-accounts inconsistency recorded as OPEN. No source, test,
+  schema, migration, privilege, dependency, or CI change; no tests run.
 - 2026-11-26 — **DOC-013 — post-Phase-13-1 documentation reconciliation** (docs only). Records that
   **13-1F merged in PR #23** (`df774ca`, merge `d24a142`) and **Phase 13-1 is CLOSED AND ACCEPTED** at
   `main` `d24a142` (post-merge run reported as `45704231153` SUCCESS; logs not inspected in DOC-013);
