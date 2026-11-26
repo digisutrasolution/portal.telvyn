@@ -332,3 +332,46 @@ UPDATE/DELETE on posted history). Deployment uses a temporary ownership-transfer
 (`ledger-migration-pre.sql`/`-post.sql`, fail-closed cleanup) wired into CI. **`prisma db push`
 prohibited** on the ledger DB; after financial data exists, recovery is **forward-only**. RLS on
 ledger tables stays **deferred (ADR-0005), NOT active** — application-layer read isolation today.
+
+## BillingAccount foundation — IMPLEMENTED, NOT MERGED (Phase 13-2B S3, 2026-11-26, ADR-0022 Amendment 5)
+
+Additive migration `20261126120000_billing_account_foundation` — the **inert** commercial billing
+account anchor (BA-01/02/04/05/06/13, X-1; owner decisions S3-D1..D4, E). Verified on the isolated PG18
+env (`telvyn_ledger_dev` + `telvyn_ledger_e2e`); **not committed/merged; NOT deployed**. No endpoint,
+service, caller, rows, ledger change or grant to the runtime role.
+
+**Prisma model** `BillingAccount` (UUIDv7 PK, `timestamptz`) + enums `BillingMode` (`PREPAID`/`POSTPAID`)
+and `BillingAccountStatus` (`ACTIVE`/`SUSPENDED`/`CLOSING`/`CLOSED`). Columns: `tenantId` (NOT NULL, FK
+`Tenant` RESTRICT), `accountNumber` (globally unique; format is an open owner value → S5), `label`,
+`currency` (existing `Currency` enum), `mode`, `status` (default ACTIVE), `statusChangedAt`, `isDefault`,
+`successorOfId`, `provisioningKey` + `provisioningFingerprint` (unique per tenant — the S5 idempotency
+anchor), `createdAt`/`updatedAt`. **No `deletedAt`** (X-1 documented exception: accounts close, never
+delete). Uniques: `(id, tenantId)` (composite FK target), `(successorOfId, tenantId)` (≤1 successor),
+`(tenantId, provisioningKey)`; index `(tenantId, status)`. Lineage FK `(successorOfId, tenantId)` →
+`(id, tenantId)` RESTRICT — a successor must be in the same tenant. Added to `TENANT_SCOPED_MODELS`
+(auto-scoped, deny-by-default, IDOR-safe) — it is tenant-owned, **not** dual-nature.
+
+**Raw SQL** (not expressible in `schema.prisma`; verified by `scripts/db/ledger-drift-check.sql`
+`BILLING_ACCOUNT_DRIFT_OK`; `prisma migrate diff` DB→schema is empty — Prisma ignores these objects and
+proposes no drops):
+- CHECK `BillingAccount_label_nonblank_chk` (`btrim(label) <> ''`) and
+  `BillingAccount_no_self_succession_chk`.
+- Partial unique `BillingAccount_tenantId_currency_default_key` on `(tenantId, currency)` WHERE
+  `isDefault AND status IN (ACTIVE, SUSPENDED)` — one default per tenant+currency; CLOSING/CLOSED release it.
+- Partial expression unique `BillingAccount_tenantId_label_open_key` on `(tenantId, lower(btrim(label)))`
+  WHERE `status <> CLOSED` — first partial/expression index in the repo.
+- Trigger `billing_account_guard` (BEFORE INSERT OR UPDATE, row) → `billing.billing_account_guard()`
+  (plpgsql, SECURITY INVOKER, `search_path = pg_catalog, pg_temp`). SQLSTATEs: **BA001** immutable column
+  changed (`id`, `tenantId`, `accountNumber`, `currency`, `mode`, `successorOfId`, `provisioningKey`,
+  `provisioningFingerprint`); **BA002** CLOSED is terminal; **BA003** insert not ACTIVE; **BA004** owner
+  tenant not CUSTOMER/RESELLER (missing tenant → FK 23503). `statusChangedAt` is DB-maintained (stamped on
+  insert and on status change; client values ignored). The full transition matrix is S6.
+- `REVOKE ALL` from PUBLIC and `telvyn_app`. Both grant scripts (`ci-bootstrap-grants.sql`,
+  `ledger-dev-grants.sql`) exclude the table from the generic runtime matrix via `no_runtime_tables`
+  with an active REVOKE; `ci-privilege-check.sql` asserts 42501 for SELECT/INSERT/UPDATE/DELETE/TRUNCATE/
+  DISABLE TRIGGER/DROP FUNCTION. Grants arrive per slice: SELECT+INSERT (S5), column UPDATE (S6), reads
+  (S8); DELETE never.
+
+**Migration ownership:** runs as `telvyn_migrator` (owns `billing`), so no ledger pre/post
+ownership-transfer window is needed. Error mapping note: Tenant hard-delete against an owning account
+raises **23001** (`restrict_violation`, ON DELETE RESTRICT), not 23503.

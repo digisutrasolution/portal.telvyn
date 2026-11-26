@@ -6,6 +6,23 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-26 — **Phase 13-2B S3 — BillingAccount inert database foundation** (ADR-0022 Amendment 5
+  BA-01/02/04/05/06/13, X-1; owner decisions S3-D1..D4, E). Migration
+  `20261126120000_billing_account_foundation`: `BillingAccount` model + `BillingMode` /
+  `BillingAccountStatus` enums; tenant FK and same-tenant composite successor FK, both RESTRICT; unique
+  account number, `(tenantId, provisioningKey)`, `(successorOfId, tenantId)`; raw SQL non-blank-label and
+  no-self-succession CHECKs, partial unique default per (tenant, currency) among ACTIVE/SUSPENDED, partial
+  expression unique `lower(btrim(label))` per tenant among non-CLOSED; `billing.billing_account_guard`
+  trigger (BA001 immutable identity, BA002 CLOSED terminal, BA003 insert must be ACTIVE, BA004 owner must be
+  CUSTOMER/RESELLER; DB-maintained `statusChangedAt`). **`telvyn_app` holds no privilege on the table**
+  (REVOKE in the migration; `no_runtime_tables` exclusion in `ci-bootstrap-grants.sql` and
+  `ledger-dev-grants.sql`). `ledger-drift-check.sql` adds `BILLING_ACCOUNT_DRIFT_OK`;
+  `ci-privilege-check.sql` asserts 42501 on eight runtime operations. `BillingAccount` added to
+  `TENANT_SCOPED_MODELS` (+ unit tests). New `test/billing-account-foundation.e2e.test.ts` (27 invariant,
+  concurrency and privilege tests). Inert: no endpoint, service, caller, rows, ledger link or money
+  movement. `ROADMAP.md` records the owner-approved S1–S9 slice register and order; `DATABASE.md`,
+  `BILLING.md`, `PROJECT_STATE.md` updated; `LEDGER_FOUNDATION.md` ADR-0010 citation relabelled.
+  Verified on the isolated env only; not deployed.
 - 2026-11-26 — **Phase 13-2A — commercial billing architecture decisions recorded** (docs only).
   The owner approved the 13-2A decision register; recorded as **ADR-0022 Amendment 5** (§"Phase 13-2A
   architecture decisions"): BA-01..BA-15 decided; **OB-1 resolved** (COA foundation in 13-2, prepaid

@@ -34,7 +34,8 @@ charging (see §24).
 
 - **ADR-0022** (Accepted) — hybrid prepaid/postpaid; D1–D4; LF-01–LF-10; R1–R6.
 - ADR-0003 (PostgreSQL 18 + Prisma), ADR-0004 (tenant isolation), ADR-0005 (RLS
-  deferred), ADR-0008 (dual-nature ownership), ADR-0010 (audit boundary),
+  deferred), ADR-0008 (dual-nature ownership), ADR-0010 (telecom node/health — append-only
+  transitions, no database firehose; financial audit = ADR-0022 Amendment 5 BA-14),
   ADR-0021 (fraud/settlement separation). `DATABASE.md` (DB-003/DB-004 resolved),
   `BILLING.md`, `SECURITY.md`.
 

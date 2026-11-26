@@ -4,7 +4,7 @@
 
 ## Current state — EXISTING
 
-**No COMMERCIAL billing exists** — no BillingAccount, Wallet, CreditProfile,
+**No COMMERCIAL billing exists** — no usable BillingAccount (the S3 table is inert), Wallet, CreditProfile,
 UsageReservation, invoicing, payments, pricing, or customer-facing billing
 action. Those are later, owner-gated slices.
 
@@ -46,8 +46,15 @@ action. Those are later, owner-gated slices.
   private ledger-context minting, chart of accounts via `LedgerAccount.billingAccountId`, restricted
   read functions, append-only same-transaction financial audit, and step-up MFA. No code or schema.
 - **13-2** (BillingAccount + per-account lock anchor + chart-of-accounts foundation, now also financial
-  RBAC, financial audit and step-up per the OB-2 gates) — **13-2B implementation NOT STARTED; separate
-  owner authorization required.**
+  RBAC, financial audit and step-up per the OB-2 gates) — **13-2B implementation IN PROGRESS**; slice
+  register S1–S9 and order S3 → S1 → S2 → S4 → S5 → S6 → S8 → S7 → S9 OWNER-APPROVED (`ROADMAP.md`),
+  each slice separately authorized.
+- **13-2B S3 — IMPLEMENTED + VERIFIED on the isolated env; not yet merged.** Inert `BillingAccount`
+  database foundation (migration `20261126120000_billing_account_foundation`, `DATABASE.md`): tenant-owned
+  (CUSTOMER/RESELLER only), immutable currency/mode/number/lineage, DB floor of the lifecycle (start
+  ACTIVE, CLOSED terminal), one default per (tenant, currency), per-tenant open-label uniqueness,
+  same-tenant successor lineage. **The runtime role has no access to it**; no endpoint, service, rows,
+  ledger link or money movement. Provisioning, locking, reads and the ledger link are S5/S6/S8/S4.
 
 **No money has moved and no balance exists** — a balanced ledger post never
 implies sufficient funds; that is 13-3+.

@@ -79,3 +79,25 @@ describe("SipTrunk is auto-scoped (12F)", () => {
     expect(() => applyTenantScope("SipTrunk", "findMany", {}, undefined)).toThrow(TenantScopeError);
   });
 });
+
+describe("BillingAccount is auto-scoped (Phase 13-2B S3, ADR-0022 BA-01/BA-13)", () => {
+  it("is in the scoped set; reads, unique reads and creates are tenant-bound", () => {
+    expect(TENANT_SCOPED_MODELS.has("BillingAccount")).toBe(true);
+    expect(applyTenantScope("BillingAccount", "findMany", { where: { status: "ACTIVE" } }, TID).where).toEqual({
+      status: "ACTIVE",
+      tenantId: TID,
+    });
+    // a foreign account id resolves to not-found (IDOR-safe)
+    expect(applyTenantScope("BillingAccount", "findUnique", { where: { id: "foreign" } }, TID).where).toEqual({
+      AND: [{ id: "foreign" }, { tenantId: TID }],
+    });
+    // a client-supplied tenantId is overwritten by the server-derived one
+    expect(applyTenantScope("BillingAccount", "create", { data: { tenantId: "attacker" } }, TID).data).toEqual({
+      tenantId: TID,
+    });
+  });
+  it("refuses an unscoped BillingAccount query and fails closed on unsupported ops", () => {
+    expect(() => applyTenantScope("BillingAccount", "findMany", {}, undefined)).toThrow(TenantScopeError);
+    expect(() => applyTenantScope("BillingAccount", "upsert", { where: { id: "x" } }, TID)).toThrow(TenantScopeError);
+  });
+});
