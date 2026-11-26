@@ -138,3 +138,91 @@ END
 $$;
 
 \echo 'LEDGER_DRIFT_OK: ledger schema, triggers, function, ownership and privileges verified.'
+
+-- =============================================================================
+-- BillingAccount foundation (Phase 13-2B S3; ADR-0022 Amendment 5 BA-01/02/04/
+-- 05/06/13, X-1; owner S3 decisions S3-D1..D4 + E). The partial/expression
+-- indexes, CHECKs and guard trigger are raw SQL that Prisma's schema-diff cannot
+-- see — this block is their drift authority.
+-- =============================================================================
+DO $$
+DECLARE
+  v int; v_txt text; v_bool boolean;
+BEGIN
+  IF to_regclass('public."BillingAccount"') IS NULL THEN
+    RAISE EXCEPTION 'DRIFT: table public.BillingAccount missing';
+  END IF;
+
+  -- Owner is mandatory; no soft-delete column (X-1).
+  SELECT count(*) INTO v FROM information_schema.columns
+   WHERE table_schema='public' AND table_name='BillingAccount'
+     AND column_name='tenantId' AND is_nullable='NO';
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: BillingAccount.tenantId must be NOT NULL'; END IF;
+  SELECT count(*) INTO v FROM information_schema.columns
+   WHERE table_schema='public' AND table_name='BillingAccount' AND column_name='deletedAt';
+  IF v <> 0 THEN RAISE EXCEPTION 'DRIFT: BillingAccount must not have deletedAt (X-1)'; END IF;
+
+  -- Every FK is ON DELETE RESTRICT; the lineage FK is composite (same tenant).
+  SELECT count(*) INTO v FROM pg_constraint
+   WHERE contype='f' AND conrelid='public."BillingAccount"'::regclass AND confdeltype <> 'r';
+  IF v <> 0 THEN RAISE EXCEPTION 'DRIFT: % BillingAccount FK(s) are not ON DELETE RESTRICT', v; END IF;
+  SELECT count(*) INTO v FROM pg_constraint
+   WHERE conname='BillingAccount_successorOfId_tenantId_fkey' AND contype='f'
+     AND array_length(conkey,1)=2;
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: same-tenant composite lineage FK missing'; END IF;
+
+  -- Unique indexes: plain + composite + the two PARTIAL ones (with predicates).
+  FOR v_txt IN SELECT unnest(ARRAY[
+      'BillingAccount_accountNumber_key','BillingAccount_id_tenantId_key',
+      'BillingAccount_successorOfId_tenantId_key','BillingAccount_tenantId_provisioningKey_key',
+      'BillingAccount_tenantId_currency_default_key','BillingAccount_tenantId_label_open_key']) LOOP
+    SELECT count(*) INTO v FROM pg_index ix JOIN pg_class c ON c.oid=ix.indexrelid
+     WHERE c.relname=v_txt AND ix.indisunique AND ix.indrelid='public."BillingAccount"'::regclass;
+    IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: unique index % missing', v_txt; END IF;
+  END LOOP;
+  SELECT pg_get_indexdef(c.oid) INTO v_txt FROM pg_class c
+   WHERE c.relname='BillingAccount_tenantId_currency_default_key';
+  IF v_txt NOT LIKE '%("tenantId", currency)%' OR v_txt NOT LIKE '%WHERE ("isDefault" AND%'
+     OR v_txt NOT LIKE '%ACTIVE%' OR v_txt NOT LIKE '%SUSPENDED%' THEN
+    RAISE EXCEPTION 'DRIFT: default-account partial index definition changed: %', v_txt;
+  END IF;
+  SELECT pg_get_indexdef(c.oid) INTO v_txt FROM pg_class c
+   WHERE c.relname='BillingAccount_tenantId_label_open_key';
+  IF v_txt NOT LIKE '%lower(btrim(label))%' OR v_txt NOT LIKE '%WHERE (status <> %CLOSED%' THEN
+    RAISE EXCEPTION 'DRIFT: open-label partial index definition changed: %', v_txt;
+  END IF;
+
+  -- CHECKs.
+  SELECT count(*) INTO v FROM pg_constraint
+   WHERE conrelid='public."BillingAccount"'::regclass AND contype='c'
+     AND conname IN ('BillingAccount_label_nonblank_chk','BillingAccount_no_self_succession_chk');
+  IF v <> 2 THEN RAISE EXCEPTION 'DRIFT: BillingAccount CHECK constraints missing (found %)', v; END IF;
+
+  -- Guard trigger: enabled, BEFORE INSERT OR UPDATE, row-level; function is
+  -- SECURITY INVOKER with a hardened search_path.
+  SELECT count(*) INTO v FROM pg_trigger
+   WHERE tgname='billing_account_guard' AND tgrelid='public."BillingAccount"'::regclass
+     AND tgenabled='O' AND (tgtype & 1)=1 AND (tgtype & 2)=2 AND (tgtype & 4)=4 AND (tgtype & 16)=16;
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: billing_account_guard trigger missing, disabled or wrong timing/events'; END IF;
+  SELECT count(*) INTO v FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+   WHERE n.nspname='billing' AND p.proname='billing_account_guard'
+     AND NOT p.prosecdef AND 'search_path=pg_catalog, pg_temp' = ANY(p.proconfig);
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: billing.billing_account_guard must be SECURITY INVOKER with hardened search_path'; END IF;
+
+  -- Runtime role holds NO privilege on BillingAccount in S3 (owner decision E);
+  -- PUBLIC holds none either. (S5/S6/S8 will update this expectation.)
+  FOR v_txt IN SELECT unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) LOOP
+    IF has_table_privilege('telvyn_app','public."BillingAccount"',v_txt) THEN
+      RAISE EXCEPTION 'DRIFT: telvyn_app must have NO % privilege on BillingAccount (S3)', v_txt;
+    END IF;
+  END LOOP;
+  SELECT count(*) INTO v FROM information_schema.column_privileges
+   WHERE table_schema='public' AND table_name='BillingAccount' AND grantee IN ('telvyn_app','PUBLIC');
+  IF v <> 0 THEN RAISE EXCEPTION 'DRIFT: column-level privileges on BillingAccount must not exist in S3'; END IF;
+  SELECT count(*) INTO v FROM information_schema.table_privileges
+   WHERE table_schema='public' AND table_name='BillingAccount' AND grantee='PUBLIC';
+  IF v <> 0 THEN RAISE EXCEPTION 'DRIFT: PUBLIC must have no privilege on BillingAccount'; END IF;
+END
+$$;
+
+\echo 'BILLING_ACCOUNT_DRIFT_OK: BillingAccount indexes, constraints, guard trigger and privileges verified.'

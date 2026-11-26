@@ -47,6 +47,13 @@ DECLARE
   ledger_tables text[] := ARRAY[
     'LedgerAccount', 'LedgerTransaction', 'LedgerLeg', 'IdempotencyKey'
   ];
+  -- Commercial billing tables with NO runtime privilege yet (Phase 13-2B S3,
+  -- owner decision E — least privilege). Excluded from this loop and actively
+  -- revoked so a re-run can never widen access. BillingAccount gains exactly
+  -- SELECT+INSERT with S5, column-level UPDATE with S6 — never DELETE (BA-13).
+  no_runtime_tables text[] := ARRAY[
+    'BillingAccount'
+  ];
 BEGIN
   IF current_database() <> target THEN
     RAISE EXCEPTION 'ABORT: connected to %, expected %. Refusing to grant.', current_database(), target;
@@ -59,6 +66,8 @@ BEGIN
   LOOP
     IF t = ANY(ledger_tables) THEN
       CONTINUE;  -- ledger tables: runtime has EXECUTE on ledger_post only, no table DML
+    ELSIF t = ANY(no_runtime_tables) THEN
+      EXECUTE format('REVOKE ALL ON public.%I FROM telvyn_app', t);
     ELSIF t = ANY(immutable_tables) THEN
       EXECUTE format('GRANT SELECT, INSERT ON public.%I TO telvyn_app', t);
     ELSE

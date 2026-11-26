@@ -147,4 +147,39 @@ BEGIN
 END
 $$;
 
+-- ---- BillingAccount runtime negatives (Phase 13-2B S3) -------------------
+-- Owner decision E: in S3 the runtime role holds NO privilege on BillingAccount
+-- (inert foundation). Every op MUST fail with 42501 — never a missing-object or
+-- syntax error. S5 (SELECT+INSERT), S6 (column UPDATE) and S8 (reads) will
+-- narrow this list; DELETE stays forbidden permanently (BA-13).
+DO $$
+DECLARE
+  stmt text;
+  forbidden text[] := ARRAY[
+    'SELECT 1 FROM "BillingAccount" WHERE false',
+    'INSERT INTO "BillingAccount"("tenantId","accountNumber","label","currency","mode","provisioningKey","provisioningFingerprint","updatedAt") VALUES (uuidv7(),''x'',''x'',''USD'',''PREPAID'',''x'',''x'',now())',
+    'UPDATE "BillingAccount" SET "label" = ''x'' WHERE false',
+    'UPDATE "BillingAccount" SET "currency" = ''EUR'' WHERE false',
+    'DELETE FROM "BillingAccount" WHERE false',
+    'TRUNCATE TABLE "BillingAccount"',
+    'ALTER TABLE "BillingAccount" DISABLE TRIGGER ALL',
+    'DROP FUNCTION billing.billing_account_guard()'
+  ];
+BEGIN
+  IF to_regclass('public."BillingAccount"') IS NULL THEN
+    RAISE EXCEPTION 'PRIV_FAIL: BillingAccount missing (S3 migration not applied)';
+  END IF;
+  FOREACH stmt IN ARRAY forbidden LOOP
+    BEGIN
+      EXECUTE stmt;
+      RAISE EXCEPTION 'PRIV_FAIL: runtime role unexpectedly ALLOWED on BillingAccount: %', stmt;
+    EXCEPTION
+      WHEN insufficient_privilege THEN NULL;  -- 42501: the expected denial
+      WHEN undefined_object OR undefined_table OR undefined_function OR syntax_error THEN
+        RAISE EXCEPTION 'PRIV_FAIL: BillingAccount op % errored with a NON-privilege class % (not a valid denial)', stmt, SQLSTATE;
+    END;
+  END LOOP;
+END
+$$;
+
 \echo 'PRIV_CHECK_OK: restricted runtime-role privilege verification passed.'

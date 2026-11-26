@@ -47,8 +47,8 @@
 architecture design.** Status: **COMPLETE — architecture OWNER-APPROVED
 2026-11-26**, recorded in **ADR-0022 Amendment 5** (§"Phase 13-2A architecture
 decisions"). Design only: no schema, migration, code, privilege, or endpoint
-change was made. **Phase 13-2B (implementation) is NOT STARTED and requires
-separate explicit owner authorization.** Bound by ADR-0022 (the five owner
+change was made. **Phase 13-2B (implementation) is IN PROGRESS** — see the
+slice register below; each slice requires its own explicit owner authorization. Bound by ADR-0022 (the five owner
 decisions, D1–D4, R1–R6 and the Amendment 3 safeguards are not reopened). Phase 13
 slice numbering (13-1…13-9) is the billing roadmap, not the historical Phase
 12A…12R telecom tracking.
@@ -98,6 +98,35 @@ Out of 13-2A (later billing slices / phases, per ADR-0022): wallet projections
 and exposure limits (13-5), late-CDR settlement and reconciliation (13-6), billing
 cycles, terms, tax, invoice numbering, overdue and suspension (13-7), payment
 posting (13-8), refunds/chargebacks (partly Phase 15), rating and rounding (Phase 14).
+
+## Phase 13-2B — implementation slices (within Phase 13-2)
+
+**Slice register OWNER-APPROVED 2026-11-26** (IDs fixed; order is the owner-approved execution
+order, not the ID order). Each slice still needs its **own explicit owner authorization**; approval
+of the register authorizes none of them. S9 is reduced to 13-2 closure verification because its ADR
+work merged with 13-2A (PR #26).
+
+**Execution order:** S3 → S1 → S2 → S4 → S5 → S6 → S8 → S7 → S9.
+
+| Slice | Scope | Depends on | Status |
+|---|---|---|---|
+| S3 | BillingAccount **inert DB foundation**: table + enums, immutable identity, DB lifecycle floor, label/default/lineage uniqueness, tenant-type guard, **no runtime privileges** | — | **IMPLEMENTED + VERIFIED locally (isolated env); not yet merged** |
+| S1 | Financial authorization foundations: wildcard exclusion, MFA-for-finance, StepUpGrant, TOTP replay guard, retire `wallet.credit` | — | Not started |
+| S2 | Financial audit writer (dedicated append-only table, same transaction, fail closed) | — | Not started |
+| S4 | Chart-of-accounts foundation: `LedgerAccount.billingAccountId` + `billing.ledger_account_open` | S3 | Not started |
+| S5 | Atomic idempotent platform provisioning (grants `telvyn_app` SELECT+INSERT on BillingAccount) | S1, S2, S3, S4; account-number format + step-up TTLs | Not started |
+| S6 | Ordered account locking + full lifecycle transition matrix (column-level UPDATE grant) | S5; lock timeout/retry values | Not started |
+| S8 | Restricted metadata reads (SECURITY DEFINER read functions, masked projections) | S5 | Not started |
+| S7 | Private ledger-context minting boundary (`FinancialAuthorizationService`) | S1, S6 | Not started |
+| S9 | 13-2 closure verification | all | Not started |
+
+**S3 database decisions (OWNER-APPROVED 2026-11-26):** S3-D1 label required, non-blank, unique per
+tenant on `lower(btrim(label))` among non-CLOSED accounts (max length → S5); S3-D2 successor lineage
+by composite FK `(successorOfId, tenantId)` → `(id, tenantId)` RESTRICT, at most one successor, no
+self-reference, insert-only and immutable (mode change not DB-enforced); S3-D3 the database enforces
+only "insert must be ACTIVE" and "CLOSED is terminal" (full matrix → S6); S3-D4 `statusChangedAt` only
+(actor/reason → S2 audit); E — `telvyn_app` holds **no** BillingAccount privilege in S3 (DELETE is
+never granted).
 
 ## Dependency spine (critical path)
 

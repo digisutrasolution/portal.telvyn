@@ -103,6 +103,10 @@ model Tenant {
   ledgerTransactions LedgerTransaction[]
   idempotencyKeys    IdempotencyKey[]
 
+  // Commercial billing accounts (Phase 13-2B S3; ADR-0022 Amendment 5 BA-01).
+  // Back-relation only — no new column on Tenant. FK is ON DELETE RESTRICT.
+  billingAccounts BillingAccount[]
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -1342,4 +1346,75 @@ model IdempotencyKey {
   // UNIQUE ... NULLS NOT DISTINCT (PG18) so platform (null tenant) ops dedupe
   // without a sentinel (D4 / R4).
   @@unique([tenantId, operation, key])
+}
+
+// ===========================================================================
+// Commercial billing account foundation — Phase 13-2B, Slice S3
+// (ADR-0022 Amendment 5: BA-01, BA-02, BA-04, BA-05, BA-06 [database part],
+// BA-13, X-1; owner S3 decisions S3-D1..D4, 2026-11-26).
+//
+// INERT FOUNDATION: no endpoint, service, caller or rows exist in S3, and the
+// runtime role (telvyn_app) holds NO privilege on this table (owner decision E,
+// least privilege). SELECT/INSERT arrive with S5 (provisioning), column-level
+// UPDATE with S6 (lifecycle), reads with S8 — never DELETE (BA-13).
+//
+// Raw SQL in the migration (not expressible in schema.prisma; verified by
+// scripts/db/ledger-drift-check.sql, NOT by Prisma schema-diff — always review
+// generated migrations with --create-only so these are never dropped):
+//   * partial unique index: one default account per (tenantId, currency) among
+//     ACTIVE/SUSPENDED accounts (BA-02);
+//   * partial expression unique index: label unique per tenant ignoring case and
+//     surrounding whitespace among non-CLOSED accounts (BA-02, S3-D1);
+//   * CHECKs: label non-empty after trim (S3-D1); no self-succession (S3-D2);
+//   * billing.billing_account_guard trigger: owner/currency/mode/number/lineage/
+//     provisioning identity immutable; new rows start ACTIVE; CLOSED is terminal
+//     (BA-01/04/05/06, S3-D3); tenant must be CUSTOMER or RESELLER (BA-01).
+// The full lifecycle transition matrix is NOT enforced here — it is approved and
+// implemented with S6 (S3-D3).
+//
+// No deletedAt (X-1): CLOSED replaces deletion; history is never removed.
+// ===========================================================================
+
+enum BillingMode {
+  PREPAID
+  POSTPAID
+}
+
+enum BillingAccountStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSING
+  CLOSED
+}
+
+/// A tenant-owned commercial billing account (BA-01). One currency and one mode,
+/// both immutable (BA-04/BA-05); a mode change opens a successor account
+/// (owner decision 5). Provisioning idempotency lives on the row (BA-03).
+model BillingAccount {
+  id                      String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId                String               @db.Uuid // immutable owner (BA-01)
+  tenant                  Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  accountNumber           String               @unique // immutable; format decided before S5
+  label                   String // required; unique per tenant ignoring case among non-CLOSED (raw SQL)
+  currency                Currency // immutable (BA-04)
+  mode                    BillingMode // immutable (BA-05)
+  status                  BillingAccountStatus @default(ACTIVE)
+  statusChangedAt         DateTime             @default(now()) @db.Timestamptz(6)
+  isDefault               Boolean              @default(false)
+  // Lineage (S3-D2): this account succeeds `successorOfId`. Same tenant enforced
+  // by the composite FK; at most one successor per account; set at insert only.
+  successorOfId           String?              @db.Uuid
+  predecessor             BillingAccount?      @relation("BillingAccountLineage", fields: [successorOfId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  successor               BillingAccount?      @relation("BillingAccountLineage")
+  // Provisioning idempotency (BA-03): same key + same fingerprint replays; same
+  // key + different fingerprint is rejected by the provisioning service (S5).
+  provisioningKey         String
+  provisioningFingerprint String
+  createdAt               DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime             @updatedAt @db.Timestamptz(6)
+
+  @@unique([id, tenantId]) // composite-FK target for same-tenant lineage
+  @@unique([successorOfId, tenantId]) // at most one successor per account
+  @@unique([tenantId, provisioningKey])
+  @@index([tenantId, status])
 }
