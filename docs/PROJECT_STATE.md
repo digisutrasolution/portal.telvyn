@@ -56,9 +56,23 @@ rollback — direct lock evidence, not timing), uncertain-commit recovery, singl
 operations/owners may post = DEFERRED commercial RBAC; the service is inert. Verified: **53 unit + 17
 integration** + unchanged 43 ledger DB tests; post-merge CI `45684728547` **API 619/2-skip, web 257, build 19/19**
 (613 at `9ed2c04`; +6 CI-002 portability tests in `0b0d33e`); typecheck/lint green; no DB/migration/CI/privilege
-change. Phase 13-1 is **technically accepted** (`main` `68d4da2`); **13-1F** documentation closure prepared,
-pending PR merge + final owner acceptance.
-**NEXT (owner-gated):** push + PR the 13-1F docs closure, then 13-2 BillingAccount + per-account lock anchor + chart of accounts.
+change. Phase 13-1 was **technically accepted** at `main` `68d4da2` (PR #22).
+
+**Phase 13-1 CLOSED AND ACCEPTED (2026-11-26).** **13-1F** documentation closure **merged in PR #23**
+(`df774ca`; merge commit `d24a142`). Final accepted baseline: `main` =
+`d24a142f11cb947a4d691088acb194240ebaa018`. CI evidence (historical — not re-run by the 2026-11-26
+DOC-013 reconciliation): post-merge run `45684728547` above is the PR #22 (`68d4da2`) evidence; the
+post-merge run for `d24a142` is **reported** as `45704231153` = SUCCESS (owner/session report; its logs
+were not inspected during DOC-013). **NOT deployed to production.** The ledger adapter is implemented but
+inert: `BillingModule` is registered, yet no commercial production caller and no posting endpoint exist;
+trusted-context provenance is **not** commercial authorization; runtime DB restrictions (EXECUTE-only on
+`ledger_post`) are unchanged. **No commercial billing exists** — the ledger foundation is not a prepaid or
+postpaid billing system; no wallet/credit exposure authorization and no billing activation. Fraud
+`SpendReservation`s remain distinct from future billing `UsageReservation`s. RLS remains deferred
+(ADR-0005) and is a **production prerequisite**.
+**NEXT (owner-gated):** **Phase 13-2A** — design-only BillingAccount, financial-authorization and
+chart-of-accounts architecture (BA-01..BA-15, see `ROADMAP.md`) — **NOT STARTED — OWNER APPROVAL
+REQUIRED.** No Phase 13-2 implementation is authorized.
 
 ---
 
