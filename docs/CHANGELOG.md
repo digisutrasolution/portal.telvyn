@@ -6,6 +6,15 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-26 — **DOC-013 — post-Phase-13-1 documentation reconciliation** (docs only). Records that
+  **13-1F merged in PR #23** (`df774ca`, merge `d24a142`) and **Phase 13-1 is CLOSED AND ACCEPTED** at
+  `main` `d24a142` (post-merge run reported as `45704231153` SUCCESS; logs not inspected in DOC-013);
+  NOT deployed. `PROJECT_STATE.md` / `BILLING.md` stale "13-1F pending PR merge" wording corrected (the
+  2026-11-25 entries below are kept as historical). **ADR-0022 Amendment 4** — reconciliation only, no
+  policy change: the two pre-13-1 open decisions marked resolved (R2/R4/R5) and a classified
+  implementation-reconciliation table added; all commercial decisions remain open. `ROADMAP.md` adds the
+  design-only **Phase 13-2A** gate (BA-01..BA-15) — **NOT STARTED, owner approval required**. No source,
+  test, schema, migration, privilege, dependency, or CI change; no tests run.
 - 2026-11-25 — **CI-002 — F04 test database-URL portability fix** (`fix(test)`, `0b0d33e`). The Phase
   13-1D+E concurrency e2e test built the F04 single-connection client URL as
   `` `${DATABASE_URL}&connection_limit=1` ``; a query-free CI `DATABASE_URL` made the `&` fuse into the

@@ -20,6 +20,11 @@
     DEFINER security model, ledger read-isolation, and the resolved idempotency
     insertion sequence (§"Final acceptance safeguards"); referenced
     `docs/LEDGER_FOUNDATION.md`; **status Proposed → Accepted.**
+  - **Amendment 4 (2026-11-26)** — **documentation reconciliation only (DOC-013);
+    no policy, architecture, or owner-decision change.** Marks the two pre-13-1
+    "Open decisions" entries resolved by R2/R4/R5 and implemented in Slice 13-1,
+    and adds §"Post-13-1 implementation reconciliation". The five owner decisions,
+    D1–D4, R1–R6 and the Amendment 3 safeguards are unchanged.
 
 > **Status note.** **Accepted.** The **five owner billing decisions**
 > (§"Owner decision") are **OWNER-APPROVED**; the technical architecture (**D1–D4**
@@ -472,11 +477,14 @@ sections above.
 
 These remain open and must not be treated as decided:
 
-- **Schema-level enforcement (before 13-1):** one-tenant-per-transaction DB check
+- ~~**Schema-level enforcement (before 13-1):** one-tenant-per-transaction DB check
   vs service-only; transaction-owner representation; `IdempotencyKey` platform
-  sentinel (D1).
-- **Debit/credit sign convention + generic posting contract (before 13-1);**
-  chart of accounts + per-operation posting matrix (before 13-3).
+  sentinel (D1).~~ **RESOLVED (Amendment 2, R2/R4) and implemented in Slice 13-1**
+  — see §"Post-13-1 implementation reconciliation" (Amendment 4).
+- ~~**Debit/credit sign convention + generic posting contract (before 13-1);**~~
+  **RESOLVED (Amendment 2, R5; `LEDGER_FOUNDATION.md`) and implemented in Slice
+  13-1.** Still **OPEN:** chart of accounts + per-operation posting matrix
+  (before 13-3).
 - **Late-settlement accounting treatment, recovery policy, and exceptional-debt
   authorization** (F5) — blocks 13-6.
 - Credit limits and approval authority — blocks 13-4.
@@ -657,6 +665,46 @@ Resolved before acceptance; detailed in `docs/LEDGER_FOUNDATION.md`.
 architecture of record; **it does not authorize any implementation.** Slice 13-1
 begins only on separate explicit owner authorization, against
 `docs/LEDGER_FOUNDATION.md`'s acceptance criteria.
+
+## Post-13-1 implementation reconciliation (Amendment 4, DOC-013)
+
+Documentation reconciliation only — **no policy, architecture, or owner decision
+is changed, broadened, or newly made here.** Slice 13-1 (PRs #21–#23) is closed and
+accepted at `main` `d24a142`; **not deployed to production.** "Verified" below
+means verified by the Slice 13-1 test/CI evidence already recorded in
+`PROJECT_STATE.md` / `CHANGELOG.md` (historical; not re-run by this amendment).
+Support in the ledger foundation **does not** make a commercial decision approved.
+
+| Decision area | Classification | Evidence / remaining scope |
+|---|---|---|
+| Ledger sign convention | ACCEPTED POLICY · IMPLEMENTED AND VERIFIED | R5 (debit = +, credit = −); signed `amountMicros`, Σ = 0 deferred check (LG002) |
+| Integer money representation | ACCEPTED POLICY · IMPLEMENTED AND VERIFIED | `BIGINT` micros, `CHECK <> 0` and ±1e15; `money.ts` BigInt, no floats |
+| Monetary precision | IMPLEMENTED AND VERIFIED (ledger) · rating/rounding OPEN | 6-digit micros, exact decimal parse; tariff/rating/rounding stays Phase 14; provider minor-unit conversion Phase 15 |
+| Ledger posting contract | Generic contract IMPLEMENTED AND VERIFIED · posting matrix OPEN — OWNER APPROVAL REQUIRED | `billing.ledger_post(jsonb)` + `ledger-contract.ts`; per-operation matrix + chart of accounts open (before 13-3) |
+| Ledger ownership | ACCEPTED POLICY (D1) · IMPLEMENTED AND VERIFIED | Dual-nature `LedgerAccount.tenantId`; denormalized `LedgerTransaction.ownerTenantId`; one-tenant-per-transaction DB-enforced (LG004) |
+| Currency consistency | Transaction level IMPLEMENTED AND VERIFIED · account level ACCEPTED POLICY, DEFERRED | Single-currency legs (LG003); one currency per BillingAccount (owner decision 2) awaits BillingAccount (13-2) |
+| Idempotency | ACCEPTED POLICY (D4/R4) · IMPLEMENTED AND VERIFIED | `UNIQUE NULLS NOT DISTINCT (tenantId, operation, key)` (null = platform namespace), claim → complete deferred trigger, fingerprint replay / 409; commercial key formats deferred to consuming slices |
+| Transaction finalization | ACCEPTED POLICY (R2) · IMPLEMENTED AND VERIFIED | `DEFERRABLE INITIALLY DEFERRED` balancing and completeness constraint triggers |
+| Immutable ledger history | ACCEPTED POLICY (R1/R2) · IMPLEMENTED AND VERIFIED | Immutability triggers; account identity immutable; compensating-correction *authorization* stays OPEN (financial RBAC) |
+| Database enforcement | ACCEPTED POLICY (F6/R2/R6) · IMPLEMENTED AND VERIFIED | Triggers + drift check in CI; honest limit — superuser/table owner can disable triggers (operational control) |
+| Restricted posting privileges | ACCEPTED POLICY (R2/R6, Amendment 3) · IMPLEMENTED AND VERIFIED | `ledger_post` SECURITY DEFINER owned by `telvyn_ledger_fn`; runtime EXECUTE only, no ledger DML (42501) |
+| Concurrency guarantees | PARTIALLY IMPLEMENTED | Idempotency concurrency verified (`ON CONFLICT`, `pg_blocking_pids` evidence); per-account `SELECT … FOR UPDATE` on `BillingAccount` (D3) is ACCEPTED POLICY, DEFERRED to 13-2 |
+| Trusted posting context | PARTIALLY IMPLEMENTED | Provenance (WeakSet registry, frozen fields, forgery rejected) verified; **provenance ≠ commercial authorization** — authorized context minting + financial RBAC OPEN — OWNER APPROVAL REQUIRED |
+| Database error mapping | IMPLEMENTED AND VERIFIED | `ledger-errors.ts` stable typed hierarchy (LG001..LG033, 23xxx, 42501, 40001/40P01); no SQL/credential leakage |
+
+**Unchanged and still binding:** the five owner decisions (§"Owner decision"),
+D1–D4, R1–R6, and the Amendment 3 safeguards. **Still not implemented or
+owner-approved** (OPEN or DEFERRED as listed in §"Open decisions" and the
+dependency matrix): BillingAccount lifecycle, provisioning and customer/account
+relationships; account-level locking contract; financial RBAC and authorized
+ledger-context minting; chart of accounts and commercial posting matrix; wallet
+projections; CreditProfile, credit limits and approval workflows; billing
+cycles, payment terms, tax and invoice numbering; overdue handling and account
+suspension; reservation TTL defaults and exposure limits; refunds and
+chargebacks; rating and rounding; financial read visibility; financial step-up
+MFA; late-CDR settlement; reconciliation workflows. **No commercial caller, posting
+endpoint, wallet/credit authorization, or billing activation exists. RLS
+(ADR-0005) remains deferred and a production prerequisite.**
 
 ## Status rationale (now Accepted)
 
