@@ -11,6 +11,13 @@ export interface PermissionDef {
   action: string;
   description: string;
   group: string;
+  /**
+   * High-risk financial authority (ADR-0022 Amendment 5 BA-08): never covered
+   * by `*` or `x.*`, effective only with MFA enabled, and not assignable until
+   * the governed assignment path exists (S1 fails closed). No catalogued key
+   * carries this flag yet — the first (provisioning) is named in S5.
+   */
+  wildcardExcluded?: true;
 }
 
 export interface PermissionGroupDef {
@@ -51,9 +58,11 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: "did.read", resource: "did", action: "read", description: "View DID inventory", group: "numbers" },
   { key: "did.assign", resource: "did", action: "assign", description: "Assign/release DIDs", group: "numbers" },
   { key: "did.manage", resource: "did", action: "manage", description: "Manage DID lifecycle & routing", group: "numbers" },
-  // billing (declared for role stability)
+  // billing (declared for role stability). `wallet.credit` was RETIRED in Phase
+  // 13-2B S1 (ADR-0022 Amendment 5 BA-08): it is removed from the catalog and its
+  // stored row/grants are deleted by migration 20261127090000_financial_authz_foundation.
+  // Must never be re-added — financial write authority uses wildcard-excluded keys.
   { key: "wallet.read", resource: "wallet", action: "read", description: "View balances", group: "billing" },
-  { key: "wallet.credit", resource: "wallet", action: "credit", description: "Post wallet credits", group: "billing" },
   // CDRs / usage are billing-adjacent; declared now (routes land in Phase 14) so
   // roles are stable and the frontend gates on cdr.read, not wallet.read.
   { key: "cdr.read", resource: "cdr", action: "read", description: "View call detail records (CDRs)", group: "billing" },
@@ -140,3 +149,11 @@ export const SYSTEM_ROLES: SystemRoleDef[] = [
 
 /** All permission keys — used to expand wildcards at seed/eval time. */
 export const ALL_PERMISSION_KEYS: string[] = PERMISSIONS.map((p) => p.key);
+
+/** Keys retired from the catalog — must never reappear (guarded by tests). */
+export const RETIRED_PERMISSION_KEYS: readonly string[] = ["wallet.credit"];
+
+/** Wildcard-excluded (high-risk financial) keys, derived from the catalog flag. */
+export const WILDCARD_EXCLUDED_KEYS: ReadonlySet<string> = new Set(
+  PERMISSIONS.filter((p) => p.wildcardExcluded).map((p) => p.key),
+);

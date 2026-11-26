@@ -333,11 +333,11 @@ UPDATE/DELETE on posted history). Deployment uses a temporary ownership-transfer
 prohibited** on the ledger DB; after financial data exists, recovery is **forward-only**. RLS on
 ledger tables stays **deferred (ADR-0005), NOT active** — application-layer read isolation today.
 
-## BillingAccount foundation — IMPLEMENTED, NOT MERGED (Phase 13-2B S3, 2026-11-26, ADR-0022 Amendment 5)
+## BillingAccount foundation — EXISTING (Phase 13-2B S3, 2026-11-26, ADR-0022 Amendment 5)
 
 Additive migration `20261126120000_billing_account_foundation` — the **inert** commercial billing
 account anchor (BA-01/02/04/05/06/13, X-1; owner decisions S3-D1..D4, E). Verified on the isolated PG18
-env (`telvyn_ledger_dev` + `telvyn_ledger_e2e`); **not committed/merged; NOT deployed**. No endpoint,
+env (`telvyn_ledger_dev` + `telvyn_ledger_e2e`); **merged to `main` in PR #27 (`6fea9fa`); NOT deployed**. No endpoint,
 service, caller, rows, ledger change or grant to the runtime role.
 
 **Prisma model** `BillingAccount` (UUIDv7 PK, `timestamptz`) + enums `BillingMode` (`PREPAID`/`POSTPAID`)
@@ -375,3 +375,28 @@ proposes no drops):
 **Migration ownership:** runs as `telvyn_migrator` (owns `billing`), so no ledger pre/post
 ownership-transfer window is needed. Error mapping note: Tenant hard-delete against an owning account
 raises **23001** (`restrict_violation`, ON DELETE RESTRICT), not 23503.
+
+## Financial step-up + TOTP replay guard — IMPLEMENTED, NOT COMMITTED (Phase 13-2B S1, 2026-11-26, ADR-0022 Amendment 5)
+
+Additive migration `20261127090000_financial_authz_foundation` (BA-08, BA-15; owner decisions G1/G2).
+Verified on the isolated PG18 env (`telvyn_ledger_dev` + `telvyn_ledger_e2e`); **not committed; NOT deployed**.
+
+- **`User.mfaLastTotpStep`** (`INTEGER`, nullable) — the last accepted absolute TOTP time step. A code is
+  accepted only for a strictly greater step, recorded by one conditional `UPDATE` (concurrency-safe), on
+  every TOTP path (enable, login, step-up). Runtime already holds UPDATE on `User`; no grant change.
+- **`StepUpGrant`** (UUIDv7, `timestamptz`): `userId`, `sessionId`, `tenantId` (all FK **RESTRICT** — grants
+  are evidence), `purpose`, `expiresAt`, `consumedAt`, `createdAt`. No `updatedAt`/`deletedAt` (the only
+  mutation is the single `consumedAt` stamp). Indexes `(userId, sessionId)`, `tenantId`, `expiresAt`. Not in
+  `TENANT_SCOPED_MODELS` (security material bound to a session, accessed only through `StepUpService` with
+  explicit bindings — like `Session`).
+- **Raw SQL** (drift authority: `ledger-drift-check.sql` `FINANCIAL_AUTHZ_DRIFT_OK`): CHECK
+  `StepUpGrant_purpose_format_chk` (`^[a-z][a-z0-9_.]{2,63}$`); CHECK `StepUpGrant_lifetime_chk`
+  (`expiresAt > createdAt` and `<= createdAt + 300 s` — G1, so even a faulty caller cannot mint a longer
+  grant); trigger `step_up_grant_guard` → `billing.step_up_grant_guard()` (SECURITY INVOKER, hardened
+  `search_path`): **SG001** binding immutable, **SG002** single-use (`consumedAt` set once, never cleared or
+  re-stamped), **SG003** cannot insert consumed; `createdAt`/`consumedAt` stamped from the DB clock.
+- **`wallet.credit` retired:** its `RolePermission` rows (system and custom roles) and its `Permission` row
+  are deleted; the catalog no longer declares it, so a re-seed cannot recreate it.
+- **Privileges (G2):** `telvyn_app` holds SELECT, INSERT and column-level UPDATE(`consumedAt`) on
+  `StepUpGrant` — no table UPDATE, no DELETE/TRUNCATE. Both grant scripts handle it explicitly
+  (`step_up_tables`); `ci-privilege-check.sql` asserts 42501 for 8 forbidden operations.

@@ -1,5 +1,6 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "@/infra/prisma.service";
+import { assertNoWildcardExcludedAssignment, WildcardExcludedAssignmentError } from "./authorization";
 import type { TenantContext } from "./tenant-context";
 
 /**
@@ -74,9 +75,17 @@ export class TenancyService {
     // Only roles valid for this tenant (system roles or this tenant's custom roles).
     const validRoles = await this.prisma.role.findMany({
       where: { id: { in: roleIds }, deletedAt: null, OR: [{ tenantId: ctx.tenantId }, { isSystem: true, tenantId: null }] },
-      select: { id: true },
+      select: { id: true, permissions: { select: { permission: { select: { key: true } } } } },
     });
     if (validRoles.length !== roleIds.length) throw new ConflictException("One or more roles are invalid for this tenant");
+    // BA-08 / owner decision G4: a role conferring a high-risk financial permission
+    // cannot be assigned in S1 (fail closed until the governed path exists).
+    try {
+      assertNoWildcardExcludedAssignment(validRoles.flatMap((r) => r.permissions.map((p) => p.permission.key)));
+    } catch (e) {
+      if (e instanceof WildcardExcludedAssignmentError) throw new ForbiddenException(e.message);
+      throw e;
+    }
 
     await this.prisma.$transaction([
       this.prisma.membershipRole.deleteMany({ where: { membershipId } }),

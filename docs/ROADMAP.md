@@ -110,8 +110,8 @@ work merged with 13-2A (PR #26).
 
 | Slice | Scope | Depends on | Status |
 |---|---|---|---|
-| S3 | BillingAccount **inert DB foundation**: table + enums, immutable identity, DB lifecycle floor, label/default/lineage uniqueness, tenant-type guard, **no runtime privileges** | — | **IMPLEMENTED + VERIFIED locally (isolated env); not yet merged** |
-| S1 | Financial authorization foundations: wildcard exclusion, MFA-for-finance, StepUpGrant, TOTP replay guard, retire `wallet.credit` | — | Not started |
+| S3 | BillingAccount **inert DB foundation**: table + enums, immutable identity, DB lifecycle floor, label/default/lineage uniqueness, tenant-type guard, **no runtime privileges** | — | **MERGED** (PR #27, `6fea9fa`; post-merge CI #58 green); NOT deployed |
+| S1 | Financial authorization foundations: wildcard exclusion, MFA-for-finance, StepUpGrant, TOTP replay guard, retire `wallet.credit` | — | **IMPLEMENTED + VERIFIED locally (isolated env); not committed** |
 | S2 | Financial audit writer (dedicated append-only table, same transaction, fail closed) | — | Not started |
 | S4 | Chart-of-accounts foundation: `LedgerAccount.billingAccountId` + `billing.ledger_account_open` | S3 | Not started |
 | S5 | Atomic idempotent platform provisioning (grants `telvyn_app` SELECT+INSERT on BillingAccount) | S1, S2, S3, S4; account-number format + step-up TTLs | Not started |
@@ -127,6 +127,15 @@ self-reference, insert-only and immutable (mode change not DB-enforced); S3-D3 t
 only "insert must be ACTIVE" and "CLOSED is terminal" (full matrix → S6); S3-D4 `statusChangedAt` only
 (actor/reason → S2 audit); E — `telvyn_app` holds **no** BillingAccount privilege in S3 (DELETE is
 never granted).
+
+**S1 decisions (OWNER-APPROVED 2026-11-26):** G1 financial step-up grant lifetime **300 s** — one value
+for freshness and lifetime; no separate challenge object (the TOTP code is verified at issuance, ±1 step);
+grants are single-use and purpose-bound. G2 S1 ships a migration (`StepUpGrant`, `User.mfaLastTotpStep`,
+`wallet.credit` retirement) and `telvyn_app` gets SELECT + INSERT + UPDATE(`consumedAt`) on `StepUpGrant`
+only — never DELETE. G3 S1 adds the `wildcardExcluded` catalog flag and enforcement but names **no**
+financial permission key (the first is named in S5). G4 in S1, conferring any wildcard-excluded
+permission through a custom role or role assignment **fails closed**; the governed path (step-up, no
+self-assignment, same-transaction audit) opens in S2/S5.
 
 ## Dependency spine (critical path)
 

@@ -153,7 +153,9 @@ this wiring; the web client consumes the new API unchanged in shape.
   not deferred to JWT expiry.
 - **MFA/2FA**: TOTP (otplib, ±1 window), secret AES-256-GCM encrypted at rest,
   8 single-use recovery codes (hashed), disable requires **step-up** (password
-  AND code).
+  AND code). **TOTP replay guard (Phase 13-2B S1, BA-15):** each user's last
+  accepted time step is stored; a code is accepted only for a later step, so a
+  TOTP code works at most once (concurrency-safe conditional update).
 - **Password reset / email verification**: 256-bit hashed single-use TTL tokens;
   reset revokes ALL sessions; requests always 202 (no enumeration); messages
   written to `EmailOutbox` seam (no fake sends).
@@ -728,3 +730,31 @@ Attaching a node's heartbeat identity (`POST /v1/telecom/nodes/:id/credential`):
   known, so the heartbeat authenticator can bind a verified cert to the node — but
   acceptance still requires a real inbound mTLS terminator (none is deployed yet),
   so the ingest remains fail-closed until then.
+
+## Financial authorization foundation — IMPLEMENTED, NOT COMMITTED (Phase 13-2B S1, 2026-11-26)
+
+ADR-0022 Amendment 5 BA-08/BA-15; owner decisions G1–G4. Verified on the isolated env only.
+
+- **Wildcard exclusion:** a catalog permission flagged `wildcardExcluded` (high-risk financial authority)
+  is never covered by `*` or `x.*` in `grantCovers`/`isAuthorized`, and is never materialized by
+  `expandGrants` (seed and runtime) — only an explicit grant satisfies it. **No key is flagged in S1**
+  (owner decision G3: the first is named in S5), so today's effective permissions are unchanged apart from
+  the retired `wallet.credit`.
+- **MFA-for-finance:** `TenantGuard` drops wildcard-excluded keys from the effective permission set of a
+  user without MFA (fail closed).
+- **Assignment fails closed (G4):** creating a custom role, or assigning roles to a member, that would
+  confer a wildcard-excluded key is refused (403). The governed path (step-up, no self-assignment,
+  same-transaction financial audit) is S2/S5 work.
+- **`wallet.credit` retired** (catalog + stored rows); guarded by tests against reintroduction.
+- **Server-side step-up (`StepUpService`, inert):** `issue` needs a fresh TOTP code (recovery codes are
+  NOT accepted for financial step-up; the replay guard applies), an ACTIVE user with MFA, a live session of
+  that user whose active tenant is the bound tenant, and an ACTIVE membership in an ACTIVE tenant; it
+  records a grant valid **300 s** (G1). `consume` single-uses it in one `UPDATE` that re-checks user,
+  session, tenant, purpose, strict expiry, session liveness, user status and MFA, and can run inside the
+  caller's transaction. Failures return a generic reason (no detail leak). No controller exposes it; no
+  operation requires it yet (first: S5 provisioning).
+- **Not in S1:** maker-checker (13-3/13-4 money operations), dual-control thresholds (open), the financial
+  audit table and its write (S2), private ledger-context minting (S7), service identities for step-up-free
+  flows. **Pre-existing, out of scope:** `setMemberRoles` lets any `member.manage` holder assign any role
+  in the tenant, including `owner` (`*`); wildcard exclusion now keeps high-risk financial keys out of that
+  path, but general role-escalation hardening needs its own decision.

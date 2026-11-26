@@ -136,13 +136,22 @@ describe("privilege escalation", () => {
   });
 
   it("cannot grant a custom role permissions beyond one's own (403)", async () => {
-    // admin holds member.*/role.*/did.*/tenant.* but NOT wallet.credit.
+    // admin holds member.*/role.*/did.*/tenant.* but NOT wallet.read.
     const admin = await provision("alpha", "admin");
     const res = await request(http)
       .post("/v1/roles")
       .set("Authorization", `Bearer ${admin.token}`)
-      .send({ key: "overreach", name: "Overreach", permissions: ["wallet.credit"] });
+      .send({ key: "overreach", name: "Overreach", permissions: ["wallet.read"] });
     expect(res.status).toBe(403);
+  });
+
+  it("the retired wallet.credit permission can no longer be granted by anyone (400, Phase 13-2B S1)", async () => {
+    const owner = await provision("alpha", "owner");
+    const res = await request(http)
+      .post("/v1/roles")
+      .set("Authorization", `Bearer ${owner.token}`)
+      .send({ key: `retired-${Date.now()}`, name: "Retired", permissions: ["wallet.credit"] });
+    expect(res.status).toBe(400);
   });
 
   it("a member with no roles is denied every guarded route (403)", async () => {

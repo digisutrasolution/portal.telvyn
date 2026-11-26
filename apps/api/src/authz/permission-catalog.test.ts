@@ -46,3 +46,26 @@ describe("permission catalog integrity", () => {
     }
   });
 });
+
+import { RETIRED_PERMISSION_KEYS, WILDCARD_EXCLUDED_KEYS } from "./permission-catalog";
+
+describe("financial authorization catalog rules (Phase 13-2B S1, BA-08)", () => {
+  it("wallet.credit is retired and can never reappear in the catalog or any system role", () => {
+    expect(RETIRED_PERMISSION_KEYS).toContain("wallet.credit");
+    for (const k of RETIRED_PERMISSION_KEYS) {
+      expect(ALL_PERMISSION_KEYS).not.toContain(k);
+      for (const role of SYSTEM_ROLES) expect(expandGrants(role.permissions)).not.toContain(k);
+    }
+  });
+  it("the excluded set is exactly the catalog flag (single source of truth)", () => {
+    expect([...WILDCARD_EXCLUDED_KEYS].sort()).toEqual(PERMISSIONS.filter((p) => p.wildcardExcluded).map((p) => p.key).sort());
+  });
+  it("no system role is auto-granted a wildcard-excluded key, explicitly or by wildcard", () => {
+    for (const role of SYSTEM_ROLES) {
+      for (const k of WILDCARD_EXCLUDED_KEYS) {
+        expect(role.permissions).not.toContain(k);
+        expect(expandGrants(role.permissions)).not.toContain(k);
+      }
+    }
+  });
+});

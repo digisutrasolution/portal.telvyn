@@ -226,3 +226,75 @@ END
 $$;
 
 \echo 'BILLING_ACCOUNT_DRIFT_OK: BillingAccount indexes, constraints, guard trigger and privileges verified.'
+
+-- =============================================================================
+-- Financial authorization foundation (Phase 13-2B S1; ADR-0022 Amendment 5
+-- BA-08/BA-15; owner decisions G1/G2). StepUpGrant CHECKs, guard trigger and the
+-- narrow runtime grant are raw SQL — this block is their drift authority.
+-- =============================================================================
+DO $$
+DECLARE
+  v int; v_txt text;
+BEGIN
+  IF to_regclass('public."StepUpGrant"') IS NULL THEN
+    RAISE EXCEPTION 'DRIFT: table public.StepUpGrant missing';
+  END IF;
+  SELECT count(*) INTO v FROM information_schema.columns
+   WHERE table_schema='public' AND table_name='User' AND column_name='mfaLastTotpStep';
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: User.mfaLastTotpStep (TOTP replay guard) missing'; END IF;
+
+  -- Grants are evidence: no soft delete/updatedAt; every FK ON DELETE RESTRICT.
+  SELECT count(*) INTO v FROM information_schema.columns
+   WHERE table_schema='public' AND table_name='StepUpGrant' AND column_name IN ('deletedAt','updatedAt');
+  IF v <> 0 THEN RAISE EXCEPTION 'DRIFT: StepUpGrant must not have deletedAt/updatedAt'; END IF;
+  SELECT count(*) INTO v FROM pg_constraint
+   WHERE contype='f' AND conrelid='public."StepUpGrant"'::regclass AND confdeltype = 'r';
+  IF v <> 3 THEN RAISE EXCEPTION 'DRIFT: StepUpGrant must have 3 ON DELETE RESTRICT FKs (found %)', v; END IF;
+
+  -- CHECKs: purpose format + 300 s lifetime (owner decision G1).
+  SELECT count(*) INTO v FROM pg_constraint
+   WHERE conrelid='public."StepUpGrant"'::regclass AND contype='c'
+     AND conname IN ('StepUpGrant_purpose_format_chk','StepUpGrant_lifetime_chk');
+  IF v <> 2 THEN RAISE EXCEPTION 'DRIFT: StepUpGrant CHECK constraints missing (found %)', v; END IF;
+  SELECT pg_get_constraintdef(oid) INTO v_txt FROM pg_constraint WHERE conname='StepUpGrant_lifetime_chk';
+  IF v_txt NOT LIKE '%00:05:00%' AND v_txt NOT LIKE '%300 seconds%' THEN
+    RAISE EXCEPTION 'DRIFT: StepUpGrant lifetime bound changed: %', v_txt;
+  END IF;
+
+  -- Guard trigger: enabled, BEFORE INSERT OR UPDATE, row-level, SECURITY INVOKER.
+  SELECT count(*) INTO v FROM pg_trigger
+   WHERE tgname='step_up_grant_guard' AND tgrelid='public."StepUpGrant"'::regclass
+     AND tgenabled='O' AND (tgtype & 1)=1 AND (tgtype & 2)=2 AND (tgtype & 4)=4 AND (tgtype & 16)=16;
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: step_up_grant_guard trigger missing, disabled or wrong timing/events'; END IF;
+  SELECT count(*) INTO v FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+   WHERE n.nspname='billing' AND p.proname='step_up_grant_guard'
+     AND NOT p.prosecdef AND 'search_path=pg_catalog, pg_temp' = ANY(p.proconfig);
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: billing.step_up_grant_guard must be SECURITY INVOKER with hardened search_path'; END IF;
+
+  -- Runtime: SELECT + INSERT + UPDATE("consumedAt") only (owner decision G2).
+  IF NOT has_table_privilege('telvyn_app','public."StepUpGrant"','SELECT')
+     OR NOT has_table_privilege('telvyn_app','public."StepUpGrant"','INSERT') THEN
+    RAISE EXCEPTION 'DRIFT: telvyn_app must have SELECT and INSERT on StepUpGrant';
+  END IF;
+  FOR v_txt IN SELECT unnest(ARRAY['UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) LOOP
+    IF has_table_privilege('telvyn_app','public."StepUpGrant"',v_txt) THEN
+      RAISE EXCEPTION 'DRIFT: telvyn_app must NOT have table-level % on StepUpGrant', v_txt;
+    END IF;
+  END LOOP;
+  SELECT count(*) INTO v FROM information_schema.column_privileges
+   WHERE table_schema='public' AND table_name='StepUpGrant' AND grantee='telvyn_app'
+     AND privilege_type='UPDATE';
+  IF v <> 1 OR NOT has_column_privilege('telvyn_app','public."StepUpGrant"','consumedAt','UPDATE') THEN
+    RAISE EXCEPTION 'DRIFT: telvyn_app must have UPDATE on StepUpGrant."consumedAt" ONLY (found % column grants)', v;
+  END IF;
+  SELECT count(*) INTO v FROM information_schema.table_privileges
+   WHERE table_schema='public' AND table_name='StepUpGrant' AND grantee='PUBLIC';
+  IF v <> 0 THEN RAISE EXCEPTION 'DRIFT: PUBLIC must have no privilege on StepUpGrant'; END IF;
+
+  -- wallet.credit is retired (BA-08): no permission row, hence no grant.
+  SELECT count(*) INTO v FROM public."Permission" WHERE "key"='wallet.credit';
+  IF v <> 0 THEN RAISE EXCEPTION 'DRIFT: retired permission wallet.credit still present'; END IF;
+END
+$$;
+
+\echo 'FINANCIAL_AUTHZ_DRIFT_OK: StepUpGrant constraints, guard trigger, runtime grant and wallet.credit retirement verified.'

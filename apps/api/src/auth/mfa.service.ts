@@ -28,7 +28,7 @@ export class MfaService {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     if (!user.mfaSecretEnc) throw new BadRequestException("No MFA enrollment in progress");
     if (user.mfaEnabled) throw new BadRequestException("MFA is already enabled");
-    if (!this.checkTotp(user.mfaSecretEnc, code)) throw new BadRequestException("Invalid code");
+    if (!(await this.acceptTotp(userId, user.mfaSecretEnc, code))) throw new BadRequestException("Invalid code");
 
     const recoveryCodes = Array.from({ length: 8 }, () => randomToken(10));
     await this.prisma.$transaction([
@@ -53,7 +53,7 @@ export class MfaService {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     if (!user.mfaEnabled || !user.mfaSecretEnc) return false;
 
-    if (/^\d{6}$/.test(code) && this.checkTotp(user.mfaSecretEnc, code)) return true;
+    if (/^\d{6}$/.test(code)) return this.acceptTotp(userId, user.mfaSecretEnc, code);
 
     // Recovery code path — single-use, atomically consumed.
     const consumed = await this.prisma.mfaRecoveryCode.updateMany({
@@ -63,11 +63,46 @@ export class MfaService {
     return consumed.count === 1;
   }
 
-  private checkTotp(secretEnc: string, code: string): boolean {
+  /**
+   * Verify a TOTP code ONLY (no recovery-code fallback) with the replay guard.
+   * Used where a fresh authenticator proof is required (financial step-up, BA-15).
+   */
+  async verifyTotpOnly(userId: string, code: string): Promise<boolean> {
+    if (!/^\d{6}$/.test(code)) return false;
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.mfaEnabled || !user.mfaSecretEnc) return false;
+    return this.acceptTotp(userId, user.mfaSecretEnc, code);
+  }
+
+  /**
+   * TOTP replay guard (ADR-0022 Amendment 5 BA-15, Phase 13-2B S1). A code is
+   * accepted only if its time step is STRICTLY greater than the user's stored
+   * last-accepted step; the step is recorded by one conditional UPDATE, so two
+   * concurrent presentations of the same code cannot both succeed. Applies to
+   * every TOTP path (enable, login, step-up).
+   */
+  private async acceptTotp(userId: string, secretEnc: string, code: string): Promise<boolean> {
+    const step = this.matchTotpStep(secretEnc, code);
+    if (step === null) return false;
+    const claimed = await this.prisma.user.updateMany({
+      where: { id: userId, OR: [{ mfaLastTotpStep: null }, { mfaLastTotpStep: { lt: step } }] },
+      data: { mfaLastTotpStep: step },
+    });
+    return claimed.count === 1;
+  }
+
+  /** The absolute TOTP time step the code matches (within the ±1 window), or null. */
+  private matchTotpStep(secretEnc: string, code: string): number | null {
     try {
-      return authenticator.check(code, decryptSecret(secretEnc, this.env.APP_ENCRYPTION_KEY));
+      // One fixed epoch for both the check and the step arithmetic (no boundary skew).
+      const epoch = Date.now();
+      const checker = authenticator.clone({ epoch });
+      const delta = checker.checkDelta(code, decryptSecret(secretEnc, this.env.APP_ENCRYPTION_KEY));
+      if (delta === null) return null;
+      const stepSeconds = checker.allOptions().step ?? 30;
+      return Math.floor(epoch / 1000 / stepSeconds) + delta;
     } catch {
-      return false;
+      return null;
     }
   }
 }

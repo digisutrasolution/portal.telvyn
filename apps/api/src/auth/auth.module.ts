@@ -11,6 +11,7 @@ import { AccountFlowsService } from "./account-flows.service";
 import { SecurityEventsService } from "./security-events.service";
 import { RateLimitService } from "./rate-limit.service";
 import { JwtAuthGuard } from "./jwt-auth.guard";
+import { StepUpService } from "./step-up.service";
 
 @Module({
   imports: [
@@ -31,7 +32,9 @@ import { JwtAuthGuard } from "./jwt-auth.guard";
     SecurityEventsService,
     RateLimitService,
     JwtAuthGuard,
+    // Financial step-up (Phase 13-2B S1, BA-15) — inert: no controller uses it yet.
+    StepUpService,
   ],
-  exports: [JwtAuthGuard, AuthService, TokenService],
+  exports: [JwtAuthGuard, AuthService, TokenService, StepUpService],
 })
 export class AuthModule {}
