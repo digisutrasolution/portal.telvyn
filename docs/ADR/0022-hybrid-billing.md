@@ -7,7 +7,9 @@
   technical design for Slice 13-1)
 - Related: ADR-0003 (PostgreSQL 18 + Prisma — resolves DB-004), ADR-0004 (tenant
   isolation), ADR-0005 (RLS deferred), ADR-0008 (dual-nature system/tenant
-  ownership), ADR-0010 (audit model boundary), ADR-0021 (fraud-event foundation —
+  ownership), ADR-0010 (telecom node/health model — its "append-only transition
+  events, no OLTP firehose" principle; it does not define a financial audit model),
+  ADR-0021 (fraud-event foundation —
   fraud/settlement separation), SEC-005 (payment rails, Phase 15), DB-005 (CDR
   volume/partitioning, Phase 14)
 - Amendments:
@@ -28,6 +30,16 @@
     *Clarified 2026-11-26 (DOC-013A, still no policy change):* approved-but-unbuilt
     items relabelled ACCEPTED BUT NOT IMPLEMENTED, and the chart-of-accounts timing
     inconsistency recorded as an open owner decision.
+  - **Amendment 5 (2026-11-26)** — **Phase 13-2A commercial billing architecture
+    decisions, OWNER-APPROVED** (§"Phase 13-2A architecture decisions"). Records
+    the owner's decisions on BA-01..BA-15, resolves **OB-1** (chart-of-accounts
+    timing) and **OB-2** (financial-authorization timing — dependency-based gates
+    supersede "before 13-9"), applies FIX-03/04/05, and relabels the former
+    "ADR-0010 (audit model boundary)" citation (X-2): ADR-0010 is the telecom
+    node/health ADR — it supplies the append-only-transitions / no-OLTP-firehose
+    principle but defines no audit model; financial audit is decided here as BA-14. The five owner decisions,
+    D1–D4, R1–R6 and the Amendment 3 safeguards are unchanged. **Architecture
+    approval only — it does not authorize Phase 13-2 implementation.**
 
 > **Status note.** **Accepted.** The **five owner billing decisions**
 > (§"Owner decision") are **OWNER-APPROVED**; the technical architecture (**D1–D4**
@@ -65,7 +77,12 @@ What **does** exist and constrains this decision (all verified in-repo):
 - **Call-authorization hook** — `CallAuthorizationService` (slice 12R-8):
   **policy-only, with no wallet/balance gate**, explicitly deferred to this
   decision. Its concurrency check uses **Redis gauges** (correct for fraud counts).
-- **Isolation & audit** — ADR-0004 tenant scoping; ADR-0010 audit boundary.
+- **Isolation & audit** — ADR-0004 tenant scoping; generic `AuditLog` /
+  `AuditService` (written after the mutation, not in the same transaction).
+  *(Amendment 5: the former "ADR-0010 audit boundary" label was imprecise —
+  ADR-0010 is the telecom node/health model and contributes only the
+  append-only-transitions / no-OLTP-firehose principle; financial audit is
+  BA-14.)*
 - **Async** — a transactional **outbox** pattern (`EmailOutbox`); no in-process
   job-queue infrastructure. **Migrations** are Prisma `migration.sql` (raw SQL).
 
@@ -321,7 +338,7 @@ thresholds, tax, and invoice numbering are **open** (§"Open decisions").
     models; **ADR-0008 dual-nature** for the ledger), with service-level financial
     authorization above the generic helpers (D1).
 11. Every adjustment carries an **authorized actor (or trusted system identity)
-    and a reason** (ADR-0010 audit).
+    and a reason** (financial audit — BA-14, Amendment 5).
 12. Every usage charge is **traceable to its CDR and rating inputs**.
 13. A posted transaction has **≥ 2 non-zero legs** and **Σ legs = 0**, with
     valid account references and ownership consistency (F6).
@@ -486,8 +503,10 @@ These remain open and must not be treated as decided:
   — see §"Post-13-1 implementation reconciliation" (Amendment 4).
 - ~~**Debit/credit sign convention + generic posting contract (before 13-1);**~~
   **RESOLVED (Amendment 2, R5; `LEDGER_FOUNDATION.md`) and implemented in Slice
-  13-1.** Still **OPEN:** chart of accounts + per-operation posting matrix
-  (before 13-3).
+  13-1.** Chart-of-accounts architecture and timing **DECIDED (Amendment 5,
+  BA-10/OB-1)**. Still **OPEN:** each per-operation posting-matrix entry and its
+  accounting treatment (BA-11 framework approved; entries approved before their
+  slice — prepaid before 13-3, postpaid before 13-4).
 - **Late-settlement accounting treatment, recovery policy, and exceptional-debt
   authorization** (F5) — blocks 13-6.
 - Credit limits and approval authority — blocks 13-4.
@@ -497,8 +516,17 @@ These remain open and must not be treated as decided:
 - Refunds and chargebacks — partial (chargebacks with Phase 15).
 - Payment-provider integrations — Phase 15 (SEC-005).
 - Tariff, rating, and rounding rules — Phase 14 (usage billing).
-- Step-up MFA for financial operations; ledger visibility & audit policy — blocks
-  13-9 / admin money actions.
+- ~~Step-up MFA for financial operations; ledger visibility & audit policy — blocks
+  13-9 / admin money actions.~~ **Architecture DECIDED (Amendment 5, BA-12/14/15;
+  timing per the OB-2 dependency gates).** Still **OPEN (owner values):** step-up
+  TTLs and freshness windows, dual-control monetary thresholds, financial export
+  rules.
+- **Owner values still open after Amendment 5:** BillingAccount number format;
+  how usage selects a billing account (13-5); `lock_timeout`, transaction timeout
+  and retry count (BA-07); refund vs forfeit of remaining prepaid funds at closure
+  (13-8 / Phase 15); interpretation of tenant-owned receivable accounts (BA-10/11);
+  reseller sub-customer billing and visibility (requires a tenant-hierarchy ADR);
+  tenant self-service provisioning (requires separate architecture approval).
 
 ## Implementation dependency matrix (NOT executed)
 
@@ -525,8 +553,11 @@ Dependency-ordered; **none is authorized** by this ADR.
 - **Before 13-7 (postpaid invoicing):** invoice & tax policy; billing cycles;
   payment terms; overdue & suspension policy.
 - **Before 13-8 (payment posting):** payment posting & allocation contract.
-- **Before 13-9 (ledger admin UI):** financial RBAC; step-up MFA requirements;
-  ledger visibility & audit policy.
+- ~~**Before 13-9 (ledger admin UI):** financial RBAC; step-up MFA requirements;
+  ledger visibility & audit policy.~~ **Superseded by Amendment 5 (OB-2):** each
+  financial control must exist before the **first** implementation that depends
+  on it — see §"Phase 13-2A architecture decisions" → *Dependency gates*. 13-9
+  keeps only the ledger admin UI itself.
 
 Preserve: **Phase 14 = CDR ingestion and rating; Phase 15 = payment-provider
 integrations.** Do not conflate roadmap phases with the historical Phase-12A…12R
@@ -683,7 +714,7 @@ Support in the ledger foundation **does not** make a commercial decision approve
 | Ledger sign convention | ACCEPTED POLICY · IMPLEMENTED AND VERIFIED | R5 (debit = +, credit = −); signed `amountMicros`, Σ = 0 deferred check (LG002) |
 | Integer money representation | ACCEPTED POLICY · IMPLEMENTED AND VERIFIED | `BIGINT` micros, `CHECK <> 0` and ±1e15; `money.ts` BigInt, no floats |
 | Monetary precision | IMPLEMENTED AND VERIFIED (ledger) · rating/rounding OPEN | 6-digit micros, exact decimal parse; tariff/rating/rounding stays Phase 14; provider minor-unit conversion Phase 15 |
-| Ledger posting contract | Generic contract IMPLEMENTED AND VERIFIED · posting matrix OPEN — OWNER APPROVAL REQUIRED | `billing.ledger_post(jsonb)` + `ledger-contract.ts`; per-operation matrix + chart of accounts open (before 13-3) |
+| Ledger posting contract | Generic contract IMPLEMENTED AND VERIFIED · posting matrix OPEN — OWNER APPROVAL REQUIRED | `billing.ledger_post(jsonb)` + `ledger-contract.ts`; chart of accounts + matrix framework decided (Amendment 5, BA-10/BA-11); per-operation matrix entries open (prepaid before 13-3, postpaid before 13-4) |
 | Ledger ownership | ACCEPTED POLICY (D1) · IMPLEMENTED AND VERIFIED | Dual-nature `LedgerAccount.tenantId`; denormalized `LedgerTransaction.ownerTenantId`; one-tenant-per-transaction DB-enforced (LG004) |
 | Currency consistency | Transaction level IMPLEMENTED AND VERIFIED · account level ACCEPTED BUT NOT IMPLEMENTED | Single-currency legs (LG003); one currency per BillingAccount (owner decision 2, approved) awaits BillingAccount (13-2) |
 | Idempotency | ACCEPTED POLICY (D4/R4) · IMPLEMENTED AND VERIFIED | `UNIQUE NULLS NOT DISTINCT (tenantId, operation, key)` (null = platform namespace), claim → complete deferred trigger, fingerprint replay / 409; commercial key formats deferred to consuming slices |
@@ -692,32 +723,87 @@ Support in the ledger foundation **does not** make a commercial decision approve
 | Database enforcement | ACCEPTED POLICY (F6/R2/R6) · IMPLEMENTED AND VERIFIED | Triggers + drift check in CI; honest limit — superuser/table owner can disable triggers (operational control) |
 | Restricted posting privileges | ACCEPTED POLICY (R2/R6, Amendment 3) · IMPLEMENTED AND VERIFIED | `ledger_post` SECURITY DEFINER owned by `telvyn_ledger_fn`; runtime EXECUTE only, no ledger DML (42501) |
 | Concurrency guarantees | PARTIALLY IMPLEMENTED | Idempotency concurrency verified (`ON CONFLICT`, `pg_blocking_pids` evidence); per-account `SELECT … FOR UPDATE` on `BillingAccount` (D3, ratified) is ACCEPTED BUT NOT IMPLEMENTED (13-2) |
-| Trusted posting context | PARTIALLY IMPLEMENTED | Provenance (WeakSet registry, frozen fields, forgery rejected) verified; **provenance ≠ commercial authorization** — authorized context minting + financial RBAC OPEN — OWNER APPROVAL REQUIRED |
+| Trusted posting context | PARTIALLY IMPLEMENTED | Provenance (WeakSet registry, frozen fields, forgery rejected) verified; **provenance ≠ commercial authorization** — authorized context minting + financial RBAC: architecture OWNER-APPROVED (Amendment 5, BA-08/BA-09), NOT IMPLEMENTED |
 | Database error mapping | IMPLEMENTED AND VERIFIED | `ledger-errors.ts` stable typed hierarchy (LG001..LG033, 23xxx, 42501, 40001/40P01); no SQL/credential leakage |
 
 **Unchanged and still binding:** the five owner decisions (§"Owner decision"),
-D1–D4, R1–R6, and the Amendment 3 safeguards. **Still not implemented or
-owner-approved** (OPEN or DEFERRED as listed in §"Open decisions" and the
-dependency matrix): BillingAccount lifecycle, provisioning and customer/account
-relationships; account-level locking implementation details (the D3 lock-anchor
-policy itself is accepted); financial RBAC and authorized
-ledger-context minting; chart of accounts and commercial posting matrix; wallet
-projections; CreditProfile, credit limits and approval workflows; billing
-cycles, payment terms, tax and invoice numbering; overdue handling and account
-suspension; reservation TTL defaults and exposure-limit values (configurable TTL
-and per-account exposure limits are approved — owner decision 3); refunds and
-chargebacks; rating and rounding; financial read visibility; financial step-up
-MFA; late-CDR settlement; reconciliation workflows. **No commercial caller, posting
-endpoint, wallet/credit authorization, or billing activation exists. RLS
-(ADR-0005) remains deferred and a production prerequisite.**
+D1–D4, R1–R6, and the Amendment 3 safeguards.
 
-**Recorded inconsistency — OPEN, owner approval required (not resolved by this
-amendment):** this ADR places the chart of accounts **before 13-2** in the
-dependency matrix ("Before 13-2 (BillingAccount + COA)") but **before 13-3** in
-§"Open decisions". It is carried into the Phase 13-2A design gate as **OB-1**
-(`ROADMAP.md`), together with **OB-2** (whether financial RBAC, step-up MFA,
-visibility and audit policy must be finalized before the first money-moving
-slice rather than before 13-9). Any proposed boundary there is a proposal only.
+*Reworded by Amendment 5 (FIX-03) to separate approved policy from open work:*
+
+- **OWNER-APPROVED, NOT IMPLEMENTED:** owner decision 1 (multiple billing accounts
+  per customer); owner decision 2 at account level (one currency per billing
+  account); owner decision 3 (configurable reservation TTL, per-account exposure
+  limits); owner decision 4 (no ordinary negative prepaid available balance;
+  corrections by authorized compensating transactions); owner decision 5 (no
+  in-place mode change; new account per mode); the D3 account-lock policy; and,
+  since Amendment 5, the Phase 13-2A architecture decisions BA-01..BA-15.
+- **OPEN or DEFERRED (not owner-approved):** commercial posting-matrix entries
+  and accounting treatment; wallet projections; CreditProfile, credit limits and
+  approval workflows; billing cycles, payment terms, tax and invoice numbering;
+  overdue handling; reservation TTL default and exposure-limit **values**; refunds
+  and chargebacks; rating and rounding; late-CDR settlement; reconciliation
+  workflows; and the owner values listed in §"Open decisions".
+
+**No commercial caller, posting endpoint, wallet/credit authorization, or billing
+activation exists. RLS (ADR-0005) remains deferred and a production
+prerequisite.**
+
+~~**Recorded inconsistency — OPEN, owner approval required:** this ADR places the
+chart of accounts **before 13-2** in the dependency matrix but **before 13-3** in
+§"Open decisions" (OB-1), and financial RBAC / step-up / visibility / audit
+"before 13-9" (OB-2).~~ **RESOLVED by Amendment 5:** OB-1 and OB-2 are decided in
+§"Phase 13-2A architecture decisions".
+
+## Phase 13-2A architecture decisions (Amendment 5, OWNER-APPROVED 2026-11-26)
+
+Recorded from the owner's review of the Phase 13-2A design (in-session decision
+register, 2026-11-26). These are **architecture decisions**: they bind the design
+of Phase 13-2 and later slices but **do not authorize implementation** — Phase
+13-2B (implementation) requires separate explicit owner authorization, and each
+schema, privilege, migration and code change is reviewed in its own slice.
+Evidence basis: source inspection of `main` `b6f812c` (no tests run, no database
+accessed).
+
+### Decisions
+
+| ID | Topic | Decision (OWNER-APPROVED) | Owner values still open |
+|---|---|---|---|
+| BA-01 | Ownership | `BillingAccount.tenantId` **NOT NULL**, immutable, FK RESTRICT → `Tenant` (type CUSTOMER or RESELLER); tenant-scoped through the existing scoped client (foreign id → 404). No `Customer` entity. Platform cross-tenant access only through a separate, explicit, permission-checked and audited platform path — never a silent scope bypass. | Reseller sub-customer billing — deferred to a tenant-hierarchy ADR |
+| BA-02 | Relationships | One tenant → many BillingAccounts. `accountNumber` globally unique and immutable; `label` unique per tenant among non-CLOSED accounts; at most one default account per `(tenantId, currency)` among ACTIVE/SUSPENDED accounts; `successorOfId` self-link records mode-migration lineage. A tenant cannot be closed while any of its BillingAccounts is not CLOSED; tenant suspension blocks new spend (derived, stored account status unchanged). | Account-number format; service taxonomy; how usage selects an account (13-5) |
+| BA-03 | Provisioning | **Platform-only.** Requires `PlatformGuard`, an **explicit financial provisioning permission**, **valid step-up MFA**, verified tenant ownership, currency and billing-mode validation, **atomic idempotent provisioning**, and **same-transaction financial audit**. Platform administrator status alone does **not** grant provisioning authority. Same key + identical parameters → the existing result; same key + different parameters → rejected (409). The required ledger accounts are provisioned in the same transaction. **No artificial zero-amount ledger transaction.** Provisioning idempotency lives on the BillingAccount row (`provisioningKey` + fingerprint), not the ledger `IdempotencyKey` table. | Tenant self-service provisioning — deferred, requires separate architecture approval |
+| BA-04 | Currency | Account currency from the `Currency` enum, **immutable**; every `LedgerAccount` linked to a BillingAccount must share its currency (checked at ledger-account creation). Amounts cross the API as integer-micros or canonical decimal strings, never JS numbers. No FX. | Future conversion process |
+| BA-05 | Billing mode | One shared `BillingAccount` table with an **immutable** `mode` (PREPAID / POSTPAID); mode-specific policy in later projections (Wallet 13-3, CreditProfile 13-4). A mode change opens a successor account (owner decision 5). | Mode-migration workflow mechanics |
+| BA-06 | Lifecycle | States **ACTIVE → SUSPENDED → CLOSING → CLOSED**; new accounts start **ACTIVE** (no PENDING state). **CLOSED is terminal** (database-enforced; no reopening — open a new account). **CLOSING → ACTIVE is allowed** for platform only, with step-up, reason code and audit. SUSPENDED blocks new reservations/services but permits cure (top-up/payment) and in-flight settlement. CLOSED requires, **checked under the account lock**: zero balance, no active reservations, no open invoices. Late CDRs after CLOSED become settlement exceptions, never postings to a closed account. Every transition audited with reason code. Commercial lifecycle, financial position and service status stay separate. | Refund vs forfeit of remaining prepaid funds at closure (13-8 / Phase 15) |
+| BA-07 | Account locking | Implements ratified D3: `SELECT … FOR UPDATE` on `BillingAccount` rows in **ascending id order**, on the caller's transaction; always acquired **before** `ledger_post`'s idempotency wait; lifecycle re-checked under the lock; bounded, jittered retry only in the outermost operation service on `40001`/`40P01`, fail closed when exhausted; reaches the ledger only via `postInTransaction`; **no deadlock-free claim**. | `lock_timeout`, interactive-transaction timeout, retry count |
+| BA-08 | Financial RBAC | High-risk financial permissions are **wildcard-excluded** — never granted by `*` or `x.*`; explicit assignment only. **Maker-checker** (requester ≠ approver) for adjustments, refunds, credit-limit changes and manual funding. **`wallet.credit` retired.** MFA enrollment required to hold any high-risk financial permission. **No financial permission is auto-granted to existing roles.** Assigning a financial permission requires step-up and audit; self-assignment forbidden. | Dual-control monetary thresholds |
+| BA-09 | Context minting | Trusted ledger-context minting is **private** to a single `FinancialAuthorizationService`, which mints only after full authorization (server-derived actor/tenant, ownership, permission, lifecycle, currency, operation rules, step-up where required, audited decision) inside the posting transaction. Enforced by an **architecture test** (single non-test importer) and an **ESLint import restriction**. `ledger_post` unchanged. Honest limit: provenance does not defend against a compromised runtime; only DB privileges, structural constraints and future RLS do. | — |
+| BA-10 / OB-1 | Chart of accounts | Immutable, nullable **`LedgerAccount.billingAccountId`** (FK RESTRICT) plus a `<taxonomy>:<accountNumber>` code convention (existing `(tenantId, currency, code)` uniqueness unchanged). Tenant ledger accounts created through a new restricted SECURITY DEFINER function **`billing.ledger_account_open`**; the **`telvyn_ledger_fn` INSERT privilege on `LedgerAccount` is approved at design level only** and is applied later by a reviewed migration under separate authorization. **Timing (resolves OB-1):** 13-2A = COA architecture (this amendment); **13-2 = COA foundation** (link column, `ledger_account_open`, taxonomy, per-account tenant ledger accounts at provisioning — no platform accounts, no postings); **before 13-3** = prepaid platform accounts + prepaid posting matrix; **before 13-4** = postpaid receivable accounts + postpaid posting matrix. | Interpretation of tenant-owned receivable (ASSET) accounts |
+| BA-11 | Posting matrix | **Framework only approved:** each entry must define event, actor/permission, required account state, debit and credit categories, currency, amount rules (non-zero integer micros), idempotency scope, source reference, audit fields, reversal behaviour and phase. Prepaid debits only after an available-balance check under the account lock (owner decision 4). Design-session example postings are **illustrative, not accepted accounting treatment**. | Every entry's accounting treatment |
+| BA-12 | Read visibility | Financial reads through **SECURITY DEFINER read functions** returning masked, tenant-safe projections; the runtime role gets **no direct ledger SELECT** (R7). Tenants see their own accounts; platform cross-tenant reads need a platform permission and are audited; resellers see their own accounts only. **BillingAccount metadata reads ship in 13-2; balance/statement functions before 13-3.** Future RLS is additive defence. | Export rules; reseller sub-customer visibility |
+| BA-13 | Platform/tenant boundary | `BillingAccount` joins `TENANT_SCOPED_MODELS`; runtime grants are **column-level UPDATE and no DELETE** (the generic grant loop must exclude or reclassify it). One-tenant-per-transaction (LG004) unchanged. **RLS still deferred (ADR-0005), a production prerequisite.** | — |
+| BA-14 | Financial audit | A **dedicated, append-only financial audit event table** with typed columns (actor, tenant, BillingAccount, operation, permission, authorization decision, step-up grant, reason code, before/after, idempotency key, ledger transaction, correlation id, IP/user agent), written **in the same transaction** as the change; runtime SELECT/INSERT only plus a no-update/no-delete trigger. **Audit failure rolls back the change (fail closed).** Denied high-risk attempts recorded separately. Secrets, tokens and TOTP codes never logged. `AuditLog` remains for operational events. | — |
+| BA-15 | Step-up MFA | A **server-side step-up grant** bound to session, actor, tenant and purpose; **single-use** for high-risk operations; a stored **last-accepted TOTP time step** per user prevents replay. Service-to-service flows use narrow service identities, never human step-up, and can never perform human-only high-risk operations. | Grant TTLs, freshness windows, thresholds |
+| X-1 | Soft delete | **No `deletedAt` on BillingAccount** — a documented exception to the constitution's soft-delete default (precedent: ledger tables). CLOSED replaces deletion; history is never removed. | — |
+| X-4 | Money boundary | Billing accepts money only as BigInt micros / canonical decimal strings. The fraud plane's `completeCall(..., actualCostMicros: number)` is **not** converted here; that is a separate, separately authorized task required **before any billing↔fraud integration**. | — |
+
+### Dependency gates (resolves OB-2; supersedes "before 13-9")
+
+| Control | Must exist before |
+|---|---|
+| BA-07 account locking | The first operation affecting account-level financial invariants (13-2 closure check; 13-3 funding) |
+| BA-08 financial RBAC | The first protected commercial billing operation (13-2 provisioning) |
+| BA-09 authorized minting | The first commercial ledger caller (13-3) |
+| BA-10 chart of accounts | Dependent provisioning or posting (13-2 foundation; mode accounts before 13-3 / 13-4) |
+| BA-11 posting-matrix entry | The first posting operation that uses it |
+| BA-12 read visibility | The first financial read API (metadata 13-2; balances before 13-3) |
+| BA-14 financial audit | The first commercial financial state change (13-2) |
+| BA-15 step-up | The first sensitive operation requiring it (13-2 provisioning / lifecycle) |
+
+**Consequence:** Phase 13-2 grows to include financial RBAC, same-transaction
+financial audit and step-up MFA, because 13-2 provisioning is the first operation
+that depends on them. Every commercial money operation remains disabled until
+its own slice is authorized.
 
 ## Status rationale (now Accepted)
 

@@ -39,8 +39,15 @@ action. Those are later, owner-gated slices.
   (**API 619 passed / 2 skipped**, web 257, build 19/19).
 - **13-1F — MERGED (`main`, PR #23, merge `d24a142`).** **Phase 13-1 is CLOSED AND ACCEPTED**; final
   accepted baseline `d24a142`. NOT deployed to production.
-- **13-2** (BillingAccount + per-account lock anchor + chart of accounts) — not started. Its design-only
-  gate **13-2A** (`ROADMAP.md`) is **NOT STARTED — OWNER APPROVAL REQUIRED**.
+- **13-2A — COMPLETE (2026-11-26, design only).** The commercial billing architecture (BA-01..BA-15,
+  OB-1, OB-2) is **OWNER-APPROVED** and recorded in **ADR-0022 Amendment 5**: tenant-owned
+  BillingAccount with immutable currency/mode, platform-only step-up provisioning, ACTIVE/SUSPENDED/
+  CLOSING/CLOSED lifecycle, D3 account lock, wildcard-excluded financial RBAC with maker-checker,
+  private ledger-context minting, chart of accounts via `LedgerAccount.billingAccountId`, restricted
+  read functions, append-only same-transaction financial audit, and step-up MFA. No code or schema.
+- **13-2** (BillingAccount + per-account lock anchor + chart-of-accounts foundation, now also financial
+  RBAC, financial audit and step-up per the OB-2 gates) — **13-2B implementation NOT STARTED; separate
+  owner authorization required.**
 
 **No money has moved and no balance exists** — a balanced ledger post never
 implies sufficient funds; that is 13-3+.
@@ -55,7 +62,8 @@ implies sufficient funds; that is 13-3+.
 
 ## Components — PROPOSED (shape, once model is decided)
 
-- Chart of accounts: customer liability / revenue / COGS / promo / suspense
+- Chart of accounts: customer liability / revenue / COGS / promo / suspense — architecture
+  decided (ADR-0022 Amendment 5, BA-10); per-operation accounting treatment still open
 - Charge engine: DID NRC + MRC cycles; usage rating if per-minute billing is in scope
 - Statement/invoice generation
 - Low-balance & suspension automation with grace policies

@@ -32,7 +32,7 @@
 | 10 | **Carriers** | Carrier management module, vaulted credentials (references only), per-carrier adapter implementations, carrier health signals | Carrier contracts; secret store (SEC-006) | Not started |
 | 11 | **SIP** | SIP trunk/delivery configuration (if delivery model includes SIP): trunk entities, IP ACLs, credential handling. **Public-IP constraint applies — never behind CDN** | **Delivery-model decision** (TELECOM.md UNKNOWN #2) | Not started |
 | 12 | **Routing** | Per-DID routing config (versioned/audited — "what routed at time T"), routing UI, **toll-fraud rails ship here**: spend/velocity/geo limits, balance gates, kill-switch (SEC-002 spec) | Toll-fraud spec written & approved | Not started |
-| 13 | **Billing** | Double-entry ledger spine + idempotency guard, wallet OR invoicing per ADR, NRC/MRC charge cycles, reconciliation job + drift alert, ledger drill-down UI | ✔ ADR-0022 (DB-003) | **Phase 13 IN PROGRESS.** **13-1 ledger foundation CLOSED AND ACCEPTED (merged, not deployed)** — spine + idempotency guard (13-1B+C, PR #21) and exact money + secure internal posting integration (13-1D+E, PR #22, incl. CI-002 fix) **merged to `main`** (`68d4da2`); 13-1F doc closure merged (PR #23, final baseline `d24a142`); NOT deployed; **13-2A design gate NOT STARTED — owner approval required** (see below); **13-2 through 13-9 not implemented** (wallet/charge-cycles/reconciliation/UI not started) |
+| 13 | **Billing** | Double-entry ledger spine + idempotency guard, wallet OR invoicing per ADR, NRC/MRC charge cycles, reconciliation job + drift alert, ledger drill-down UI | ✔ ADR-0022 (DB-003) | **Phase 13 IN PROGRESS.** **13-1 ledger foundation CLOSED AND ACCEPTED (merged, not deployed)** — spine + idempotency guard (13-1B+C, PR #21) and exact money + secure internal posting integration (13-1D+E, PR #22, incl. CI-002 fix) **merged to `main`** (`68d4da2`); 13-1F doc closure merged (PR #23, final baseline `d24a142`); NOT deployed; **13-2A design gate COMPLETE — architecture OWNER-APPROVED 2026-11-26 (ADR-0022 Amendment 5)**; **13-2B implementation NOT STARTED — separate owner authorization required** (see below); **13-2 through 13-9 not implemented** (wallet/charge-cycles/reconciliation/UI not started) |
 | 14 | **CDR** | Ingest workers (dedupe by carrier record id), monthly-partitioned storage + automated partition management, CDR viewer + filters + export | CDR source + volume (DB-005) | Not started |
 | 15 | **Payments** | Payment rails per ADR (manual/crypto/PSP), signed webhooks + replay dedupe, top-up/settlement flows, compliance posture documented | **Rails ADR (SEC-005)**; AML/KYC ownership | Not started |
 | 16 | **NOC** | The operational cockpit: work queues (stuck orders/ports, failed provisioning), system health tiles, **Fraud Center** (limit trips, lock-down), alert → runbook wiring, notification center | Phases 8–14 emitting signals | Not started |
@@ -44,48 +44,54 @@
 ## Phase 13-2A — design-only gate (within Phase 13-2)
 
 **Phase 13-2A: BillingAccount, financial authorization and chart-of-accounts
-architecture design.** Status: **NOT STARTED — OWNER APPROVAL REQUIRED.**
-Design only: no schema, migration, code, privilege, or endpoint change, and no
-expansion of Phase 13-2 implementation without separate owner approval. Bound by
-ADR-0022 (the five owner decisions, D1–D4, R1–R6 and the Amendment 3 safeguards
-are not reopened). Phase 13 slice numbering (13-1…13-9) is the billing roadmap,
-not the historical Phase 12A…12R telecom tracking.
+architecture design.** Status: **COMPLETE — architecture OWNER-APPROVED
+2026-11-26**, recorded in **ADR-0022 Amendment 5** (§"Phase 13-2A architecture
+decisions"). Design only: no schema, migration, code, privilege, or endpoint
+change was made. **Phase 13-2B (implementation) is NOT STARTED and requires
+separate explicit owner authorization.** Bound by ADR-0022 (the five owner
+decisions, D1–D4, R1–R6 and the Amendment 3 safeguards are not reopened). Phase 13
+slice numbering (13-1…13-9) is the billing roadmap, not the historical Phase
+12A…12R telecom tracking.
 
-Proposed deliverables (design topics, not decisions). The "Finalize" column is a
-**proposal for owner confirmation**, derived from the ADR-0022 dependency matrix:
+Decisions (summary — the authoritative text is ADR-0022 Amendment 5):
 
-| ID | Design topic | Finalize |
-|---|---|---|
-| BA-01 | BillingAccount ownership | 13-2A |
-| BA-02 | Customer/account relationships | 13-2A |
-| BA-03 | Account provisioning | 13-2A |
-| BA-04 | Currency boundaries (one currency per account — owner decision 2) | 13-2A |
-| BA-05 | Billing mode (PREPAID/POSTPAID; no in-place flip — owner decision 5) | 13-2A |
-| BA-06 | Account lifecycle | 13-2A |
-| BA-07 | Account-level locking (D3 lock anchor) | 13-2A |
-| BA-08 | Financial RBAC | 13-2A: permissions needed by 13-2 account actions · full matrix before 13-9 — **timing OPEN (OB-2)** |
-| BA-09 | Authorized ledger-context minting | 13-2A: boundary · before any commercial ledger caller |
-| BA-10 | Chart of accounts | 13-2A: architecture design — **timing OPEN (OB-1)** |
-| BA-11 | Posting-matrix boundaries | 13-2A: boundaries only · per-operation matrix before 13-3 / 13-4 |
-| BA-12 | Financial read visibility | 13-2A: principles (D1) · detailed policy before 13-9 — **timing OPEN (OB-2)** |
-| BA-13 | Platform vs tenant boundaries | 13-2A |
-| BA-14 | Financial audit requirements | 13-2A: account-lifecycle events · ledger audit policy before 13-9 — **timing OPEN (OB-2)** |
-| BA-15 | Financial step-up authentication | 13-2A: which 13-2 actions need it · full policy before 13-9 — **timing OPEN (OB-2)** |
+| ID | Design topic | Owner decision (2026-11-26) | Lands |
+|---|---|---|---|
+| BA-01 | BillingAccount ownership | Non-null, immutable tenant owner; platform access via explicit audited path | 13-2 |
+| BA-02 | Customer/account relationships | Many per tenant; unique number; per-tenant label; one default per (tenant, currency) | 13-2 |
+| BA-03 | Account provisioning | Platform-only + explicit permission + step-up; atomic, idempotent, same-tx audit; no zero-amount ledger tx | 13-2 |
+| BA-04 | Currency boundaries | Immutable currency, enforced on linked ledger accounts | 13-2 |
+| BA-05 | Billing mode | Shared table, immutable mode, successor account on change | 13-2 |
+| BA-06 | Account lifecycle | ACTIVE / SUSPENDED / CLOSING / CLOSED; start ACTIVE; CLOSING→ACTIVE allowed; CLOSED terminal | 13-2 |
+| BA-07 | Account-level locking | Ordered `FOR UPDATE` before ledger idempotency; bounded outer retry | 13-2 |
+| BA-08 | Financial RBAC | Wildcard-excluded high-risk permissions; maker-checker; retire `wallet.credit`; MFA required; no auto-grants | 13-2 |
+| BA-09 | Authorized ledger-context minting | Private `FinancialAuthorizationService` + architecture test + lint | Before 13-3 |
+| BA-10 | Chart of accounts (**OB-1 resolved**) | `LedgerAccount.billingAccountId` + `billing.ledger_account_open` | Foundation 13-2 · prepaid before 13-3 · postpaid before 13-4 |
+| BA-11 | Posting-matrix boundaries | Framework only; entries approved per slice | Before 13-3 / 13-4 |
+| BA-12 | Financial read visibility | SECURITY DEFINER read functions; masked projections | Metadata 13-2 · balances before 13-3 |
+| BA-13 | Platform vs tenant boundaries | Tenant-scoped; column-level UPDATE, no DELETE; RLS still deferred | 13-2 |
+| BA-14 | Financial audit requirements | Dedicated append-only table, same transaction, fail closed | 13-2 |
+| BA-15 | Financial step-up authentication | Server-side single-use grant + TOTP replay guard | 13-2 |
 
-**Open boundary decisions (owner approval required — not resolved here):**
+**Resolved boundary decisions:**
 
-- **OB-1 — Chart-of-accounts timing.** ADR-0022 is internally inconsistent: its
-  dependency matrix places the chart of accounts **before 13-2** ("BillingAccount +
-  COA"), while its "Open decisions" list places it **before 13-3**. Proposed
-  boundary, **for owner review only (not accepted)**: 13-2A — chart-of-accounts
-  architecture, ownership, taxonomy and provisioning design; 13-2 implementation —
-  the approved chart-of-accounts foundation; before 13-3 — prepaid posting matrix;
-  before 13-4 — postpaid posting matrix.
-- **OB-2 — Financial-authorization timing.** ADR-0022's matrix places full financial
-  RBAC, step-up MFA, ledger visibility and audit policy **before 13-9** (ledger admin
-  UI), but **13-3** (prepaid funding and adjustments) is the first slice that would
-  move money and depends on them. Owner to decide whether each must be finalized
-  before the **first** implementation that depends on it.
+- **OB-1 — Chart-of-accounts timing — RESOLVED (Amendment 5).** 13-2A: COA
+  architecture; 13-2: COA foundation (no platform accounts, no postings); before
+  13-3: prepaid platform accounts + prepaid posting matrix; before 13-4: postpaid
+  receivable accounts + postpaid posting matrix.
+- **OB-2 — Financial-authorization timing — RESOLVED (Amendment 5).**
+  Dependency-based gates supersede "before 13-9": each financial control (RBAC,
+  audit, step-up, read visibility, minting, locking) must exist before the
+  **first** implementation that depends on it. Consequence: **13-2 includes
+  financial RBAC, same-transaction financial audit and step-up MFA.**
+
+**Owner values still open** (not decided by 13-2A): account-number format; usage
+→ account selection (13-5); lock/transaction timeouts and retry count; step-up
+TTLs and freshness; dual-control thresholds; refund vs forfeit of prepaid funds at
+closure; export rules; tenant-owned receivable interpretation; reseller
+sub-customer billing (tenant-hierarchy ADR); tenant self-service provisioning
+(separate architecture approval). Separate follow-up: convert the fraud plane's
+money-as-`number` (`completeCall`) to BigInt before any billing↔fraud integration.
 
 Out of 13-2A (later billing slices / phases, per ADR-0022): wallet projections
 (13-3), CreditProfile and credit limits/approval (13-4), reservation TTL defaults
