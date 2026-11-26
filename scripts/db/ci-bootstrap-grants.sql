@@ -54,6 +54,12 @@ DECLARE
   no_runtime_tables text[] := ARRAY[
     'BillingAccount'
   ];
+  -- Financial step-up grants (Phase 13-2B S1, BA-15, owner decision G2): runtime
+  -- may read and issue grants and stamp "consumedAt" ONLY - no DELETE and no
+  -- UPDATE of any binding column. Handled explicitly, never by the generic grant.
+  step_up_tables text[] := ARRAY[
+    'StepUpGrant'
+  ];
 BEGIN
   IF current_database() <> target THEN
     RAISE EXCEPTION 'ABORT: connected to %, expected %. Refusing to grant.', current_database(), target;
@@ -68,6 +74,10 @@ BEGIN
       CONTINUE;  -- ledger tables: runtime has EXECUTE on ledger_post only, no table DML
     ELSIF t = ANY(no_runtime_tables) THEN
       EXECUTE format('REVOKE ALL ON public.%I FROM telvyn_app', t);
+    ELSIF t = ANY(step_up_tables) THEN
+      EXECUTE format('REVOKE ALL ON public.%I FROM telvyn_app', t);
+      EXECUTE format('GRANT SELECT, INSERT ON public.%I TO telvyn_app', t);
+      EXECUTE format('GRANT UPDATE (%I) ON public.%I TO telvyn_app', 'consumedAt', t);
     ELSIF t = ANY(immutable_tables) THEN
       EXECUTE format('GRANT SELECT, INSERT ON public.%I TO telvyn_app', t);
     ELSE

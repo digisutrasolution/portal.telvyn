@@ -204,12 +204,23 @@ describe("MFA", () => {
       .send({ mfaToken: challenged.body.mfaToken, code: "000000" });
     expect(bad.status).toBe(401);
 
+    // TOTP replay guard (Phase 13-2B S1, BA-15): the enable code's time step is
+    // now consumed, so login proves a LATER step (the next one, within the ±1 window).
+    const nextStepCode = authenticator.clone({ epoch: Date.now() + 30_000 }).generate(secret);
     const done = await request(http)
       .post("/v1/auth/mfa/verify")
       .set(TRANSPORT)
-      .send({ mfaToken: challenged.body.mfaToken, code: authenticator.generate(secret) });
+      .send({ mfaToken: challenged.body.mfaToken, code: nextStepCode });
     expect(done.status).toBe(200);
     expect(done.body.accessToken).toBeTruthy();
+
+    // Replaying an accepted TOTP code is refused, even on a fresh, valid challenge.
+    const replayChallenge = await request(http).post("/v1/auth/login").set(TRANSPORT).send({ email, password: PASSWORD });
+    await request(http)
+      .post("/v1/auth/mfa/verify")
+      .set(TRANSPORT)
+      .send({ mfaToken: replayChallenge.body.mfaToken, code: nextStepCode })
+      .expect(401);
 
     // Recovery code works exactly once.
     const challenge2 = await request(http).post("/v1/auth/login").set(TRANSPORT).send({ email, password: PASSWORD });
@@ -226,16 +237,18 @@ describe("MFA", () => {
       .send({ mfaToken: challenge3.body.mfaToken, code: recovery })
       .expect(401);
 
-    // Step-up disable: wrong password refused; correct password + code succeeds.
+    // Step-up disable: wrong password refused; correct password + a fresh proof
+    // succeeds. Every TOTP step in the ±1 window is already consumed (replay
+    // guard), so the proof here is an unused single-use recovery code.
     await request(http)
       .post("/v1/auth/mfa/disable")
       .set("Authorization", `Bearer ${done.body.accessToken}`)
-      .send({ password: "wrong-password-123", code: authenticator.generate(secret) })
+      .send({ password: "wrong-password-123", code: enable.body.recoveryCodes[1] as string })
       .expect(401);
     await request(http)
       .post("/v1/auth/mfa/disable")
       .set("Authorization", `Bearer ${done.body.accessToken}`)
-      .send({ password: PASSWORD, code: authenticator.generate(secret) })
+      .send({ password: PASSWORD, code: enable.body.recoveryCodes[2] as string })
       .expect(204);
   });
 });

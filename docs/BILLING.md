@@ -49,12 +49,18 @@ action. Those are later, owner-gated slices.
   RBAC, financial audit and step-up per the OB-2 gates) — **13-2B implementation IN PROGRESS**; slice
   register S1–S9 and order S3 → S1 → S2 → S4 → S5 → S6 → S8 → S7 → S9 OWNER-APPROVED (`ROADMAP.md`),
   each slice separately authorized.
-- **13-2B S3 — IMPLEMENTED + VERIFIED on the isolated env; not yet merged.** Inert `BillingAccount`
+- **13-2B S3 — MERGED (`main`, PR #27, merge `6fea9fa`); NOT deployed.** Inert `BillingAccount`
   database foundation (migration `20261126120000_billing_account_foundation`, `DATABASE.md`): tenant-owned
   (CUSTOMER/RESELLER only), immutable currency/mode/number/lineage, DB floor of the lifecycle (start
   ACTIVE, CLOSED terminal), one default per (tenant, currency), per-tenant open-label uniqueness,
   same-tenant successor lineage. **The runtime role has no access to it**; no endpoint, service, rows,
   ledger link or money movement. Provisioning, locking, reads and the ledger link are S5/S6/S8/S4.
+- **13-2B S1 — IMPLEMENTED + VERIFIED on the isolated env; not committed.** Financial authorization
+  foundation (BA-08/BA-15; owner decisions G1–G4): `wildcardExcluded` permission flag (never covered by
+  `*`/`x.*`, effective only with MFA, assignment fails closed in S1 — no key flagged yet), `wallet.credit`
+  retired, TOTP replay guard, and the inert server-side `StepUpGrant` (300 s, single-use, bound to
+  user/session/tenant/purpose). No endpoint, no financial permission granted to any role, no money
+  movement. Maker-checker (13-3/13-4), the financial audit write (S2) and minting (S7) are not in S1.
 
 **No money has moved and no balance exists** — a balanced ledger post never
 implies sufficient funds; that is 13-3+.

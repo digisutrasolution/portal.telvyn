@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "@/infra/prisma.service";
 import { ALL_PERMISSION_KEYS } from "./permission-catalog";
-import { expandGrants } from "./authorization";
+import { assertNoWildcardExcludedAssignment, expandGrants, WildcardExcludedAssignmentError } from "./authorization";
 import type { TenantContext } from "./tenant-context";
 
 /** Role management — system roles (read-only templates) + tenant custom roles. */
@@ -33,6 +33,14 @@ export class RolesService {
     const requested = expandGrants(input.permissions);
     const unknown = requested.filter((p) => !ALL_PERMISSION_KEYS.includes(p));
     if (unknown.length) throw new BadRequestException(`Unknown permissions: ${unknown.join(", ")}`);
+    // BA-08 / owner decision G4: high-risk financial permissions cannot be conferred
+    // through a custom role in S1 (fail closed until the governed path exists).
+    try {
+      assertNoWildcardExcludedAssignment(requested);
+    } catch (e) {
+      if (e instanceof WildcardExcludedAssignmentError) throw new ForbiddenException(e.message);
+      throw e;
+    }
     const beyond = requested.filter((p) => !ctx.permissions.has(p));
     if (beyond.length) throw new ForbiddenException(`Cannot grant permissions you do not hold: ${beyond.join(", ")}`);
 

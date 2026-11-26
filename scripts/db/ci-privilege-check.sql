@@ -182,4 +182,37 @@ BEGIN
 END
 $$;
 
+-- ---- StepUpGrant runtime negatives (Phase 13-2B S1) ----------------------
+-- Owner decision G2: runtime holds SELECT, INSERT and UPDATE("consumedAt") only.
+-- Every op below MUST fail with 42501 — never a missing-object or syntax error.
+DO $$
+DECLARE
+  stmt text;
+  forbidden text[] := ARRAY[
+    'UPDATE "StepUpGrant" SET "expiresAt" = now() WHERE false',
+    'UPDATE "StepUpGrant" SET "purpose" = ''x'' WHERE false',
+    'UPDATE "StepUpGrant" SET "userId" = uuidv7() WHERE false',
+    'UPDATE "StepUpGrant" SET "tenantId" = uuidv7() WHERE false',
+    'DELETE FROM "StepUpGrant" WHERE false',
+    'TRUNCATE TABLE "StepUpGrant"',
+    'ALTER TABLE "StepUpGrant" DISABLE TRIGGER ALL',
+    'DROP FUNCTION billing.step_up_grant_guard()'
+  ];
+BEGIN
+  IF to_regclass('public."StepUpGrant"') IS NULL THEN
+    RAISE EXCEPTION 'PRIV_FAIL: StepUpGrant missing (S1 migration not applied)';
+  END IF;
+  FOREACH stmt IN ARRAY forbidden LOOP
+    BEGIN
+      EXECUTE stmt;
+      RAISE EXCEPTION 'PRIV_FAIL: runtime role unexpectedly ALLOWED on StepUpGrant: %', stmt;
+    EXCEPTION
+      WHEN insufficient_privilege THEN NULL;  -- 42501: the expected denial
+      WHEN undefined_object OR undefined_table OR undefined_function OR syntax_error THEN
+        RAISE EXCEPTION 'PRIV_FAIL: StepUpGrant op % errored with a NON-privilege class % (not a valid denial)', stmt, SQLSTATE;
+    END;
+  END LOOP;
+END
+$$;
+
 \echo 'PRIV_CHECK_OK: restricted runtime-role privilege verification passed.'

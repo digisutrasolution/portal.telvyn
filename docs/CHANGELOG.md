@@ -6,6 +6,21 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-26 — **Phase 13-2B S1 — financial authorization foundation** (ADR-0022 Amendment 5 BA-08,
+  BA-15; owner decisions G1–G4). Permission catalog gains the `wildcardExcluded` flag: such keys are never
+  covered by `*`/`x.*`, never materialized by wildcard expansion (seed and runtime), effective only for users
+  with MFA (`TenantGuard`), and cannot be conferred through custom roles or role assignment in S1 (403,
+  fail closed). No key is flagged yet (first named in S5). **`wallet.credit` retired** (catalog, stored
+  grants and permission row). **TOTP replay guard**: `User.mfaLastTotpStep`; a TOTP code is accepted at
+  most once on every path (enable, login, step-up). **Inert `StepUpService` + `StepUpGrant`**: server-side,
+  single-use, 300 s, bound to user/session/tenant/purpose, TOTP-only, atomic consumption that can join the
+  caller's transaction; DB CHECKs (purpose format, 300 s cap) and guard trigger (SG001 immutable binding,
+  SG002 single-use, SG003 no pre-consumed insert). Migration `20261127090000_financial_authz_foundation`;
+  `telvyn_app` gets SELECT + INSERT + UPDATE(`consumedAt`) on `StepUpGrant` only. Grant scripts, drift check
+  (`FINANCIAL_AUTHZ_DRIFT_OK`) and privilege check extended. New `test/financial-authz-foundation.e2e.test.ts`
+  (22) and unit tests (12). Behaviour change: re-using a TOTP code (same time step) is now refused —
+  `auth.e2e` adjusted accordingly. No endpoint, no financial permission granted to any role, no money
+  movement. Verified on the isolated env only; not deployed.
 - 2026-11-26 — **Phase 13-2B S3 — BillingAccount inert database foundation** (ADR-0022 Amendment 5
   BA-01/02/04/05/06/13, X-1; owner decisions S3-D1..D4, E). Migration
   `20261126120000_billing_account_foundation`: `BillingAccount` model + `BillingMode` /

@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from "@nestjs/common";
 import { PrismaService } from "@/infra/prisma.service";
 import type { AuthedRequest } from "@/auth/jwt-auth.guard";
-import { expandGrants } from "./authorization";
+import { effectivePermissions, expandGrants } from "./authorization";
 import { setTenantContext, type TenantContext } from "./tenant-context";
 
 /**
@@ -26,6 +26,7 @@ export class TenantGuard implements CanActivate {
       where: { userId_tenantId: { userId: req.auth.sub, tenantId } },
       include: {
         tenant: { select: { status: true, deletedAt: true, type: true } },
+        user: { select: { mfaEnabled: true } },
         roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
       },
     });
@@ -46,7 +47,8 @@ export class TenantGuard implements CanActivate {
       tenantId,
       tenantType: membership.tenant.type,
       membershipId: membership.id,
-      permissions: new Set(expandGrants(grants)),
+      // MFA-for-finance (BA-08): high-risk financial keys are effective only with MFA.
+      permissions: effectivePermissions(expandGrants(grants), membership.user.mfaEnabled),
     };
     req.tenantContext = ctx;
 

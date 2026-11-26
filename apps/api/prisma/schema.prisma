@@ -32,6 +32,9 @@ model User {
   emailVerifiedAt DateTime?
   mfaEnabled      Boolean    @default(false)
   mfaSecretEnc    String? // AES-256-GCM under APP_ENCRYPTION_KEY (secret-manager upgrade path in SECURITY.md)
+  // TOTP replay guard (ADR-0022 Amendment 5 BA-15, Phase 13-2B S1): the last
+  // accepted absolute TOTP time step; a code is accepted only for a greater step.
+  mfaLastTotpStep Int?
   failedLogins    Int        @default(0)
   lockedUntil     DateTime?
 
@@ -41,6 +44,7 @@ model User {
   loginAttempts  LoginAttempt[]
   securityEvents SecurityEvent[]
   memberships    Membership[]
+  stepUpGrants   StepUpGrant[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -93,6 +97,7 @@ model Tenant {
   destinationRules  DestinationRule[]
   killSwitches      KillSwitch[]
   spendReservations SpendReservation[]
+  stepUpGrants      StepUpGrant[]
 
   // Billing ledger foundation (Phase 13, Slice 13-1; ADR-0022 / LEDGER_FOUNDATION).
   // Back-relations only — no new column on Tenant. Dual-nature ledger (ADR-0008):
@@ -238,6 +243,7 @@ model Session {
   createdAt     DateTime  @default(now())
 
   refreshTokens RefreshToken[]
+  stepUpGrants  StepUpGrant[]
 
   @@index([userId, revokedAt])
   @@index([expiresAt])
@@ -1417,4 +1423,32 @@ model BillingAccount {
   @@unique([successorOfId, tenantId]) // at most one successor per account
   @@unique([tenantId, provisioningKey])
   @@index([tenantId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Financial step-up grant (ADR-0022 Amendment 5 BA-15, Phase 13-2B S1).
+// A server-side, single-use proof that the actor re-verified a fresh TOTP code,
+// bound to user + session + tenant + purpose, valid for 300 s (owner-approved
+// G1, 2026-11-26; also enforced by a DB CHECK). Issued and consumed only by
+// StepUpService; INERT in S1 (no endpoint, no operation requires it yet).
+// No updatedAt/deletedAt: the only mutation is the single consumedAt stamp
+// (runtime holds column-level UPDATE on consumedAt only); grants are evidence
+// and are never deleted (FKs RESTRICT, no runtime DELETE).
+// ---------------------------------------------------------------------------
+model StepUpGrant {
+  id         String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId     String    @db.Uuid
+  user       User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sessionId  String    @db.Uuid
+  session    Session   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  tenantId   String    @db.Uuid
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  purpose    String
+  expiresAt  DateTime  @db.Timestamptz(6)
+  consumedAt DateTime? @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([userId, sessionId])
+  @@index([tenantId])
+  @@index([expiresAt])
 }
