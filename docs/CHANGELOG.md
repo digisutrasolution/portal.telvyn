@@ -6,6 +6,19 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Added
+- 2026-11-26 — **Phase 13-2A — commercial billing architecture decisions recorded** (docs only).
+  The owner approved the 13-2A decision register; recorded as **ADR-0022 Amendment 5** (§"Phase 13-2A
+  architecture decisions"): BA-01..BA-15 decided; **OB-1 resolved** (COA foundation in 13-2, prepaid
+  accounts + matrix before 13-3, postpaid before 13-4); **OB-2 resolved** (dependency-based gates
+  supersede "before 13-9" — financial RBAC, same-transaction audit and step-up land with 13-2);
+  FIX-03 (approved vs open items separated in the Amendment 4 closing list), FIX-04/05 (approved
+  boundaries and gates written in); X-1 (no `deletedAt` on BillingAccount, documented exception);
+  X-2 (the "ADR-0010 audit model boundary" citation relabelled — ADR-0010 contributes only the
+  append-only-transitions / no-OLTP-firehose principle); X-4 (fraud-plane money-as-`number` is a
+  separate pre-integration task). `ROADMAP.md` 13-2A gate marked COMPLETE with the decision summary;
+  `PROJECT_STATE.md` and `BILLING.md` updated. **Architecture approval only — Phase 13-2B
+  implementation is not authorized.** No source, test, schema, migration, privilege, dependency, or CI
+  change; no tests run.
 - 2026-11-26 — **DOC-013A — DOC-013 follow-up clarifications** (docs only, no policy change).
   `ROADMAP.md` row 13 now states **Phase 13 IN PROGRESS** and that 13-2 through 13-9 are not
   implemented; two open boundary decisions added to the 13-2A gate — **OB-1** chart-of-accounts timing
