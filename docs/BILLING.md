@@ -55,12 +55,18 @@ action. Those are later, owner-gated slices.
   ACTIVE, CLOSED terminal), one default per (tenant, currency), per-tenant open-label uniqueness,
   same-tenant successor lineage. **The runtime role has no access to it**; no endpoint, service, rows,
   ledger link or money movement. Provisioning, locking, reads and the ledger link are S5/S6/S8/S4.
-- **13-2B S1 — IMPLEMENTED + VERIFIED on the isolated env; not committed.** Financial authorization
+- **13-2B S1 — MERGED (`main`, PR #28, merge `032ee95`); NOT deployed.** Financial authorization
   foundation (BA-08/BA-15; owner decisions G1–G4): `wildcardExcluded` permission flag (never covered by
   `*`/`x.*`, effective only with MFA, assignment fails closed in S1 — no key flagged yet), `wallet.credit`
   retired, TOTP replay guard, and the inert server-side `StepUpGrant` (300 s, single-use, bound to
   user/session/tenant/purpose). No endpoint, no financial permission granted to any role, no money
   movement. Maker-checker (13-3/13-4), the financial audit write (S2) and minting (S7) are not in S1.
+- **13-2B S2 — IMPLEMENTED + VERIFIED (disposable `local-verify` env + CI); inert foundation, NOT active commercial billing; NOT deployed.** Financial audit foundation
+  (BA-14; owner decisions F1–F7): dedicated append-only `FinancialAuditEvent` table and the internal
+  `FinancialAuditWriter`, which writes only through the caller's transaction so audit and change commit
+  or roll back together (fail closed). Inert: the operation catalog is empty until S5. An audit row is
+  attribution evidence — never a ledger entry and never commercial authorization. Denied-attempt
+  recording, idempotent-replay audit suppression and audit reads are S5/S8 work.
 
 **No money has moved and no balance exists** — a balanced ledger post never
 implies sufficient funds; that is 13-3+.

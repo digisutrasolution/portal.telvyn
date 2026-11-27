@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { PrismaService } from "@/infra/prisma.service";
 import { LedgerPostingService } from "./ledger-posting.service";
+import { FinancialAuditWriter } from "./financial-audit.writer";
 
 /**
  * Billing module (Phase 13-1D) — internal financial infrastructure only.
@@ -13,7 +14,9 @@ import { LedgerPostingService } from "./ledger-posting.service";
  * server operation constructs a TrustedLedgerContext and invokes it.
  */
 @Module({
-  providers: [PrismaService, LedgerPostingService],
-  exports: [LedgerPostingService],
+  // FinancialAuditWriter (Phase 13-2B S2, BA-14): internal same-transaction
+  // financial audit; no controller, no caller, empty operation catalog (inert).
+  providers: [PrismaService, LedgerPostingService, FinancialAuditWriter],
+  exports: [LedgerPostingService, FinancialAuditWriter],
 })
 export class BillingModule {}
