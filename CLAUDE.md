@@ -163,3 +163,31 @@ API and the UI screens it implies.
 
 When an ad-hoc request conflicts with this constitution or an Accepted
 ADR, raise the conflict explicitly rather than silently diverging.
+
+---
+
+## Controlled Autonomous Development Mode (AUTO-001)
+
+Within an owner-authorized phase, proceed continuously: run tests,
+typecheck, lint, build, read-only Git/GitHub checks, CI monitoring and
+evidence capture without asking again. Fix ordinary in-scope defects.
+
+STOP and ask the owner only for: production deployment or production
+DB access; destructive DB operations (reset, drop, truncate, shadow-DB
+or `prisma migrate dev`/`db push`); shared-infrastructure changes;
+credential creation, disclosure or rotation; financial or live-telecom
+activation; unexpected repository changes; material security findings;
+cross-project access; out-of-scope architecture changes; a failed
+mandatory release check; any irreversible action. Commit, push, PR and
+merge each still need their own explicit approval (approvals do not chain).
+
+INC-DB-001 controls stay in force: never assume localhost is safe;
+never touch protected PostgreSQL (5432/5433/5434) or Redis
+(6379/6380/6381); never bypass E2E target guards, markers, leases or
+fencing; never weaken RBAC, MFA, RLS or financial authorization; never
+expose credentials in logs, memory or Git.
+
+Tooling: prefer native `git` and the GitHub CLI (`gh`) for PR/CI work.
+Use the built-in browser only for read-only page reading (navigate,
+get_page_text, read_page, find). Do not use browser JavaScript
+execution; do not retry a denied browser operation.
