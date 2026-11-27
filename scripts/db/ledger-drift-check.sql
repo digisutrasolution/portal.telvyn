@@ -375,3 +375,126 @@ END
 $$;
 
 \echo 'FINANCIAL_AUDIT_DRIFT_OK: FinancialAuditEvent constraints, guard triggers and append-only runtime grant verified.'
+
+-- =============================================================================
+-- Chart of Accounts foundation (Phase 13-2B S4; ADR-0022 Amendment 5 BA-10; owner
+-- decisions D1-D6). The CHECKs, partial expression unique index, link guard and
+-- the restricted account-opening function are raw SQL - this block is their
+-- drift authority. S4 is INERT: the runtime role must NOT execute the function.
+-- =============================================================================
+DO $$
+DECLARE
+  v int; v_txt text;
+  fn constant text := 'billing.ledger_account_open(uuid,uuid,"Currency",text)';
+BEGIN
+  -- Link column: nullable uuid (NULL for platform / pre-S4 accounts).
+  SELECT count(*) INTO v FROM information_schema.columns
+   WHERE table_schema='public' AND table_name='LedgerAccount' AND column_name='billingAccountId'
+     AND data_type='uuid' AND is_nullable='YES';
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: LedgerAccount.billingAccountId must be a nullable uuid'; END IF;
+
+  -- Composite same-tenant + same-currency FK, RESTRICT/RESTRICT, onto the
+  -- (id, tenantId, currency) unique identity of BillingAccount.
+  SELECT count(*) INTO v FROM pg_constraint
+   WHERE conname='LedgerAccount_billingAccountId_tenantId_currency_fkey' AND contype='f'
+     AND conrelid='public."LedgerAccount"'::regclass AND confrelid='public."BillingAccount"'::regclass
+     AND array_length(conkey,1)=3 AND confdeltype='r' AND confupdtype='r';
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: composite LedgerAccount -> BillingAccount FK missing or not RESTRICT/RESTRICT'; END IF;
+  SELECT count(*) INTO v FROM pg_index ix JOIN pg_class c ON c.oid=ix.indexrelid
+   WHERE c.relname='BillingAccount_id_tenantId_currency_key' AND ix.indisunique
+     AND ix.indrelid='public."BillingAccount"'::regclass;
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: unique BillingAccount(id, tenantId, currency) missing'; END IF;
+
+  -- CHECKs: link needs a tenant (MATCH SIMPLE bypass closed); approved taxonomy
+  -- shape; reserved prefix. All must be validated.
+  SELECT count(*) INTO v FROM pg_constraint
+   WHERE conrelid='public."LedgerAccount"'::regclass AND contype='c' AND convalidated
+     AND conname IN ('LedgerAccount_billing_link_tenant_chk','LedgerAccount_billing_link_taxonomy_chk',
+                     'LedgerAccount_customer_funds_reserved_chk');
+  IF v <> 3 THEN RAISE EXCEPTION 'DRIFT: LedgerAccount S4 CHECK constraints missing or not validated (found % of 3)', v; END IF;
+  SELECT pg_get_constraintdef(oid) INTO v_txt FROM pg_constraint WHERE conname='LedgerAccount_billing_link_taxonomy_chk';
+  IF v_txt NOT LIKE '%customer_funds:%' OR v_txt NOT LIKE '%LIABILITY%' OR v_txt NOT LIKE '%CREDIT%' THEN
+    RAISE EXCEPTION 'DRIFT: approved taxonomy CHECK changed: %', v_txt;
+  END IF;
+  SELECT pg_get_constraintdef(oid) INTO v_txt FROM pg_constraint WHERE conname='LedgerAccount_billing_link_tenant_chk';
+  IF v_txt NOT LIKE '%"billingAccountId" IS NULL%' OR v_txt NOT LIKE '%"tenantId" IS NOT NULL%' THEN
+    RAISE EXCEPTION 'DRIFT: link-requires-tenant CHECK changed: %', v_txt;
+  END IF;
+
+  -- One account per (BillingAccount, taxonomy): partial expression unique index.
+  SELECT pg_get_indexdef(c.oid) INTO v_txt FROM pg_class c JOIN pg_index ix ON ix.indexrelid=c.oid
+   WHERE c.relname='LedgerAccount_billingAccountId_taxonomy_key' AND ix.indisunique;
+  IF v_txt IS NULL OR v_txt NOT LIKE '%split_part(code, %'
+     OR v_txt NOT LIKE '%WHERE ("billingAccountId" IS NOT NULL)%' THEN
+    RAISE EXCEPTION 'DRIFT: per-account taxonomy unique index missing or changed: %', coalesce(v_txt,'<none>');
+  END IF;
+
+  -- Link guard: enabled, row-level BEFORE INSERT OR UPDATE, SECURITY INVOKER.
+  SELECT count(*) INTO v FROM pg_trigger
+   WHERE tgname='ledger_account_link_guard' AND tgrelid='public."LedgerAccount"'::regclass
+     AND tgenabled='O' AND (tgtype & 1)=1 AND (tgtype & 2)=2 AND (tgtype & 4)=4 AND (tgtype & 16)=16;
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: ledger_account_link_guard trigger missing, disabled or wrong timing/events'; END IF;
+  SELECT count(*) INTO v FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+   WHERE n.nspname='billing' AND p.proname='ledger_account_link_guard'
+     AND NOT p.prosecdef AND 'search_path=pg_catalog, pg_temp' = ANY(p.proconfig);
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: billing.ledger_account_link_guard must be SECURITY INVOKER with hardened search_path'; END IF;
+  -- The pre-existing identity guard is still in force (LG011 not weakened).
+  SELECT count(*) INTO v FROM pg_trigger
+   WHERE tgname='ledger_account_guard' AND tgrelid='public."LedgerAccount"'::regclass AND tgenabled='O';
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: ledger_account_guard trigger missing or disabled'; END IF;
+
+  -- Opening function: SECURITY DEFINER, owner telvyn_ledger_fn, hardened path,
+  -- no dynamic SQL; PUBLIC and the runtime role cannot execute it (inert S4).
+  SELECT count(*) INTO v FROM pg_proc p
+    JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+   WHERE n.nspname='billing' AND p.proname='ledger_account_open' AND p.prosecdef
+     AND r.rolname='telvyn_ledger_fn' AND 'search_path=pg_catalog, pg_temp' = ANY(p.proconfig)
+     AND p.prosrc !~* '\mexecute\M' AND p.prosrc !~* '\mformat\s*\(';
+  IF v <> 1 THEN
+    RAISE EXCEPTION 'DRIFT: billing.ledger_account_open must be SECURITY DEFINER, owned by telvyn_ledger_fn, hardened search_path, no dynamic SQL';
+  END IF;
+  IF has_function_privilege('public', fn, 'EXECUTE') THEN
+    RAISE EXCEPTION 'DRIFT: PUBLIC must not have EXECUTE on billing.ledger_account_open';
+  END IF;
+  IF has_function_privilege('telvyn_app', fn, 'EXECUTE') THEN
+    RAISE EXCEPTION 'DRIFT: telvyn_app must NOT have EXECUTE on billing.ledger_account_open in S4 (inert until S5)';
+  END IF;
+  -- Exactly one explicit grantee: telvyn_migrator (table owner; privilege-neutral
+  -- verification path). Any other grantee is drift.
+  SELECT string_agg(a.grantee::regrole::text, ',' ORDER BY a.grantee::regrole::text) INTO v_txt
+    FROM pg_proc p, aclexplode(p.proacl) a
+   WHERE p.oid = to_regprocedure(fn) AND a.privilege_type='EXECUTE'
+     AND a.grantee <> p.proowner;
+  IF v_txt IS DISTINCT FROM 'telvyn_migrator' THEN
+    RAISE EXCEPTION 'DRIFT: billing.ledger_account_open EXECUTE grantees changed: %', coalesce(v_txt,'<none>');
+  END IF;
+
+  -- Function-owner privileges are minimal and column-scoped.
+  IF has_table_privilege('telvyn_ledger_fn','public."LedgerAccount"','INSERT')
+     OR has_table_privilege('telvyn_ledger_fn','public."LedgerAccount"','UPDATE')
+     OR has_table_privilege('telvyn_ledger_fn','public."LedgerAccount"','DELETE')
+     OR has_table_privilege('telvyn_ledger_fn','public."LedgerAccount"','TRUNCATE') THEN
+    RAISE EXCEPTION 'DRIFT: telvyn_ledger_fn must hold no table-level INSERT/UPDATE/DELETE/TRUNCATE on LedgerAccount';
+  END IF;
+  SELECT string_agg(column_name::text, ',' ORDER BY column_name::text) INTO v_txt
+    FROM information_schema.column_privileges
+   WHERE table_schema='public' AND table_name='LedgerAccount' AND grantee='telvyn_ledger_fn'
+     AND privilege_type='INSERT';
+  IF v_txt IS DISTINCT FROM 'billingAccountId,code,currency,name,normalBalance,tenantId,type' THEN
+    RAISE EXCEPTION 'DRIFT: telvyn_ledger_fn LedgerAccount INSERT columns changed: %', coalesce(v_txt,'<none>');
+  END IF;
+  FOR v_txt IN SELECT unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) LOOP
+    IF has_table_privilege('telvyn_ledger_fn','public."BillingAccount"',v_txt) THEN
+      RAISE EXCEPTION 'DRIFT: telvyn_ledger_fn must hold no table-level % on BillingAccount', v_txt;
+    END IF;
+  END LOOP;
+  SELECT string_agg(privilege_type::text||':'||column_name::text, ',' ORDER BY privilege_type::text, column_name::text) INTO v_txt
+    FROM information_schema.column_privileges
+   WHERE table_schema='public' AND table_name='BillingAccount' AND grantee='telvyn_ledger_fn';
+  IF v_txt IS DISTINCT FROM 'SELECT:accountNumber,SELECT:currency,SELECT:id,SELECT:mode,SELECT:status,SELECT:tenantId,UPDATE:statusChangedAt' THEN
+    RAISE EXCEPTION 'DRIFT: telvyn_ledger_fn BillingAccount column privileges changed: %', coalesce(v_txt,'<none>');
+  END IF;
+END
+$$;
+
+\echo 'CHART_OF_ACCOUNTS_DRIFT_OK: LedgerAccount link, constraints, link guard, opening function and privileges verified.'

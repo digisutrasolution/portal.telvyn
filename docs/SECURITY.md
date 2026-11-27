@@ -761,7 +761,7 @@ ADR-0022 Amendment 5 BA-08/BA-15; owner decisions G1–G4. Merged to `main`; NOT
   **This gap is a blocking security gate before S5 and before any financial permission grant** (recorded
   2026-11-27, S2 review); it is not fixed in S2.
 
-## Financial audit foundation — IMPLEMENTED, INERT (Phase 13-2B S2, 2026-11-27)
+## Financial audit foundation — MERGED, INERT (Phase 13-2B S2, 2026-11-27; PR #31)
 
 ADR-0022 Amendment 5 BA-14; owner decisions F1–F7. A foundation only — NOT deployed and NOT active commercial billing.
 
@@ -786,6 +786,45 @@ ADR-0022 Amendment 5 BA-14; owner decisions F1–F7. A foundation only — NOT d
   endpoint, caller, audit read API or financial grant exists.
 - **Open:** retention policy for stored IP address / user agent (append-only rows keep them indefinitely);
   idempotency-key format and replay audit suppression (S5); audit read projections (S8).
+
+## Chart of Accounts foundation — IMPLEMENTED, INERT (Phase 13-2B S4, 2026-11-28)
+
+ADR-0022 Amendment 5 BA-10; owner decisions D1–D6. NOT deployed and NOT active commercial billing.
+
+- **No runtime path:** `telvyn_app` cannot execute `billing.ledger_account_open` and holds no LedgerAccount
+  privilege (42501, asserted by `ci-privilege-check.sql`); PUBLIC EXECUTE revoked. No endpoint or caller.
+- **Definer hardening:** SECURITY DEFINER owned by the NOLOGIN `telvyn_ledger_fn`, fixed `search_path`,
+  schema-qualified references, no dynamic SQL (drift-checked). Platform authority is read from the trusted
+  session context (`app.is_platform`); caller-supplied tenant and currency are only expectations checked
+  against the locked BillingAccount. Not-found and other-tenant accounts share one sanitized error (LA001)
+  — no tenant enumeration; messages carry no identifiers.
+- **Least privilege:** the function owner gains column-scoped INSERT on LedgerAccount, column SELECT on
+  BillingAccount and the lock-only UPDATE(`statusChangedAt`); no table-level INSERT/UPDATE/DELETE. Impact
+  on `billing.ledger_post` reviewed: none (its fixed body never uses them).
+- **Database-enforced:** same tenant and currency (composite FK), immutable link (LA006), approved
+  taxonomy/code/type/normal balance (CHECK + trigger), reserved prefix, uniqueness (index) and RESTRICT
+  deletes hold for direct writes by the table owner too. Not claimed against a superuser or an owner who
+  disables triggers.
+- **Concurrency:** the BillingAccount row lock serializes opens and status changes; E2E proves a waiting
+  open sees a committed suspension (LA003) and concurrent duplicates yield exactly one account (LA005).
+- **Open before S5:** lock timeout/retry values (S6); the runtime EXECUTE grant, authorization, step-up and
+  same-transaction financial audit of the opening (S5).
+
+## QA-LEASE-001 — E2E run-lease false detection (OPEN, reliability)
+
+- **Evidence (EXECUTED/OBSERVED, `local-verify`, 2026-11-27/28):** 5 full E2E attempts — 3 passed, 2 aborted
+  with "exclusive run lease LOST (lock not held by this run)". In 3 probed runs a read-only poll of
+  `pg_stat_activity`/`pg_locks` (~2 s interval) saw one lease session per run, and **no sample** in which that
+  session existed without its advisory lock; in the failed probed run the same session (same pid and
+  backend start) held the lock until the run ended — after the client reported the loss.
+- **Assessment:** suggests a **false detection** (the heartbeat query evaluated false although the lock was
+  held), most likely by running on a different backend than the lease session. That connection-switch
+  hypothesis is **unconfirmed**; sampling gaps of up to ~5 s mean a short-lived second session could have
+  been missed, so the root cause is not conclusively established. The guard failed closed both times.
+- **Residual risk:** reliability (unattended runs abort); a false-positive *safety* outcome is not shown to be
+  impossible and is not claimed so.
+- **Follow-up (separate task, not S4):** diagnostics only — log the heartbeat's backend PID and the observed
+  lock-owner PID on every negative result. The lease guard is not weakened or bypassed.
 
 ## E2E target safety — MERGED (INC-DB-001B, 2026-11-27; PR #29)
 
