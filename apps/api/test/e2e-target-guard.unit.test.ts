@@ -169,6 +169,27 @@ describe("Gate A — pre-connection (pure)", () => {
     expect(codeA({ ...VERIFY, ...over })).toBe(expected);
   });
 
+  it("verify-clean: accepts exactly its fixed targets (S5 clean environment)", () => {
+    const CLEAN = {
+      TELVYN_E2E_PROFILE: "verify-clean",
+      DATABASE_URL: pg("telvyn_app", "127.0.0.1:5436", "telvyn_clean_verify"),
+      E2E_FIXTURE_DATABASE_URL: pg("telvyn_migrator", "127.0.0.1:5436", "telvyn_clean_verify"),
+      REDIS_URL: "redis://127.0.0.1:6383/0",
+    };
+    expect(codeA(CLEAN)).toBe("PASSED");
+    expect(E2E_PROFILES["verify-clean"].dbMarker).toBe("telvyn-verify-clean");
+    expect(E2E_PROFILES["verify-clean"].requireEnv).toEqual({});
+    expect(validateGateA(CLEAN).fingerprint).not.toBe(validateGateA(VERIFY).fingerprint);
+    // The retained local-verify targets are refused under the clean profile, and vice versa.
+    expect(codeA({ ...VERIFY, TELVYN_E2E_PROFILE: "verify-clean" })).toBe("PORT_NOT_ALLOWED");
+    expect(codeA({ ...CLEAN, TELVYN_E2E_PROFILE: "local-verify" })).toBe("PORT_NOT_ALLOWED");
+    expect(codeA({ ...CLEAN, DATABASE_URL: pg("telvyn_app", "127.0.0.1:5436", "telvyn_safety_verify") })).toBe("DATABASE_NOT_ALLOWED");
+    expect(codeA({ ...CLEAN, REDIS_URL: "redis://127.0.0.1:6382/0" })).toBe("PORT_NOT_ALLOWED");
+    expect(codeA({ ...CLEAN, REDIS_URL: "redis://127.0.0.1:6383/1" })).toBe("REDIS_DB_NOT_ALLOWED");
+    expect(codeA({ ...CLEAN, DATABASE_URL: pg("telvyn", "127.0.0.1:5436", "telvyn_clean_verify") })).toBe("ROLE_NOT_ALLOWED");
+    expect(codeA({ ...CLEAN, DATABASE_URL: pg("telvyn_app", "127.0.0.1:5432", "telvyn_clean_verify") })).toBe("PROTECTED_PORT");
+  });
+
   it("wrong profile/target combinations are refused (no automatic profile selection)", () => {
     expect(codeA({ ...VERIFY, TELVYN_E2E_PROFILE: "local-isolated" })).toBe("PORT_NOT_ALLOWED");
     expect(codeA({ ...LOCAL, TELVYN_E2E_PROFILE: "local-verify" })).toBe("PORT_NOT_ALLOWED");

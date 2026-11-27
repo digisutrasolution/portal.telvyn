@@ -14,6 +14,13 @@ export const STEP_UP_GRANT_TTL_SECONDS = 300;
 /** Server-defined purpose identifiers (mirrors the DB CHECK). */
 export const STEP_UP_PURPOSE_PATTERN = /^[a-z][a-z0-9_.]{2,63}$/;
 
+/**
+ * The operations a client may request a step-up grant for (Phase 13-2B S5).
+ * A grant is bound to exactly one of these and is consumed only by that
+ * operation; anything else is refused before the TOTP code is checked.
+ */
+export const STEP_UP_PURPOSES: ReadonlySet<string> = new Set(["billing_account.provision"]);
+
 export type StepUpFailure = "invalid_purpose" | "not_eligible" | "invalid_code" | "step_up_required";
 
 /**

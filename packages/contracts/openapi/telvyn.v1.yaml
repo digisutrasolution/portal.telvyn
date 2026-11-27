@@ -15,6 +15,7 @@ tags:
   - name: auth
   - name: telecom
   - name: fraud
+  - name: billing
 security:
   - bearerAuth: []
 paths:
@@ -1853,6 +1854,82 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+  /v1/auth/step-up:
+    post:
+      tags: [auth]
+      summary: Issue a single-use step-up grant for one financial operation (TOTP only)
+      description: >-
+        Phase 13-2B S5 (owner decision O1). Verifies a fresh TOTP code (replay
+        guarded; recovery codes are NOT accepted) and issues a server-side grant
+        bound to the caller's user, session, active tenant and one server-defined
+        purpose. Lifetime 300 s; consumed atomically, once, inside the protected
+        operation's transaction. Rate limited per user. Failures return a generic
+        403 and are recorded as security events.
+      operationId: stepUpIssue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepUpIssueRequest" }
+      responses:
+        "201":
+          description: Grant issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StepUpGrant" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /v1/platform/billing-accounts:
+    post:
+      tags: [billing]
+      summary: Provision a zero-balance PREPAID billing account for a customer tenant (platform)
+      description: >-
+        Phase 13-2B S5 (ADR-0022 Amendment 5 BA-03/08/14/15; owner decisions
+        O1-O7). Requires an active PLATFORM tenant, the explicitly assigned
+        `billing.account.provision` permission (never conferred by `*`, never
+        effective without MFA) and a fresh step-up grant for purpose
+        `billing_account.provision`. Creates the BillingAccount, its
+        `customer_funds` ledger account and an ALLOWED financial audit event in
+        one transaction; no money moves and no opening balance is posted. The
+        account number (`BA-YYYY-XXXXXXXXXXXX`) is server-generated. Every refused
+        attempt by an authenticated member is recorded as a DENIED financial audit
+        event. Idempotency-Key is mandatory: the same key with the same request
+        (and a fresh grant) replays the original result with 200; the same key
+        with a different request is refused with 409. Keys never expire.
+      operationId: provisionBillingAccount
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, pattern: "^[A-Za-z0-9\\-_.:]{16,128}$" }
+        - name: X-Correlation-Id
+          in: header
+          required: false
+          schema: { type: string, pattern: "^[A-Za-z0-9\\-_.:]{1,128}$" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProvisionBillingAccountRequest" }
+      responses:
+        "201":
+          description: Account provisioned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProvisionedBillingAccount" }
+        "200":
+          description: Replay of an earlier completed request with the same Idempotency-Key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProvisionedBillingAccount" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "500": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -1870,6 +1947,46 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    StepUpIssueRequest:
+      type: object
+      additionalProperties: false
+      required: [purpose, code]
+      properties:
+        purpose: { type: string, enum: [billing_account.provision] }
+        code: { type: string, pattern: "^[0-9]{6}$", description: "Current TOTP code (recovery codes are not accepted)" }
+    StepUpGrant:
+      type: object
+      required: [grantId, purpose, expiresAt]
+      properties:
+        grantId: { type: string, format: uuid }
+        purpose: { type: string }
+        expiresAt: { type: string, format: date-time }
+    ProvisionBillingAccountRequest:
+      type: object
+      additionalProperties: false
+      required: [targetTenantId, currency, label, stepUpGrantId]
+      properties:
+        targetTenantId: { type: string, format: uuid, description: "An ACTIVE CUSTOMER or RESELLER tenant" }
+        currency: { type: string, enum: [USD, EUR, GBP, INR, AUD, CAD, JPY] }
+        label: { type: string, minLength: 1, maxLength: 100, description: "Trimmed; unique per tenant (case-insensitive) among open accounts" }
+        isDefault: { type: boolean, default: false }
+        mode: { type: string, enum: [PREPAID], default: PREPAID }
+        stepUpGrantId: { type: string, format: uuid }
+    ProvisionedBillingAccount:
+      type: object
+      required: [id, tenantId, accountNumber, label, currency, mode, status, isDefault, ledgerAccountId, createdAt, replayed]
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        accountNumber: { type: string, pattern: "^BA-[0-9]{4}-[23456789ABCDEFGHJKMNPQRSTVWXYZ]{12}$" }
+        label: { type: string }
+        currency: { type: string, enum: [USD, EUR, GBP, INR, AUD, CAD, JPY] }
+        mode: { type: string, enum: [PREPAID] }
+        status: { type: string, enum: [ACTIVE] }
+        isDefault: { type: boolean }
+        ledgerAccountId: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        replayed: { type: boolean }
     Problem:
       type: object
       required: [title, status]

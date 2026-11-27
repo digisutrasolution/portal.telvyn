@@ -14,8 +14,8 @@ export interface PermissionDef {
   /**
    * High-risk financial authority (ADR-0022 Amendment 5 BA-08): never covered
    * by `*` or `x.*`, effective only with MFA enabled, and not assignable until
-   * the governed assignment path exists (S1 fails closed). No catalogued key
-   * carries this flag yet — the first (provisioning) is named in S5.
+   * the governed assignment path exists (S1 fails closed). First key:
+   * `billing.account.provision` (S5).
    */
   wildcardExcluded?: true;
 }
@@ -66,6 +66,18 @@ export const PERMISSIONS: PermissionDef[] = [
   // CDRs / usage are billing-adjacent; declared now (routes land in Phase 14) so
   // roles are stable and the frontend gates on cdr.read, not wallet.read.
   { key: "cdr.read", resource: "cdr", action: "read", description: "View call detail records (CDRs)", group: "billing" },
+  // Phase 13-2B S5 (owner decision O4): open a zero-balance PREPAID BillingAccount for a
+  // customer/reseller tenant. PLATFORM-only (route + database function), wildcard-excluded,
+  // effective only with MFA, never auto-granted to any system role and never assignable
+  // through member/role management (G4) — explicit assignment only.
+  {
+    key: "billing.account.provision",
+    resource: "billing.account",
+    action: "provision",
+    description: "Provision PREPAID billing accounts for customer tenants (platform only)",
+    group: "billing",
+    wildcardExcluded: true,
+  },
   // audit
   { key: "audit.read", resource: "audit", action: "read", description: "View the tenant audit log", group: "audit" },
   // telecom control plane (Phase 12). Platform infra = telecom.read/telecom.manage

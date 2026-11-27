@@ -57,6 +57,11 @@ describe("financial authorization catalog rules (Phase 13-2B S1, BA-08)", () => 
       for (const role of SYSTEM_ROLES) expect(expandGrants(role.permissions)).not.toContain(k);
     }
   });
+  it("billing.account.provision (S5) is catalogued, wildcard-excluded and covered by no wildcard", () => {
+    expect(WILDCARD_EXCLUDED_KEYS.has("billing.account.provision")).toBe(true);
+    expect(expandGrants(["*"])).not.toContain("billing.account.provision");
+    expect(expandGrants(["billing.*"])).not.toContain("billing.account.provision");
+  });
   it("the excluded set is exactly the catalog flag (single source of truth)", () => {
     expect([...WILDCARD_EXCLUDED_KEYS].sort()).toEqual(PERMISSIONS.filter((p) => p.wildcardExcluded).map((p) => p.key).sort());
   });

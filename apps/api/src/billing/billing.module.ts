@@ -1,22 +1,35 @@
 import { Module } from "@nestjs/common";
 import { PrismaService } from "@/infra/prisma.service";
+import { AuthModule } from "@/auth/auth.module";
+import { AuthzModule } from "@/authz/authz.module";
 import { LedgerPostingService } from "./ledger-posting.service";
-import { FinancialAuditWriter } from "./financial-audit.writer";
+import { FinancialAuditDenialRecorder, FinancialAuditWriter } from "./financial-audit.writer";
+import { BillingAccountProvisioningService } from "./billing-account-provisioning.service";
+import { BillingAccountController } from "./billing-account.controller";
 
 /**
- * Billing module (Phase 13-1D) — internal financial infrastructure only.
+ * Billing module — internal financial infrastructure plus the first governed
+ * financial operation.
  *
- * Provides the internal `LedgerPostingService` (the sole application path to the
- * merged `billing.ledger_post` SECURITY DEFINER function). There are NO
- * controllers, DTOs, or public endpoints here, and no commercial billing
- * (BillingAccount / Wallet / CreditProfile / invoicing / payments) — those are
- * later, owner-gated slices. The service is inert until a future AUTHORIZED
- * server operation constructs a TrustedLedgerContext and invokes it.
+ * - `LedgerPostingService` (Phase 13-1D): the sole application path to
+ *   `billing.ledger_post`; inert (no endpoint, no caller).
+ * - `FinancialAuditWriter` / `FinancialAuditDenialRecorder` (S2, S5): same-
+ *   transaction ALLOWED events and own-transaction DENIED events.
+ * - `BillingAccountProvisioningService` + `BillingAccountController` (S5):
+ *   platform-only, step-up-protected, idempotent opening of zero-balance PREPAID
+ *   BillingAccounts. No money movement, no opening balance, no wallet, invoice
+ *   or payment — those are later, owner-gated slices.
  */
 @Module({
-  // FinancialAuditWriter (Phase 13-2B S2, BA-14): internal same-transaction
-  // financial audit; no controller, no caller, empty operation catalog (inert).
-  providers: [PrismaService, LedgerPostingService, FinancialAuditWriter],
+  imports: [AuthModule, AuthzModule],
+  controllers: [BillingAccountController],
+  providers: [
+    PrismaService,
+    LedgerPostingService,
+    FinancialAuditWriter,
+    FinancialAuditDenialRecorder,
+    BillingAccountProvisioningService,
+  ],
   exports: [LedgerPostingService, FinancialAuditWriter],
 })
 export class BillingModule {}

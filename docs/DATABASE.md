@@ -479,3 +479,36 @@ existing object is altered; no historical migration is rewritten.
   write). `billing.ledger_post` cannot reach these privileges (fixed body, no dynamic SQL). Drift
   authority: `ledger-drift-check.sql` `CHART_OF_ACCOUNTS_DRIFT_OK`; `ci-privilege-check.sql` asserts 42501
   for 7 runtime operations.
+
+## BillingAccount provisioning — IMPLEMENTED (Phase 13-2B S5, 2026-11-28, ADR-0022 Amendment 5)
+
+Migration `20261128150000_billing_account_provisioning` (additive; owner decisions O1–O7):
+
+- `BillingAccount.provisionedByUserId` (nullable uuid, FK → `User` RESTRICT/RESTRICT, indexed): the
+  platform actor of the provisioning request; immutable (guard `billing_account_provisioning_guard`,
+  BA001). NULL only for rows created before S5.
+- Format CHECKs (`NOT VALID` — enforced on new and updated rows, existing rows preserved):
+  `BillingAccount_account_number_format_chk` (`^BA-[0-9]{4}-[23456789ABCDEFGHJKMNPQRSTVWXYZ]{12}$`),
+  `BillingAccount_provisioning_key_format_chk` (`^[A-Za-z0-9._:-]{16,128}$`),
+  `BillingAccount_provisioning_fingerprint_format_chk` (`^v1:[0-9a-f]{64}$`).
+- `billing.billing_account_provision(...)` — SECURITY DEFINER, owner `telvyn_ledger_fn`, hardened
+  `search_path`, EXECUTE for `telvyn_app` only. It re-verifies: argument formats (BP005); the actor is an
+  ACTIVE, MFA-enabled member of an ACTIVE PLATFORM tenant (BP001); the actor explicitly holds
+  `billing.account.provision` through role rows (BP002); the step-up grant belongs to the actor, its tenant
+  and purpose and was consumed **in this transaction** (`consumedAt = transaction_timestamp()`, BP003); the
+  target is an ACTIVE CUSTOMER/RESELLER tenant (BP004). It then replays (same key + fingerprint + actor),
+  refuses a mismatch (BP006), or inserts with `ON CONFLICT DO NOTHING` (number collision BP007, label /
+  default conflict BP008) and opens the `customer_funds` ledger account via `billing.ledger_account_open`.
+  Concurrency is serialized by the unique indexes — no advisory locks.
+- `billing_account_provision_complete` — `CONSTRAINT TRIGGER … AFTER INSERT DEFERRABLE INITIALLY
+  DEFERRED` (SECURITY DEFINER, owner-only EXECUTE): at COMMIT, a provisioned row (non-null
+  `provisionedByUserId`) without its `customer_funds` ledger account or the actor's ALLOWED audit event
+  raises BP010.
+- `FinancialAuditEvent_no_network_data_chk` (`ipAddress IS NULL AND userAgent IS NULL`, `NOT VALID`) and
+  `REVOKE SELECT ON "FinancialAuditEvent" FROM telvyn_app` — the runtime appends only (O6/O7).
+- Function-owner privileges are column-scoped (reads on Tenant, Membership, User — no credential columns —,
+  MembershipRole, Role, RolePermission, Permission, StepUpGrant, four FinancialAuditEvent columns; INSERT on
+  exactly 10 BillingAccount columns). `telvyn_app` still holds **no** privilege on `BillingAccount` and
+  cannot execute `ledger_account_open`, the guard or the completeness function.
+- Drift authority: `BILLING_ACCOUNT_PROVISIONING_DRIFT_OK` in `scripts/db/ledger-drift-check.sql`; runtime
+  negatives in `scripts/db/ci-privilege-check.sql`.

@@ -19,7 +19,8 @@
 --   verify: psql -U telvyn -d telvyn_safety_verify -v ON_ERROR_STOP=1 \
 --             -v db_name=telvyn_safety_verify -v marker=telvyn-inc-db-001b-local-verify -v ci_ephemeral=0 \
 --             -f scripts/db/e2e-instance-marker.sql   (disposable local-verify environment only)
--- Only these three (database, marker) pairs are accepted; anything else aborts.
+--   clean:  psql -U telvyn -d telvyn_clean_verify -v ON_ERROR_STOP=1 --             -v db_name=telvyn_clean_verify -v marker=telvyn-verify-clean -v ci_ephemeral=0 --             -f scripts/db/e2e-instance-marker.sql   (disposable verify-clean environment only)
+-- Only these four (database, marker) pairs are accepted; anything else aborts.
 \set ON_ERROR_STOP on
 
 SELECT set_config('telvyn_mark.db', :'db_name', false),
@@ -41,6 +42,7 @@ BEGIN
   IF NOT (
        (v_db = 'telvyn_ledger_e2e' AND v_marker = 'telvyn-e2e/local-isolated' AND v_ci = '0')
     OR (v_db = 'telvyn_safety_verify' AND v_marker = 'telvyn-inc-db-001b-local-verify' AND v_ci = '0')
+    OR (v_db = 'telvyn_clean_verify' AND v_marker = 'telvyn-verify-clean' AND v_ci = '0')
     OR (v_db = 'telvyn'            AND v_marker = 'telvyn-e2e/ci-ephemeral'   AND v_ci = '1'
         AND current_setting('telvyn_mark.ci') = '1')
   ) THEN

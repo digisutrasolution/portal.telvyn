@@ -88,20 +88,60 @@ overwritten; every item of each maps below. Nothing here closes an outstanding f
 
 | Owner item | Implementation item(s) | Status | Gate |
 |---|---|---|---|
-| X-R01 FA004 tenant attribution | M-R03 (FA004/FA005 stricter than the F-text) | DB check in force (fail closed); **owner ratification pending** | before S5 |
-| X-R02 FA005 semantics | M-R03, M-R04 (owner checked, not expiry/consumption) | OPEN — the S5 caller must consume the grant in the same transaction | S5 |
+| X-R01 FA004 tenant attribution | M-R03 (FA004/FA005 stricter than the F-text) | RESOLVED — ratified by the owner (O2, 2026-11-28); platform→customer attribution preserved | before S5 |
+| X-R02 FA005 semantics | M-R03, M-R04 (owner checked, not expiry/consumption) | RESOLVED in S5 — the grant is consumed in the provisioning transaction; the DB function requires `consumedAt = transaction_timestamp()` (BP003) | S5 |
 | X-R03 runtime SELECT before S8 | M-R08 (no audit read API) | OPEN — F6 grants SELECT; with no RLS any runtime code could read every tenant's audit rows. Decide in S8 whether to narrow SELECT to SECURITY DEFINER read functions | S8 (RLS: ADR-0005) |
-| X-R04 sensitive values / denylist bypass | M-R09 (key names only, not values) | OPEN — value-level checks or typed per-operation metadata schemas needed before the first catalog operation | S5 |
-| X-R05 transaction-client provenance | — (new) | OPEN — the writer's base-client refusal is structural (`$transaction` absent); it cannot prove the client is a live interactive transaction. S5 callers must pass the Prisma interactive-transaction client only | S5 |
+| X-R04 sensitive values / denylist bypass | M-R09 (key names only, not values) | RESOLVED in S5 — strict typed per-operation schemas (O6); every value is server-derived | S5 |
+| X-R05 transaction-client provenance | — (new) | RESOLVED in S5 — `runInTrackedTransaction` (in-process WeakSet provenance) + a database probe proving an open transaction block (`assertLiveTransaction`) | S5 |
 | X-R06 linked ledger transaction ownership | M-R07 | OPEN — needs ledger read access the runtime lacks | S7 |
 | X-R07 fresh migration replay | M-R10 | **CLOSED** — CI replays every migration into an empty database (S2: 20; S4: 21) | — |
 | X-R08 actual skipped-test reasons | — (reported "not confirmed" in S2) | **CLOSED** (SOURCE-INSPECTED 2026-11-28): `e2e-lease-drill` runs only with `TELVYN_E2E_LEASE_DRILL=loss\|setup-fail` on `local-verify`; `telecom-engine-live` and `telecom-engine-apply-live` run only with `ENGINE_LIVE_MTLS_DIR` (live Kamailio + mTLS). 3 files / 3 tests skipped by design | — |
-| X-R09 recovery-code policy | (S1 carried gate) | OPEN — S1 excludes recovery codes from financial step-up; **owner ratification pending** | before S5 |
+| X-R09 recovery-code policy | (S1 carried gate) | RESOLVED — ratified by the owner (O1, 2026-11-28): recovery codes never serve as financial step-up; account recovery unchanged | before S5 |
 | X-R10 role escalation | (S1 carried gate) | RESOLVED by P1 (2026-11-28) — `setMemberRoles` locked, authority re-derived, no delegation beyond held permissions, protected/last owner, self-change refused (`docs/SECURITY.md`) | before S5 |
-| — | M-R01 `idempotencyKey` format/length | OPEN (F7) | S5 |
+| — | M-R01 `idempotencyKey` format/length | RESOLVED in S5 (O5: 16–128 of `[A-Za-z0-9-_.:]`, DB CHECK) | S5 |
 | — | M-R02 IP / user-agent retention | OPEN — owner decision | owner |
-| — | M-R05 denied-attempt writer | OPEN (F2) | S5 |
-| — | M-R06 replay audit suppression | OPEN (F7) | S5 |
+| — | M-R05 denied-attempt writer | RESOLVED in S5 (`FinancialAuditDenialRecorder`, own transaction) | S5 |
+| — | M-R06 replay audit suppression | RESOLVED in S5 (a replay writes no second ALLOWED event) | S5 |
+
+## Platform BillingAccount provisioning — IMPLEMENTED (Phase 13-2B S5, 2026-11-28; NOT deployed)
+
+Owner decisions O1–O7 (2026-11-28). The first governed financial operation. It opens accounts only — **no
+money moves, no opening balance is posted, no wallet, invoice, payment or UI exists**, and commercial billing
+is not activated.
+
+- **Who:** an actor in an ACTIVE PLATFORM tenant, with MFA enabled, holding the explicitly assigned
+  `billing.account.provision` (O4). The key is wildcard-excluded (never via `*`, `billing.*`, member
+  management or tenant ownership; no auto-grant; ineffective without MFA). **S5 has no runtime assignment
+  path** (G4 keeps custom roles and `setMemberRoles` fail-closed); choosing the governed assignment
+  mechanism and its delegation authority is an **open owner decision before activation**. Dual control is
+  not required (O4).
+- **Step-up (O1):** `POST /v1/auth/step-up` issues a 300 s grant from a fresh TOTP code (replay guarded;
+  recovery codes never accepted), bound to user, session, tenant and purpose `billing_account.provision`.
+  It is consumed once, inside the provisioning transaction; any later failure rolls the consumption back.
+- **What:** `POST /v1/platform/billing-accounts` creates, in ONE transaction: a PREPAID ACTIVE
+  `BillingAccount` for an ACTIVE CUSTOMER/RESELLER tenant; its `customer_funds` ledger account (S4
+  function); and the ALLOWED financial audit event (typed `after` image, `details.fingerprintVersion`).
+- **Account number (O3):** `BA-YYYY-XXXXXXXXXXXX` — UTC year of creation + 12 characters drawn with
+  `crypto.randomInt` from `23456789ABCDEFGHJKMNPQRSTVWXYZ`; server-generated, globally unique (DB unique
+  index), immutable (BA001), no check digit, no sequence, no PII; collisions retried up to 3 times with a new
+  suffix (BP007), then 500 `ACCOUNT_NUMBER_EXHAUSTED`. The format CHECK is `NOT VALID`, so rows created
+  before S5 keep their numbers.
+- **Idempotency (O5):** `Idempotency-Key` header is mandatory (16–128 of `[A-Za-z0-9-_.:]`); scope =
+  operation + actor + target tenant; keys never expire. Fingerprint `v1:` + SHA-256 of a fixed-order canonical
+  array (operation, actor user, actor tenant, target tenant, currency, PREPAID, label, isDefault — not the
+  grant id). Same key + same fingerprint + a **fresh** valid grant → 200 replay of the original (no new
+  account, ledger account or ALLOWED audit event). Same key + different request or actor → 409. A replay
+  always re-runs current authorization and never reuses a consumed grant.
+- **Refusals (O2/F2):** every refusal of an authenticated member is recorded as a DENIED event in its own
+  transaction, attributed to the actor's tenant, with typed details (`targetTenantId`, `currency`) and one
+  of the approved reason codes. Malformed bodies are refused by validation (400) before the service and are
+  not financial audit events.
+- **Audit content (O6):** no IP address or user agent in the financial audit (DB CHECK for new rows);
+  request telemetry goes to `AuditLog` (`billing_account.provisioned` / `_replayed`) and `SecurityEvent`
+  (`step_up.issued` / `step_up.failed`). The proposed 90-day telemetry retention is **not** implemented — no
+  destructive retention job exists.
+- **Deferred:** lifecycle transitions + locking (S6), reads (S8), wallet/reservations (S7), any money
+  movement (13-3+), UI.
 
 ## Principles — PLANNED (locked by constitution)
 

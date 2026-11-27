@@ -60,9 +60,10 @@ DECLARE
   step_up_tables text[] := ARRAY[
     'StepUpGrant'
   ];
-  -- Financial audit events (Phase 13-2B S2, BA-14, owner decision F6): runtime
-  -- may read and append ONLY - no UPDATE/DELETE/TRUNCATE (a guard trigger also
-  -- refuses them). Handled explicitly, never by the generic grant.
+  -- Financial audit events (Phase 13-2B S2, BA-14, owner decision F6; S5 O7):
+  -- runtime may APPEND ONLY - no SELECT (the writer inserts without RETURNING),
+  -- no UPDATE/DELETE/TRUNCATE (a guard trigger also refuses them). Handled
+  -- explicitly, never by the generic grant.
   financial_audit_tables text[] := ARRAY[
     'FinancialAuditEvent'
   ];
@@ -86,7 +87,7 @@ BEGIN
       EXECUTE format('GRANT UPDATE (%I) ON public.%I TO telvyn_app', 'consumedAt', t);
     ELSIF t = ANY(financial_audit_tables) THEN
       EXECUTE format('REVOKE ALL ON public.%I FROM telvyn_app', t);
-      EXECUTE format('GRANT SELECT, INSERT ON public.%I TO telvyn_app', t);
+      EXECUTE format('GRANT INSERT ON public.%I TO telvyn_app', t);
     ELSIF t = ANY(immutable_tables) THEN
       EXECUTE format('GRANT SELECT, INSERT ON public.%I TO telvyn_app', t);
     ELSE

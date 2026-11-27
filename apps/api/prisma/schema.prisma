@@ -47,6 +47,8 @@ model User {
   stepUpGrants   StepUpGrant[]
   // Financial audit (Phase 13-2B S2, BA-14): events this user performed (FK RESTRICT).
   financialAuditEvents FinancialAuditEvent[]
+  // Billing accounts this user provisioned (Phase 13-2B S5).
+  provisionedBillingAccounts BillingAccount[] @relation("BillingAccountProvisionedBy")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1431,6 +1433,11 @@ model BillingAccount {
   // key + different fingerprint is rejected by the provisioning service (S5).
   provisioningKey         String
   provisioningFingerprint String
+  // S5 (owner decision O5): the platform actor whose request created the account —
+  // the actor scope of the idempotency key. Set only by billing.billing_account_provision;
+  // immutable (BA001). NULL only for rows created before S5.
+  provisionedByUserId     String?              @db.Uuid
+  provisionedBy           User?                @relation("BillingAccountProvisionedBy", fields: [provisionedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   createdAt               DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt               DateTime             @updatedAt @db.Timestamptz(6)
 
@@ -1444,6 +1451,7 @@ model BillingAccount {
   @@unique([successorOfId, tenantId]) // at most one successor per account
   @@unique([tenantId, provisioningKey])
   @@index([tenantId, status])
+  @@index([provisionedByUserId])
 }
 
 // ---------------------------------------------------------------------------

@@ -105,7 +105,8 @@ Markers:
 - DB: `scripts/db/e2e-instance-marker.sql` sets `telvyn.e2e_instance` with
   `ALTER DATABASE` (database level). It accepts only
   (`telvyn_ledger_e2e`, `telvyn-e2e/local-isolated`), the local-verify pair
-  (`telvyn_safety_verify`, `telvyn-inc-db-001b-local-verify`) and the CI pair. Gate B refuses
+  (`telvyn_safety_verify`, `telvyn-inc-db-001b-local-verify`), the verify-clean pair
+  (`telvyn_clean_verify`, `telvyn-verify-clean`) and the CI pair. Gate B refuses
   the marker if it is also set at role or cluster level. Never set it with
   `ALTER ROLE`.
 - Redis: `pnpm --filter @telvyn/api e2e:mark-redis` runs Gate A first, then writes the
@@ -162,6 +163,33 @@ cleanup (not executed; requires explicit authorization):
 docker compose --env-file .env.inc-db-001b-verify -p telvyn-inc-db-001b-verify -f docker-compose.local-verify.yml down
 docker volume rm telvyn_inc_db_001b_verify_pgdata
 ```
+
+**Clean verification environment — profile `verify-clean`** (Phase 13-2B S5). A second disposable,
+loopback-only data plane built from an empty database, so migration checksums can be verified exactly
+(the retained `local-verify` database keeps its known S4 checksum mismatch and is not modified).
+
+| Item | Value |
+|---|---|
+| Compose project / file | `telvyn-verify-clean` / `docker-compose.verify-clean.yml` |
+| PostgreSQL | `telvyn-verify-clean-pg`, `postgres:18-alpine`, `127.0.0.1:5436`, DB `telvyn_clean_verify`, bootstrap superuser `telvyn` |
+| Redis | `telvyn-verify-clean-redis`, `redis:7-alpine`, `127.0.0.1:6383`, DB 0, no persistence |
+| Volume / network | `telvyn_verify_clean_pgdata` / `telvyn-verify-clean_net` |
+| Secrets | gitignored `.env.verify-clean` at the repo root (same keys as `.env.inc-db-001b-verify`) — never printed or committed |
+| Markers | DB `telvyn.e2e_instance = telvyn-verify-clean` (database level only); Redis key `telvyn:e2e:instance-marker` |
+
+Provisioning order: identical to `local-verify` steps 1–8 above, with `-p telvyn-verify-clean -f
+docker-compose.verify-clean.yml --env-file .env.verify-clean`, `db_name=telvyn_clean_verify`, port 5436 and
+`-Profile verify-clean`:
+
+```powershell
+docker compose --env-file .env.verify-clean -p telvyn-verify-clean -f docker-compose.verify-clean.yml up -d
+powershell -File scripts/test/e2e-local.ps1 -Profile verify-clean -Mark
+powershell -File scripts/test/e2e-local.ps1 -Profile verify-clean
+```
+
+Later migrations are applied additively (pre → `prisma migrate deploy` + seed → post → grants → drift →
+privilege check); never reset. Retention: kept until the owner authorizes cleanup (`docker compose … down`
+and `docker volume rm telvyn_verify_clean_pgdata`, not executed).
 
 ## CI restricted-role bootstrap (Phase 13-1A.7A) — EXISTING
 

@@ -837,6 +837,34 @@ confers authority to delegate permissions the actor does not hold or to assign a
 - **Not in P1:** the governed assignment path for wildcard-excluded financial permissions (S5,
   `billing.account.provision`).
 
+## Platform BillingAccount provisioning — IMPLEMENTED (Phase 13-2B S5, 2026-11-28; NOT deployed)
+
+Owner decisions O1–O7. Controls, each enforced in the application AND re-checked in the database:
+
+- **Authorization:** PLATFORM tenant + explicit `billing.account.provision` (wildcard-excluded, MFA-only) +
+  fresh step-up grant. The controller uses `JwtAuthGuard` + `TenantGuard` only, so refusals reach the
+  service and are recorded as DENIED financial audit events; the SECURITY DEFINER function re-verifies
+  platform membership, MFA, the explicit role permission and same-transaction grant consumption (BP001–BP004).
+- **Step-up (O1):** TOTP only, replay guarded, 300 s, single use, bound to user/session/tenant/purpose,
+  rate-limited (10 per 5 min per user), generic 403 on failure, `SecurityEvent` on issue/failure. Recovery
+  codes are never a financial step-up factor (account recovery unchanged).
+- **Direct-INSERT grant review (material weakness avoided):** the S5 plan's direct `BillingAccount`
+  SELECT/INSERT grant for `telvyn_app` would have let any runtime-role code create accounts with arbitrary
+  owners, numbers and keys, skipping authority checks, the ledger account and the audit event. It was **not
+  granted**. Provisioning goes only through the definer function, and the deferred BP010 constraint refuses a
+  commit lacking the ledger account or the ALLOWED audit event.
+- **Transaction provenance (P5):** financial writes need a client from `runInTrackedTransaction`
+  (module-private WeakSet) and a database probe proving an open transaction block; base, scoped, untracked
+  and finished clients are refused.
+- **Audit (O6/O7):** typed per-operation schemas; server-derived values; no IP / user agent (DB CHECK);
+  runtime holds INSERT only on `FinancialAuditEvent` (no SELECT) — no cross-tenant audit exposure.
+- **Honest limits:** a party already holding the runtime database role can still INSERT a `StepUpGrant`
+  (S1 G2 grant) and an audit row; the database checks then still require a real MFA-enabled platform member
+  with the explicit permission, but the TOTP proof itself is an application-layer control. RLS (ADR-0005)
+  remains deferred and a production prerequisite.
+- **Open owner decision:** the governed assignment mechanism and delegation authority for
+  `billing.account.provision` (no runtime path exists in S5; fixture rows are used by tests only).
+
 ## QA-LEASE-001 — E2E run-lease false detection (OPEN, reliability)
 
 - **Evidence (EXECUTED/OBSERVED, `local-verify`, 2026-11-27/28):** 5 full E2E attempts — 3 passed, 2 aborted

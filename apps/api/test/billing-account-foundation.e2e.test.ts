@@ -16,6 +16,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { fixturePrisma } from "./fixture-db";
+import { testAccountNumber, testFingerprint, testProvisioningKey } from "./billing-fixtures";
 
 const fix = fixturePrisma;
 const app = new PrismaClient();
@@ -55,18 +56,19 @@ function insert(client: PrismaClient, a: NewAccount): Promise<string> {
          ("id","tenantId","accountNumber","label","currency","mode","status","isDefault",
           "successorOfId","provisioningKey","provisioningFingerprint","updatedAt")
        VALUES (COALESCE($1::uuid, uuidv7()), $2::uuid, $3, $4, $5::"Currency", $6::"BillingMode",
-               $7::"BillingAccountStatus", $8, $9::uuid, $10, 'fp-v1', now())
+               $7::"BillingAccountStatus", $8, $9::uuid, $10, $11, now())
        RETURNING "id"`,
       a.id ?? null,
       a.tenantId,
-      a.accountNumber ?? uniq("ACCT"),
+      a.accountNumber ?? testAccountNumber(),
       a.label ?? uniq("label"),
       a.currency ?? "USD",
       a.mode ?? "PREPAID",
       a.status ?? "ACTIVE",
       a.isDefault ?? false,
       a.successorOfId ?? null,
-      a.provisioningKey ?? uniq("pk"),
+      a.provisioningKey ?? testProvisioningKey(uniq("pk")),
+      testFingerprint("s3-fixture"),
     )
     .then((r) => r[0].id);
 }
@@ -134,12 +136,12 @@ describe("BA-02 relationships and uniqueness", () => {
     expect(Number(n[0].n)).toBeGreaterThanOrEqual(3);
   });
   it("account number is globally unique (23505)", async () => {
-    const num = uniq("NUM");
+    const num = testAccountNumber();
     await insert(fix, { tenantId: TA, accountNumber: num });
     expect(await pgCode(() => insert(fix, { tenantId: TB, accountNumber: num }))).toBe("23505");
   });
   it("provisioning key is unique per tenant only", async () => {
-    const pk = uniq("prov");
+    const pk = testProvisioningKey(uniq("prov"));
     await insert(fix, { tenantId: TA, provisioningKey: pk });
     expect(await pgCode(() => insert(fix, { tenantId: TA, provisioningKey: pk }))).toBe("23505");
     await expect(insert(fix, { tenantId: TB, provisioningKey: pk })).resolves.toBeTruthy();
@@ -183,9 +185,9 @@ describe("BA-04/BA-05/BA-01 immutable identity (BA001)", () => {
     ["currency", `'EUR'::"Currency"`, () => []],
     ["mode", `'POSTPAID'::"BillingMode"`, () => []],
     ["tenantId", `$2::uuid`, ({ other }) => [other]],
-    ["accountNumber", `$2`, () => [uniq("NUM2")]],
-    ["provisioningKey", `$2`, () => [uniq("pk2")]],
-    ["provisioningFingerprint", `'fp-v2'`, () => []],
+    ["accountNumber", `$2`, () => [testAccountNumber()]],
+    ["provisioningKey", `$2`, () => [testProvisioningKey(uniq("pk2"))]],
+    ["provisioningFingerprint", `$2`, () => [testFingerprint(uniq("fp2"))]],
   ];
   for (const [col, sql, params] of cases) {
     it(`rejects changing ${col}`, async () => {
@@ -266,7 +268,7 @@ describe("Concurrency — unique indexes serialize racing inserts", () => {
     expect((rejected.reason as { meta?: { code?: string } }).meta?.code).toBe("23505");
   });
   it("two concurrent inserts with one provisioning key: exactly one wins", async () => {
-    const pk = uniq("race");
+    const pk = testProvisioningKey(uniq("race"));
     const res = await Promise.allSettled([
       insert(fix, { tenantId: TA, provisioningKey: pk }),
       insert(fix, { tenantId: TA, provisioningKey: pk }),

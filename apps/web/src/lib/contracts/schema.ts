@@ -1290,10 +1290,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/step-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a single-use step-up grant for one financial operation (TOTP only)
+         * @description Phase 13-2B S5 (owner decision O1). Verifies a fresh TOTP code (replay guarded; recovery codes are NOT accepted) and issues a server-side grant bound to the caller's user, session, active tenant and one server-defined purpose. Lifetime 300 s; consumed atomically, once, inside the protected operation's transaction. Rate limited per user. Failures return a generic 403 and are recorded as security events.
+         */
+        post: operations["stepUpIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/billing-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Provision a zero-balance PREPAID billing account for a customer tenant (platform)
+         * @description Phase 13-2B S5 (ADR-0022 Amendment 5 BA-03/08/14/15; owner decisions O1-O7). Requires an active PLATFORM tenant, the explicitly assigned `billing.account.provision` permission (never conferred by `*`, never effective without MFA) and a fresh step-up grant for purpose `billing_account.provision`. Creates the BillingAccount, its `customer_funds` ledger account and an ALLOWED financial audit event in one transaction; no money moves and no opening balance is posted. The account number (`BA-YYYY-XXXXXXXXXXXX`) is server-generated. Every refused attempt by an authenticated member is recorded as a DENIED financial audit event. Idempotency-Key is mandatory: the same key with the same request (and a fresh grant) replays the original result with 200; the same key with a different request is refused with 409. Keys never expire.
+         */
+        post: operations["provisionBillingAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        StepUpIssueRequest: {
+            /** @enum {string} */
+            purpose: "billing_account.provision";
+            /** @description Current TOTP code (recovery codes are not accepted) */
+            code: string;
+        };
+        StepUpGrant: {
+            /** Format: uuid */
+            grantId: string;
+            purpose: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ProvisionBillingAccountRequest: {
+            /**
+             * Format: uuid
+             * @description An ACTIVE CUSTOMER or RESELLER tenant
+             */
+            targetTenantId: string;
+            /** @enum {string} */
+            currency: "USD" | "EUR" | "GBP" | "INR" | "AUD" | "CAD" | "JPY";
+            /** @description Trimmed; unique per tenant (case-insensitive) among open accounts */
+            label: string;
+            /** @default false */
+            isDefault: boolean;
+            /**
+             * @default PREPAID
+             * @enum {string}
+             */
+            mode: "PREPAID";
+            /** Format: uuid */
+            stepUpGrantId: string;
+        };
+        ProvisionedBillingAccount: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            accountNumber: string;
+            label: string;
+            /** @enum {string} */
+            currency: "USD" | "EUR" | "GBP" | "INR" | "AUD" | "CAD" | "JPY";
+            /** @enum {string} */
+            mode: "PREPAID";
+            /** @enum {string} */
+            status: "ACTIVE";
+            isDefault: boolean;
+            /** Format: uuid */
+            ledgerAccountId: string;
+            /** Format: date-time */
+            createdAt: string;
+            replayed: boolean;
+        };
         Problem: {
             type?: string;
             title: string;
@@ -4802,6 +4895,76 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    stepUpIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Grant issued */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepUpGrant"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    provisionBillingAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "X-Correlation-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProvisionBillingAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Replay of an earlier completed request with the same Idempotency-Key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProvisionedBillingAccount"];
+                };
+            };
+            /** @description Account provisioned */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProvisionedBillingAccount"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
         };
     };
 }

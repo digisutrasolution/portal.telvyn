@@ -47,6 +47,8 @@ export const RATE_RULES = {
   loginIp: { bucket: "login-ip", limit: 20, windowSeconds: 300 } satisfies RateRule,
   loginEmail: { bucket: "login-email", limit: 10, windowSeconds: 300 } satisfies RateRule,
   mfaVerify: { bucket: "mfa-verify", limit: 10, windowSeconds: 300 } satisfies RateRule,
+  // Financial step-up issuance (Phase 13-2B S5): keyed by user; bounds TOTP guessing.
+  stepUp: { bucket: "step-up-user", limit: 10, windowSeconds: 300 } satisfies RateRule,
   refresh: { bucket: "refresh-ip", limit: 60, windowSeconds: 300 } satisfies RateRule,
   resetRequest: { bucket: "reset-request-ip", limit: 5, windowSeconds: 900 } satisfies RateRule,
   resetConfirm: { bucket: "reset-confirm-ip", limit: 10, windowSeconds: 900 } satisfies RateRule,

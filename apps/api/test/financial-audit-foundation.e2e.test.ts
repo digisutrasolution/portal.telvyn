@@ -4,21 +4,25 @@
  * ADR-0022 Amendment 5 BA-14; owner decisions F1–F7 (2026-11-27). Runs against
  * the real PostgreSQL 18 schema:
  *   - the writer and every "runtime" probe use the RUNTIME role (DATABASE_URL →
- *     telvyn_app in the isolated env), so SELECT + INSERT-only is exercised;
+ *     telvyn_app in the isolated env), so INSERT-only (S5 O7: no SELECT) is
+ *     exercised; every write runs in a tracked transaction (S5 P5);
  *   - fixtures and owner-level guard probes use the table owner (fixturePrisma)
  *     — the guard triggers fire for the owner too.
- * The writer is constructed with a TEST-ONLY operation catalog: the production
- * catalog is empty in S2 (F1) and no production mutation exists, so atomicity
- * is demonstrated with a test-only transaction composition (a Tenant rename).
+ * The writer is constructed with a TEST-ONLY, untyped operation catalog so the
+ * generic guarantees are exercised independently of the S5 provisioning
+ * schema; atomicity is demonstrated with a test-only composition (a Tenant
+ * rename). IP address / user agent are never stored (S5 O6).
  * Users/tenants use a dedicated domain/slug and are never deleted: audit FKs
  * are ON DELETE RESTRICT.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fixturePrisma } from "./fixture-db";
+import { testAccountNumber, testFingerprint, testProvisioningKey } from "./billing-fixtures";
 
 process.env.NODE_ENV = "test";
 
 import { PrismaService } from "../src/infra/prisma.service";
+import { runInTrackedTransaction } from "../src/infra/tracked-transaction";
 import {
   FINANCIAL_AUDIT_OPERATIONS,
   FinancialAuditError,
@@ -31,7 +35,7 @@ const fix = fixturePrisma;
 const prisma = new PrismaService(); // runtime role
 const OP = "test_only.audit_probe";
 const writer = new FinancialAuditWriter(new Set([OP]));
-const productionWriter = new FinancialAuditWriter(); // empty catalog (F1)
+const productionWriter = new FinancialAuditWriter(); // the typed production catalog (S5)
 
 const RUN = `s2-${Date.now().toString(36)}`;
 let seq = 0;
@@ -71,12 +75,12 @@ async function billingAccount(tenantId: string) {
   return fix.billingAccount.create({
     data: {
       tenantId,
-      accountNumber: uniq("acct"),
+      accountNumber: testAccountNumber(),
       label: uniq("label"),
       currency: "USD",
       mode: "PREPAID",
-      provisioningKey: uniq("pk"),
-      provisioningFingerprint: "fp",
+      provisioningKey: testProvisioningKey(uniq("pk")),
+      provisioningFingerprint: testFingerprint("s2-fixture"),
     },
   });
 }
@@ -133,7 +137,7 @@ describe("positive audit writing (BA-14)", () => {
   it("writes one ALLOWED event in the caller's transaction with server-derived attribution", async () => {
     const acct = await billingAccount(cust.id);
     const grant = await stepUpGrant(custActor);
-    const { id } = await prisma.$transaction((tx) =>
+    const { id } = await runInTrackedTransaction(prisma, (tx) =>
       writer.record(tx, custActor, event(cust.id, {
         billingAccountId: acct.id,
         permission: "test_only.permission",
@@ -159,15 +163,15 @@ describe("positive audit writing (BA-14)", () => {
       after: { status: "SUSPENDED" },
       idempotencyKey: "idem-1",
       correlationId: "corr-1",
-      ipAddress: "127.0.0.1",
-      userAgent: "s2-e2e",
+      ipAddress: null, // O6: request network data is never stored in the financial audit
+      userAgent: null,
     });
   });
 
   it("a platform actor may audit a customer-owned object and stays distinguishable from the owner", async () => {
     const plat = await tenant("PLATFORM");
     const platActor = await actorIn(plat.id, "PLATFORM");
-    const { id } = await prisma.$transaction((tx) => writer.record(tx, platActor, event(cust.id)));
+    const { id } = await runInTrackedTransaction(prisma, (tx) => writer.record(tx, platActor, event(cust.id)));
     const row = await fix.financialAuditEvent.findUniqueOrThrow({ where: { id } });
     expect(row.actorTenantId).toBe(plat.id);
     expect(row.tenantId).toBe(cust.id);
@@ -177,7 +181,7 @@ describe("positive audit writing (BA-14)", () => {
     const t = await tenant();
     const a = await actorIn(t.id, "CUSTOMER");
     for (let i = 0; i < 2; i++) {
-      await prisma.$transaction((tx) => writer.record(tx, a, event(t.id, { idempotencyKey: "same-key" })));
+      await runInTrackedTransaction(prisma, (tx) => writer.record(tx, a, event(t.id, { idempotencyKey: "same-key" })));
     }
     expect(await fix.financialAuditEvent.count({ where: { tenantId: t.id, idempotencyKey: "same-key" } })).toBe(2);
   });
@@ -192,10 +196,10 @@ describe("positive audit writing (BA-14)", () => {
 });
 
 describe("negative validation and attribution", () => {
-  it("the production catalog refuses every operation and writes nothing (inert, F1)", async () => {
-    expect(FINANCIAL_AUDIT_OPERATIONS.size).toBe(0);
+  it("the production catalog refuses an operation outside it and writes nothing", async () => {
+    expect(FINANCIAL_AUDIT_OPERATIONS.has(OP)).toBe(false);
     const before = await auditCount(cust.id);
-    await expect(prisma.$transaction((tx) => productionWriter.record(tx, custActor, event(cust.id)))).rejects.toMatchObject({
+    await expect(runInTrackedTransaction(prisma, (tx) => productionWriter.record(tx, custActor, event(cust.id)))).rejects.toMatchObject({
       reason: "unknown_operation",
     });
     expect(await auditCount(cust.id)).toBe(before);
@@ -203,7 +207,7 @@ describe("negative validation and attribution", () => {
 
   it("a non-platform actor cannot attribute to another tenant — writer and database (FA004)", async () => {
     const other = await tenant();
-    await expect(prisma.$transaction((tx) => writer.record(tx, custActor, event(other.id)))).rejects.toMatchObject({
+    await expect(runInTrackedTransaction(prisma, (tx) => writer.record(tx, custActor, event(other.id)))).rejects.toMatchObject({
       reason: "attribution_mismatch",
     });
     expect(await pgCode(() => rawInsert(prisma, { actorUserId: custActor.ctx.userId, actorTenantId: cust.id, tenantId: other.id }))).toBe("FA004");
@@ -214,8 +218,8 @@ describe("negative validation and attribution", () => {
     const other = await tenant();
     const foreignAcct = await billingAccount(other.id);
     expect(
-      await pgCode(() => prisma.$transaction((tx) => writer.record(tx, custActor, event(cust.id, { billingAccountId: foreignAcct.id })))),
-    ).toBe("P2003"); // Prisma's FK-violation code for the 23503 raised by the composite FK
+      await pgCode(() => runInTrackedTransaction(prisma, (tx) => writer.record(tx, custActor, event(cust.id, { billingAccountId: foreignAcct.id })))),
+    ).toBe("23503"); // the writer inserts with raw SQL (no RETURNING, O7): the PostgreSQL SQLSTATE surfaces
     expect(
       await pgCode(() =>
         rawInsert(prisma, { actorUserId: custActor.ctx.userId, actorTenantId: cust.id, tenantId: cust.id, extraCols: `,"billingAccountId"`, extraVals: `,'${foreignAcct.id}'::uuid` }),
@@ -271,7 +275,7 @@ describe("negative validation and attribution", () => {
   it("sensitive metadata is refused before any write", async () => {
     const before = await auditCount(cust.id);
     await expect(
-      prisma.$transaction((tx) => writer.record(tx, custActor, event(cust.id, { details: { refreshToken: "never-stored" } }))),
+      runInTrackedTransaction(prisma, (tx) => writer.record(tx, custActor, event(cust.id, { details: { refreshToken: "never-stored" } }))),
     ).rejects.toMatchObject({ reason: "sensitive_metadata" });
     expect(await auditCount(cust.id)).toBe(before);
   });
@@ -281,7 +285,7 @@ describe("transaction atomicity — fail closed (BA-14)", () => {
   it("success: the test-only mutation and its audit event commit together", async () => {
     const t = await tenant();
     const a = await actorIn(t.id, "CUSTOMER");
-    await prisma.$transaction(async (tx) => {
+    await runInTrackedTransaction(prisma, async (tx) => {
       await tx.tenant.update({ where: { id: t.id }, data: { name: "s2-renamed" } });
       await writer.record(tx, a, event(t.id));
     });
@@ -294,7 +298,7 @@ describe("transaction atomicity — fail closed (BA-14)", () => {
     const a = await actorIn(t.id, "CUSTOMER");
     const missingGrant = "0190a1b2-c3d4-7e5f-8a9b-00000000dead";
     await expect(
-      prisma.$transaction(async (tx) => {
+      runInTrackedTransaction(prisma, async (tx) => {
         await tx.tenant.update({ where: { id: t.id }, data: { name: "s2-must-not-persist" } });
         await writer.record(tx, a, event(t.id, { stepUpGrantId: missingGrant })); // FA005 from the guard
       }),
@@ -307,7 +311,7 @@ describe("transaction atomicity — fail closed (BA-14)", () => {
     const t = await tenant();
     const a = await actorIn(t.id, "CUSTOMER");
     await expect(
-      prisma.$transaction(async (tx) => {
+      runInTrackedTransaction(prisma, async (tx) => {
         await tx.tenant.update({ where: { id: t.id }, data: { name: "s2-must-not-persist" } });
         await writer.record(tx, a, event(t.id, { reasonCode: "bad" }));
       }),
@@ -321,11 +325,11 @@ describe("transaction atomicity — fail closed (BA-14)", () => {
     const a = await actorIn(t.id, "CUSTOMER");
     let provisionalId = "";
     await expect(
-      prisma.$transaction(async (tx) => {
+      runInTrackedTransaction(prisma, async (tx) => {
         await tx.tenant.update({ where: { id: t.id }, data: { name: "s2-must-not-persist" } });
         provisionalId = (await writer.record(tx, a, event(t.id))).id;
-        // Visible inside the transaction…
-        expect(await tx.financialAuditEvent.count({ where: { id: provisionalId } })).toBe(1);
+        // (The runtime role cannot read the audit — O7 — so visibility inside the
+        // transaction is not probed; the owner-side count below proves rollback.)
         throw new Error("later step failed");
       }),
     ).rejects.toThrow("later step failed");
@@ -339,6 +343,14 @@ describe("transaction atomicity — fail closed (BA-14)", () => {
     const a = await actorIn(t.id, "CUSTOMER");
     await expect(writer.record(prisma as never, a, event(t.id))).rejects.toMatchObject({ reason: "not_in_transaction" });
     await expect(writer.record(prisma.scoped as never, a, event(t.id))).rejects.toMatchObject({ reason: "not_in_transaction" });
+    // An interactive transaction NOT opened by runInTrackedTransaction is refused too (S5 P5).
+    await expect(prisma.$transaction((tx) => writer.record(tx, a, event(t.id)))).rejects.toMatchObject({ reason: "not_in_transaction" });
+    // A tracked client used after its transaction finished is refused.
+    let leaked: unknown;
+    await runInTrackedTransaction(prisma, async (tx) => {
+      leaked = tx;
+    });
+    await expect(writer.record(leaked as never, a, event(t.id))).rejects.toMatchObject({ reason: "not_in_transaction" });
     expect(await auditCount(t.id)).toBe(0);
   });
 });
@@ -347,7 +359,7 @@ describe("database immutability (F6)", () => {
   async function seededRow() {
     const t = await tenant();
     const a = await actorIn(t.id, "CUSTOMER");
-    const { id } = await prisma.$transaction((tx) => writer.record(tx, a, event(t.id)));
+    const { id } = await runInTrackedTransaction(prisma, (tx) => writer.record(tx, a, event(t.id)));
     return { id, t, a };
   }
 
@@ -357,6 +369,20 @@ describe("database immutability (F6)", () => {
     expect(await pgCode(() => prisma.$executeRawUnsafe(`DELETE FROM "FinancialAuditEvent" WHERE "id"=$1::uuid`, id))).toBe("42501");
     expect(await pgCode(() => prisma.$executeRawUnsafe(`TRUNCATE "FinancialAuditEvent"`))).toBe("42501");
     expect(await pgCode(() => prisma.$executeRawUnsafe(`ALTER TABLE "FinancialAuditEvent" DISABLE TRIGGER ALL`))).toBe("42501");
+  });
+
+  it("runtime role: reading the audit is refused (42501, O7)", async () => {
+    await seededRow();
+    expect(await pgCode(() => prisma.$queryRawUnsafe(`SELECT "id" FROM "FinancialAuditEvent" LIMIT 1`))).toBe("42501");
+    expect(await pgCode(() => prisma.$queryRawUnsafe(`SELECT count(*) FROM "FinancialAuditEvent"`))).toBe("42501");
+  });
+
+  it("network data cannot be stored in a new row, even by the owner (23514, O6)", async () => {
+    const t = await tenant();
+    const a = await actorIn(t.id, "CUSTOMER");
+    const base = { actorUserId: a.ctx.userId, actorTenantId: t.id, tenantId: t.id };
+    expect(await pgCode(() => rawInsert(fix, { ...base, extraCols: `,"ipAddress"`, extraVals: `,'127.0.0.1'` }))).toBe("23514");
+    expect(await pgCode(() => rawInsert(prisma, { ...base, extraCols: `,"userAgent"`, extraVals: `,'ua'` }))).toBe("23514");
   });
 
   it("table owner: the guard triggers refuse UPDATE (FA001), DELETE (FA002) and TRUNCATE (FA003)", async () => {
@@ -371,7 +397,7 @@ describe("database immutability (F6)", () => {
     const t = await tenant();
     const a = await actorIn(t.id, "CUSTOMER");
     const acct = await billingAccount(t.id);
-    await prisma.$transaction((tx) => writer.record(tx, a, event(t.id, { billingAccountId: acct.id })));
+    await runInTrackedTransaction(prisma, (tx) => writer.record(tx, a, event(t.id, { billingAccountId: acct.id })));
     expect(await pgCode(() => fix.$executeRawUnsafe(`DELETE FROM "BillingAccount" WHERE "id"=$1::uuid`, acct.id))).toBe("23001");
     await fix.membership.deleteMany({ where: { userId: a.ctx.userId } });
     await fix.session.deleteMany({ where: { userId: a.ctx.userId } });
@@ -379,12 +405,12 @@ describe("database immutability (F6)", () => {
     expect(await pgCode(() => fix.$executeRawUnsafe(`DELETE FROM "Tenant" WHERE "id"=$1::uuid`, t.id))).toBe("23001");
   });
 
-  it("runtime holds SELECT + INSERT only — no UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER", async () => {
+  it("runtime holds INSERT only — no SELECT (O7) / UPDATE / DELETE / TRUNCATE / REFERENCES / TRIGGER", async () => {
     const r = await prisma.$queryRawUnsafe<Array<Record<string, boolean>>>(
       `SELECT ${["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
         .map((p) => `has_table_privilege(current_user,'public."FinancialAuditEvent"','${p}') AS "${p}"`)
         .join(", ")}`,
     );
-    expect(r[0]).toEqual({ SELECT: true, INSERT: true, UPDATE: false, DELETE: false, TRUNCATE: false, REFERENCES: false, TRIGGER: false });
+    expect(r[0]).toEqual({ SELECT: false, INSERT: true, UPDATE: false, DELETE: false, TRUNCATE: false, REFERENCES: false, TRIGGER: false });
   });
 });
