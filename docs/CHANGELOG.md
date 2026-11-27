@@ -54,6 +54,16 @@ Format: Keep a Changelog; SemVer once releases begin.
     database by the incident are intentionally untouched (owner decision).
 
 ### Added
+- 2026-11-28 — **Phase 13-2B S4 — chart of accounts foundation** (ADR-0022 Amendment 5 BA-10; owner
+  decisions D1–D6). Migration `20261128090000_chart_of_accounts_foundation`: immutable nullable
+  `LedgerAccount.billingAccountId` with a composite same-tenant/same-currency FK (RESTRICT/RESTRICT) onto the
+  new unique `BillingAccount(id, tenantId, currency)`; three CHECKs, a per-(BillingAccount, taxonomy) partial
+  unique index and the `ledger_account_link_guard` trigger (LA001–LA007); restricted SECURITY DEFINER
+  `billing.ledger_account_open` (platform context, row lock, no dynamic SQL, PUBLIC and runtime EXECUTE
+  revoked). One taxonomy only: `customer_funds` (LIABILITY / CREDIT, PREPAID). Column-scoped privileges for
+  `telvyn_ledger_fn`. Drift (`CHART_OF_ACCOUNTS_DRIFT_OK`) and privilege checks extended. **Inert** — no
+  caller, endpoint, posting or platform account; not active commercial billing. Not deployed. Also: S2 review
+  registers reconciled (`BILLING.md`), QA-LEASE-001 recorded (`SECURITY.md`).
 - 2026-11-27 — **Phase 13-2B S2 — financial audit foundation** (ADR-0022 Amendment 5 BA-14; owner decisions
   F1–F7). Migration `20261127120000_financial_audit_foundation`: dedicated append-only `FinancialAuditEvent`
   (typed attribution columns, composite same-tenant BillingAccount FK, RESTRICT FKs to user/tenant/step-up

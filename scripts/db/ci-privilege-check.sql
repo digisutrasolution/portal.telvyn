@@ -248,4 +248,37 @@ BEGIN
 END
 $$;
 
+-- ---- Chart of Accounts runtime negatives (Phase 13-2B S4) ---------------
+-- Owner decision D5: S4 is INERT - the runtime role may NOT execute the
+-- account-opening function and has no direct LedgerAccount write. Each op MUST
+-- fail with 42501 - never a missing-object or syntax error.
+DO $$
+DECLARE
+  stmt text;
+  forbidden text[] := ARRAY[
+    'SELECT billing.ledger_account_open(uuidv7(), uuidv7(), ''USD''::"Currency", ''customer_funds'')',
+    'INSERT INTO "LedgerAccount"("tenantId","currency","code","name","type","normalBalance","billingAccountId") VALUES (uuidv7(),''USD'',''customer_funds:x'',''x'',''LIABILITY'',''CREDIT'',uuidv7())',
+    'UPDATE "LedgerAccount" SET "billingAccountId" = uuidv7() WHERE false',
+    'ALTER TABLE "LedgerAccount" DISABLE TRIGGER ledger_account_link_guard',
+    'ALTER TABLE "LedgerAccount" DROP CONSTRAINT "LedgerAccount_billing_link_tenant_chk"',
+    'DROP FUNCTION billing.ledger_account_open(uuid, uuid, "Currency", text)',
+    'DROP FUNCTION billing.ledger_account_link_guard()'
+  ];
+BEGIN
+  IF to_regprocedure('billing.ledger_account_open(uuid,uuid,"Currency",text)') IS NULL THEN
+    RAISE EXCEPTION 'PRIV_FAIL: billing.ledger_account_open missing (S4 migration not applied)';
+  END IF;
+  FOREACH stmt IN ARRAY forbidden LOOP
+    BEGIN
+      EXECUTE stmt;
+      RAISE EXCEPTION 'PRIV_FAIL: runtime role unexpectedly ALLOWED on chart of accounts: %', stmt;
+    EXCEPTION
+      WHEN insufficient_privilege THEN NULL;  -- 42501: the expected denial
+      WHEN undefined_object OR undefined_table OR undefined_function OR syntax_error THEN
+        RAISE EXCEPTION 'PRIV_FAIL: chart-of-accounts op % errored with a NON-privilege class % (not a valid denial)', stmt, SQLSTATE;
+    END;
+  END LOOP;
+END
+$$;
+
 \echo 'PRIV_CHECK_OK: restricted runtime-role privilege verification passed.'

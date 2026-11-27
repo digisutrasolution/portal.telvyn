@@ -442,3 +442,40 @@ disposable `local-verify` database (`telvyn_safety_verify`) and by CI's clean re
   (`financial_audit_tables`); `ci-privilege-check.sql` asserts 42501 for 8 forbidden operations. Inserting a
   row that references `LedgerTransaction` needs no ledger privilege (FK checks run as the table owner);
   the runtime still has no ledger SELECT.
+
+## Chart of Accounts foundation — IMPLEMENTED, INERT (Phase 13-2B S4, 2026-11-28, ADR-0022 Amendment 5)
+
+Additive migration `20261128090000_chart_of_accounts_foundation` (BA-10; owner decisions D1–D6). No
+existing object is altered; no historical migration is rewritten.
+- **Column:** `LedgerAccount.billingAccountId` uuid NULL — NULL for platform and pre-S4 accounts (D2).
+  Composite FK `(billingAccountId, tenantId, currency)` → `BillingAccount(id, tenantId, currency)` (new
+  unique index `BillingAccount_id_tenantId_currency_key`), **ON DELETE RESTRICT, ON UPDATE RESTRICT**:
+  a link is same-tenant and same-currency (BA-04) by construction.
+- **CHECKs:** `LedgerAccount_billing_link_tenant_chk` (a link needs a tenant — the FK is MATCH SIMPLE and
+  would otherwise be skipped for a NULL tenant); `LedgerAccount_billing_link_taxonomy_chk` (a linked account
+  is `customer_funds:%`, LIABILITY, CREDIT); `LedgerAccount_customer_funds_reserved_chk` (an unlinked
+  account can never use the `customer_funds:` prefix).
+- **Uniqueness (D4):** partial expression unique index `LedgerAccount_billingAccountId_taxonomy_key` on
+  `(billingAccountId, split_part(code, ':', 1)) WHERE billingAccountId IS NOT NULL` — one account per
+  BillingAccount and taxonomy, independent of any function.
+- **Trigger `ledger_account_link_guard`** (row, BEFORE INSERT OR UPDATE; `billing.ledger_account_link_guard()`
+  SECURITY INVOKER, hardened `search_path`; fires for the owner too): on INSERT with a link, the
+  BillingAccount must exist for the tenant (**LA001**), match the currency (**LA004**), be PREPAID
+  (**LA002**) and ACTIVE (**LA003**), and `code` must equal `'customer_funds:' || accountNumber` with
+  LIABILITY/CREDIT (**LA007**) — the cross-table rule a CHECK cannot express; on UPDATE the link is
+  immutable (**LA006**). `ledger_account_guard` (LG011) is unchanged.
+- **Function `billing.ledger_account_open(uuid, uuid, "Currency", text) → uuid`:** SECURITY DEFINER, owner
+  `telvyn_ledger_fn`, `search_path = pg_catalog, pg_temp`, schema-qualified, no dynamic SQL. Requires
+  `app.is_platform = on` (**LA030**) and all arguments (**LA031**); taxonomy must be `customer_funds`
+  (**LA007**). Locks the BillingAccount row (`FOR UPDATE`), so a concurrent status change or open waits until
+  COMMIT; re-validates tenant/currency/mode/status; duplicates → **LA005** (also mapped from a unique
+  violation). Inserts exactly one LedgerAccount — no transaction, leg or idempotency row.
+- **Privileges:** PUBLIC and `telvyn_app` have **no EXECUTE** (inert until S5); `telvyn_migrator` holds
+  EXECUTE (privilege-neutral: it owns both tables; used to verify the real definer path). `telvyn_ledger_fn`
+  gains column-scoped INSERT on LedgerAccount (`tenantId, currency, code, name, type, normalBalance,
+  billingAccountId`), column SELECT on BillingAccount (`id, tenantId, currency, mode, status,
+  accountNumber`) and UPDATE(`statusChangedAt`) on BillingAccount, the narrowest grant PostgreSQL accepts
+  for `FOR UPDATE` (the BillingAccount guard always overwrites that column, so it confers no effective
+  write). `billing.ledger_post` cannot reach these privileges (fixed body, no dynamic SQL). Drift
+  authority: `ledger-drift-check.sql` `CHART_OF_ACCOUNTS_DRIFT_OK`; `ci-privilege-check.sql` asserts 42501
+  for 7 runtime operations.

@@ -1276,6 +1276,12 @@ model LedgerAccount {
   status        LedgerAccountStatus @default(ACTIVE)
   retiredAt     DateTime?           @db.Timestamptz(6)
   createdAt     DateTime            @default(now()) @db.Timestamptz(6)
+  // Chart-of-accounts link (Phase 13-2B S4; ADR-0022 Amendment 5 BA-10). Immutable;
+  // NULL for platform and pre-S4 accounts. The composite FK pins the linked
+  // BillingAccount to this row's tenant AND currency (BA-04); a raw-SQL CHECK
+  // forbids a link without a tenant (MATCH SIMPLE would otherwise skip the FK).
+  billingAccountId String?         @db.Uuid
+  billingAccount   BillingAccount? @relation(fields: [billingAccountId, tenantId, currency], references: [id, tenantId, currency], onDelete: Restrict, onUpdate: Restrict)
 
   legs LedgerLeg[]
 
@@ -1430,8 +1436,11 @@ model BillingAccount {
 
   // Financial audit back-relation (Phase 13-2B S2) — no column on this table.
   financialAuditEvents FinancialAuditEvent[]
+  // Linked ledger accounts (Phase 13-2B S4) — opened only via billing.ledger_account_open.
+  ledgerAccounts LedgerAccount[]
 
   @@unique([id, tenantId]) // composite-FK target for same-tenant lineage (and S2 audit attribution)
+  @@unique([id, tenantId, currency]) // composite-FK target for LedgerAccount links (S4, BA-04)
   @@unique([successorOfId, tenantId]) // at most one successor per account
   @@unique([tenantId, provisioningKey])
   @@index([tenantId, status])

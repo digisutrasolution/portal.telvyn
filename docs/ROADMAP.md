@@ -112,8 +112,8 @@ work merged with 13-2A (PR #26).
 |---|---|---|---|
 | S3 | BillingAccount **inert DB foundation**: table + enums, immutable identity, DB lifecycle floor, label/default/lineage uniqueness, tenant-type guard, **no runtime privileges** | — | **MERGED** (PR #27, `6fea9fa`; post-merge CI #58 green); NOT deployed |
 | S1 | Financial authorization foundations: wildcard exclusion, MFA-for-finance, StepUpGrant, TOTP replay guard, retire `wallet.credit` | — | **MERGED** (PR #28, `032ee95`; post-merge CI green); NOT deployed |
-| S2 | Financial audit writer (dedicated append-only table, same transaction, fail closed) | — | **IMPLEMENTED + VERIFIED** (disposable `local-verify` env + CI); released through the S2 release PR; **inert** (empty operation catalog); NOT deployed |
-| S4 | Chart-of-accounts foundation: `LedgerAccount.billingAccountId` + `billing.ledger_account_open` | S3 | Not started |
+| S2 | Financial audit writer (dedicated append-only table, same transaction, fail closed) | — | **MERGED** (PR #31, `fd0c3d1`; post-merge CI #66 green); **inert** (empty operation catalog); NOT deployed |
+| S4 | Chart-of-accounts foundation: `LedgerAccount.billingAccountId` + `billing.ledger_account_open` | S3 | **IMPLEMENTED + VERIFIED** (disposable `local-verify` env + CI); released through the S4 PR; **inert** (no runtime EXECUTE); NOT deployed |
 | S5 | Atomic idempotent platform provisioning (grants `telvyn_app` SELECT+INSERT on BillingAccount) | S1, S2, S3, S4; account-number format + step-up TTLs | Not started |
 | S6 | Ordered account locking + full lifecycle transition matrix (column-level UPDATE grant) | S5; lock timeout/retry values | Not started |
 | S8 | Restricted metadata reads (SECURITY DEFINER read functions, masked projections) | S5 | Not started |
@@ -150,6 +150,21 @@ runtime SELECT + INSERT only; trigger refuses UPDATE/DELETE/TRUNCATE; FKs RESTRI
 `updatedAt`/`deletedAt`; IP/user agent as in `AuditLog` (retention policy open). F7 `idempotencyKey`
 reference only (never unique); `ledgerTransactionId` / `stepUpGrantId` FK RESTRICT; `correlationId`
 ≤ 128; replay suppression of audit events is the S5 caller's job.
+
+**S4 decisions (OWNER-APPROVED 2026-11-28):** D1 exactly one taxonomy, `customer_funds` — LIABILITY,
+normal balance CREDIT, PREPAID BillingAccounts only, code `customer_funds:<accountNumber>`; it represents
+customer funds held by the platform; the ledger sign convention is unchanged (debit positive, credit
+negative) and is not the customer-facing wallet balance; postpaid receivables are not implemented, and this
+is **not** the complete commercial chart of accounts (platform cash, clearing, revenue, settlement and other
+accounts are designed and accepted before their postings). D2 no new platform-owned accounts; existing
+accounts stay unlinked and compatible. D3 opening requires an existing PREPAID, ACTIVE BillingAccount of the
+matching tenant and currency, validated under a row lock; no new lifecycle transition. D4 database-level
+uniqueness (one account per BillingAccount and taxonomy), stable sanitized duplicate error, no zero-value
+posting; provisioning idempotency stays S5. D5 `billing.ledger_account_open` SECURITY DEFINER, fixed
+`search_path`, schema-qualified, no dynamic SQL, PUBLIC revoked, **no runtime EXECUTE in S4**,
+column-scoped function-owner privileges. D6 additive constraints for linkage, same tenant, same currency,
+immutable link, approved taxonomy/code/type/normal balance, uniqueness and RESTRICT; the cross-table code
+rule is a trigger, not a CHECK.
 
 ## Dependency spine (critical path)
 
