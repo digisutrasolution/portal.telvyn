@@ -6,6 +6,16 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Security
+- 2026-11-27 — **AUTO-001 — controlled autonomous development mode + project permission settings**:
+  - New committed `.claude/settings.json`: narrow allow rules for read-only Git/GitHub checks,
+    pinned pnpm typecheck/lint/test/build and read-only browser page reading; deny rules for
+    force-push / hard reset / branch deletion, `gh pr merge` / secrets / token, Prisma
+    `migrate reset` / `migrate dev` / `db push` / `--shadow-database-url`, dropping databases,
+    container/volume removal, the protected PostgreSQL 5432–5434 and Redis 6379–6381 ports, `.env`
+    reads and browser JavaScript execution. Text-matching deny rules are defense in depth, not a
+    security boundary; the INC-DB-001 E2E guards remain the enforcing control.
+  - `CLAUDE.md` gains the AUTO-001 section: stop conditions, INC-DB-001 controls kept in force,
+    approvals do not chain (commit / push / PR / merge each need explicit approval).
 - 2026-11-27 — **INC-DB-001B — fail-closed E2E test-environment safety** (incident INC-DB-001, see
   `docs/incidents/INC-DB-001.md`):
   - The default Vitest lane is now unit-only and pins `.invalid` data-plane sentinels. The package
