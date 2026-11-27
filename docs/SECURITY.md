@@ -731,9 +731,9 @@ Attaching a node's heartbeat identity (`POST /v1/telecom/nodes/:id/credential`):
   acceptance still requires a real inbound mTLS terminator (none is deployed yet),
   so the ingest remains fail-closed until then.
 
-## Financial authorization foundation — IMPLEMENTED, NOT COMMITTED (Phase 13-2B S1, 2026-11-26)
+## Financial authorization foundation — EXISTING (Phase 13-2B S1, 2026-11-26; merged PR #28)
 
-ADR-0022 Amendment 5 BA-08/BA-15; owner decisions G1–G4. Verified on the isolated env only.
+ADR-0022 Amendment 5 BA-08/BA-15; owner decisions G1–G4. Merged to `main`; NOT deployed.
 
 - **Wildcard exclusion:** a catalog permission flagged `wildcardExcluded` (high-risk financial authority)
   is never covered by `*` or `x.*` in `grantCovers`/`isAuthorized`, and is never materialized by
@@ -747,7 +747,7 @@ ADR-0022 Amendment 5 BA-08/BA-15; owner decisions G1–G4. Verified on the isola
   same-transaction financial audit) is S2/S5 work.
 - **`wallet.credit` retired** (catalog + stored rows); guarded by tests against reintroduction.
 - **Server-side step-up (`StepUpService`, inert):** `issue` needs a fresh TOTP code (recovery codes are
-  NOT accepted for financial step-up; the replay guard applies), an ACTIVE user with MFA, a live session of
+  NOT accepted for financial step-up — an S1 implementation choice, **pending owner ratification before S5**; the replay guard applies), an ACTIVE user with MFA, a live session of
   that user whose active tenant is the bound tenant, and an ACTIVE membership in an ACTIVE tenant; it
   records a grant valid **300 s** (G1). `consume` single-uses it in one `UPDATE` that re-checks user,
   session, tenant, purpose, strict expiry, session liveness, user status and MFA, and can run inside the
@@ -758,8 +758,36 @@ ADR-0022 Amendment 5 BA-08/BA-15; owner decisions G1–G4. Verified on the isola
   flows. **Pre-existing, out of scope:** `setMemberRoles` lets any `member.manage` holder assign any role
   in the tenant, including `owner` (`*`); wildcard exclusion now keeps high-risk financial keys out of that
   path, but general role-escalation hardening needs its own decision.
+  **This gap is a blocking security gate before S5 and before any financial permission grant** (recorded
+  2026-11-27, S2 review); it is not fixed in S2.
 
-## E2E target safety — IMPLEMENTED, NOT COMMITTED (INC-DB-001B, 2026-11-27)
+## Financial audit foundation — IMPLEMENTED, INERT (Phase 13-2B S2, 2026-11-27)
+
+ADR-0022 Amendment 5 BA-14; owner decisions F1–F7. A foundation only — NOT deployed and NOT active commercial billing.
+
+- **Separate from other audit planes:** `FinancialAuditEvent` records financial state changes; `AuditLog`
+  (operational events), `SecurityEvent`/`LoginAttempt` (authentication) and the ledger (money history) are
+  unchanged. An audit row is never a ledger entry and never commercial authorization.
+- **Same transaction, fail closed:** `FinancialAuditWriter.record(tx, actor, event)` holds no database client
+  of its own; it refuses a base client (anything exposing `$transaction`), opens no nested transaction, never
+  retries and never swallows an error. Audit failure rolls the change back; a later failure rolls the audit
+  row back. A rolled-back transaction leaves no audit row — denied-attempt recording (own transaction) is S5 (F2).
+- **Attribution:** the actor comes only from the server-derived `TenantContext` (the event input has no actor
+  field); human actors only (F3). A non-platform actor can only audit its own tenant (writer + DB FA004); a
+  cited step-up grant must be the actor's (FA005); a cross-tenant BillingAccount reference is impossible
+  (composite FK).
+- **Metadata:** plain objects, ≤ 4096 bytes / ≤ 50 keys (writer and DB). A recursive denylist of sensitive key
+  names (password, secret, token, TOTP/OTP/MFA, recovery, credential, CVV/CVC, PAN/card number, connection
+  string/DSN/database URL, API/private/access keys) rejects the whole event; errors never echo submitted
+  values. Raw step-up evidence is never stored — only the grant id. No free-text reason.
+- **Immutability:** runtime SELECT + INSERT only; UPDATE/DELETE/TRUNCATE refused by privilege (42501) and, for
+  the owner, by the guard triggers (FA001–FA003). Not claimed against superusers or an owner disabling triggers.
+- **Inert:** the operation catalog is empty (F1); only `BillingModule` imports the writer (unit-tested); no
+  endpoint, caller, audit read API or financial grant exists.
+- **Open:** retention policy for stored IP address / user agent (append-only rows keep them indefinitely);
+  idempotency-key format and replay audit suppression (S5); audit read projections (S8).
+
+## E2E target safety — MERGED (INC-DB-001B, 2026-11-27; PR #29)
 
 Corrective controls for incident INC-DB-001 (`docs/incidents/INC-DB-001.md`). This is a
 safety interlock against configuration mistakes, **not** a security boundary against a

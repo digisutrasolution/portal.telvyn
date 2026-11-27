@@ -111,8 +111,8 @@ work merged with 13-2A (PR #26).
 | Slice | Scope | Depends on | Status |
 |---|---|---|---|
 | S3 | BillingAccount **inert DB foundation**: table + enums, immutable identity, DB lifecycle floor, label/default/lineage uniqueness, tenant-type guard, **no runtime privileges** | — | **MERGED** (PR #27, `6fea9fa`; post-merge CI #58 green); NOT deployed |
-| S1 | Financial authorization foundations: wildcard exclusion, MFA-for-finance, StepUpGrant, TOTP replay guard, retire `wallet.credit` | — | **IMPLEMENTED + VERIFIED locally (isolated env); not committed** |
-| S2 | Financial audit writer (dedicated append-only table, same transaction, fail closed) | — | Not started |
+| S1 | Financial authorization foundations: wildcard exclusion, MFA-for-finance, StepUpGrant, TOTP replay guard, retire `wallet.credit` | — | **MERGED** (PR #28, `032ee95`; post-merge CI green); NOT deployed |
+| S2 | Financial audit writer (dedicated append-only table, same transaction, fail closed) | — | **IMPLEMENTED + VERIFIED** (disposable `local-verify` env + CI); released through the S2 release PR; **inert** (empty operation catalog); NOT deployed |
 | S4 | Chart-of-accounts foundation: `LedgerAccount.billingAccountId` + `billing.ledger_account_open` | S3 | Not started |
 | S5 | Atomic idempotent platform provisioning (grants `telvyn_app` SELECT+INSERT on BillingAccount) | S1, S2, S3, S4; account-number format + step-up TTLs | Not started |
 | S6 | Ordered account locking + full lifecycle transition matrix (column-level UPDATE grant) | S5; lock timeout/retry values | Not started |
@@ -136,6 +136,20 @@ only — never DELETE. G3 S1 adds the `wildcardExcluded` catalog flag and enforc
 financial permission key (the first is named in S5). G4 in S1, conferring any wildcard-excluded
 permission through a custom role or role assignment **fails closed**; the governed path (step-up, no
 self-assignment, same-transaction audit) opens in S2/S5.
+
+**S2 decisions (OWNER-APPROVED 2026-11-27):** F1 the `operation` column is CHECK-formatted and the code
+catalog is **empty in S2** (first operation named in S5; the writer refuses anything outside it). F2 one
+table with `decision` ALLOWED/DENIED; S2 writes ALLOWED only, in the caller's transaction; the
+denied-attempt writer (own transaction) is **S5**. F3 human actors only — `actorUserId` + `actorTenantId`
+NOT NULL, FK RESTRICT; no actor type or system actor until service identities exist. F4 `tenantId` NOT
+NULL (owner of the affected object); `billingAccountId` nullable with composite FK `(billingAccountId,
+tenantId)` → `BillingAccount(id, tenantId)`; actor tenant must equal owner tenant unless PLATFORM. F5
+`before`/`after`/`details` plain jsonb objects ≤ 4096 bytes and ≤ 50 keys (writer + DB CHECK), recursive
+sensitive-key denylist rejects the whole event, `reasonCode` `^[A-Z][A-Z0-9_]{2,63}$`, no free text. F6
+runtime SELECT + INSERT only; trigger refuses UPDATE/DELETE/TRUNCATE; FKs RESTRICT; no
+`updatedAt`/`deletedAt`; IP/user agent as in `AuditLog` (retention policy open). F7 `idempotencyKey`
+reference only (never unique); `ledgerTransactionId` / `stepUpGrantId` FK RESTRICT; `correlationId`
+≤ 128; replay suppression of audit events is the S5 caller's job.
 
 ## Dependency spine (critical path)
 

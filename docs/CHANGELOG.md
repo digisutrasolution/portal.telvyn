@@ -54,6 +54,14 @@ Format: Keep a Changelog; SemVer once releases begin.
     database by the incident are intentionally untouched (owner decision).
 
 ### Added
+- 2026-11-27 — **Phase 13-2B S2 — financial audit foundation** (ADR-0022 Amendment 5 BA-14; owner decisions
+  F1–F7). Migration `20261127120000_financial_audit_foundation`: dedicated append-only `FinancialAuditEvent`
+  (typed attribution columns, composite same-tenant BillingAccount FK, RESTRICT FKs to user/tenant/step-up
+  grant/ledger transaction; format and metadata-size CHECKs; guard triggers FA001–FA005; runtime SELECT +
+  INSERT only). Internal `FinancialAuditWriter`: writes only through the caller's transaction (fail closed,
+  no fallback client, no retry), server-derived actor, sensitive-key denylist. **Inert** — empty operation
+  catalog, no endpoint or caller; not active commercial billing. Grant, drift and privilege-check scripts
+  extended. Reconciled onto `main` after INC-DB-001B (#29) and AUTO-001 (#30). Not deployed.
 - 2026-11-26 — **Phase 13-2B S1 — financial authorization foundation** (ADR-0022 Amendment 5 BA-08,
   BA-15; owner decisions G1–G4). Permission catalog gains the `wildcardExcluded` flag: such keys are never
   covered by `*`/`x.*`, never materialized by wildcard expansion (seed and runtime), effective only for users

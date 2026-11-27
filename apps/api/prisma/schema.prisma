@@ -45,6 +45,8 @@ model User {
   securityEvents SecurityEvent[]
   memberships    Membership[]
   stepUpGrants   StepUpGrant[]
+  // Financial audit (Phase 13-2B S2, BA-14): events this user performed (FK RESTRICT).
+  financialAuditEvents FinancialAuditEvent[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -111,6 +113,11 @@ model Tenant {
   // Commercial billing accounts (Phase 13-2B S3; ADR-0022 Amendment 5 BA-01).
   // Back-relation only — no new column on Tenant. FK is ON DELETE RESTRICT.
   billingAccounts BillingAccount[]
+
+  // Financial audit (Phase 13-2B S2; BA-14, owner decisions F3/F4). Back-relations
+  // only — no new column on Tenant. FKs are ON DELETE RESTRICT (audit is evidence).
+  financialAuditEventsOwned FinancialAuditEvent[] @relation("FinancialAuditOwnerTenant")
+  financialAuditEventsActed FinancialAuditEvent[] @relation("FinancialAuditActorTenant")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1305,6 +1312,8 @@ model LedgerTransaction {
 
   legs           LedgerLeg[]
   idempotencyKey IdempotencyKey? // 1:1 via IdempotencyKey.resultTransactionId (unique)
+  // Financial audit back-relation (Phase 13-2B S2) — no column on this table.
+  financialAuditEvents FinancialAuditEvent[]
 
   @@index([ownerTenantId, effectiveAt])
   @@index([correlationId])
@@ -1419,7 +1428,10 @@ model BillingAccount {
   createdAt               DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt               DateTime             @updatedAt @db.Timestamptz(6)
 
-  @@unique([id, tenantId]) // composite-FK target for same-tenant lineage
+  // Financial audit back-relation (Phase 13-2B S2) — no column on this table.
+  financialAuditEvents FinancialAuditEvent[]
+
+  @@unique([id, tenantId]) // composite-FK target for same-tenant lineage (and S2 audit attribution)
   @@unique([successorOfId, tenantId]) // at most one successor per account
   @@unique([tenantId, provisioningKey])
   @@index([tenantId, status])
@@ -1448,7 +1460,76 @@ model StepUpGrant {
   consumedAt DateTime? @db.Timestamptz(6)
   createdAt  DateTime  @default(now()) @db.Timestamptz(6)
 
+  // Financial audit back-relation (Phase 13-2B S2) — no column on this table.
+  financialAuditEvents FinancialAuditEvent[]
+
   @@index([userId, sessionId])
   @@index([tenantId])
   @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Financial audit event (ADR-0022 Amendment 5 BA-14, Phase 13-2B S2; owner
+// decisions F1–F7, 2026-11-27). A dedicated, APPEND-ONLY record of a financial
+// state change, written by FinancialAuditWriter IN THE CALLER'S TRANSACTION
+// (audit failure rolls the change back — fail closed). Distinct from AuditLog
+// (operational events), SecurityEvent (authentication) and the ledger (money
+// history): an audit row is never a substitute for a ledger entry.
+//
+// INERT in S2: the operation catalog is empty (F1 — the first operation is
+// named in S5), so no production code path can write a row yet.
+//
+// Attribution (F3/F4): a HUMAN actor only (no system actor until service
+// identities are designed, BA-15) — actorUserId + actorTenantId (the session's
+// tenant) are distinct from tenantId (owner of the affected financial object),
+// so a platform actor stays distinguishable from tenant ownership. The DB guard
+// requires actorTenantId = tenantId unless the actor's tenant is PLATFORM.
+// billingAccountId is pinned to tenantId by a composite FK (no cross-tenant
+// reference is representable).
+//
+// Raw SQL in the migration (verified by scripts/db/ledger-drift-check.sql):
+// format/size CHECKs (F5), the billing.financial_audit_event_guard trigger
+// (no UPDATE / DELETE / TRUNCATE, attribution + step-up binding, DB-stamped
+// createdAt — F6), and runtime SELECT + INSERT only (F6).
+// No updatedAt/deletedAt: rows are evidence and are never changed or removed.
+// ---------------------------------------------------------------------------
+enum FinancialAuditDecision {
+  ALLOWED // written in the caller's transaction by FinancialAuditWriter (S2)
+  DENIED // reserved: the denied-attempt writer (own transaction) is S5 (F2)
+}
+
+model FinancialAuditEvent {
+  id                  String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  operation           String // catalog identifier (F1), CHECK-formatted
+  decision            FinancialAuditDecision
+  actorUserId         String                 @db.Uuid
+  actorUser           User                   @relation(fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  actorTenantId       String                 @db.Uuid
+  actorTenant         Tenant                 @relation("FinancialAuditActorTenant", fields: [actorTenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  tenantId            String                 @db.Uuid // owner of the affected financial object
+  tenant              Tenant                 @relation("FinancialAuditOwnerTenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  billingAccountId    String?                @db.Uuid
+  billingAccount      BillingAccount?        @relation(fields: [billingAccountId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  permission          String? // the permission key that authorized the operation
+  stepUpGrantId       String?                @db.Uuid
+  stepUpGrant         StepUpGrant?           @relation(fields: [stepUpGrantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reasonCode          String // CHECK ^[A-Z][A-Z0-9_]{2,63}$; no free text (F5)
+  before              Json? // plain object, <= 4096 bytes, <= 50 keys (F5)
+  after               Json?
+  details             Json?
+  idempotencyKey      String? // reference only — never unique, never deduplicated (F7)
+  ledgerTransactionId String?                @db.Uuid
+  ledgerTransaction   LedgerTransaction?     @relation(fields: [ledgerTransactionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  correlationId       String?
+  ipAddress           String?
+  userAgent           String?
+  createdAt           DateTime               @default(now()) @db.Timestamptz(6)
+
+  @@index([tenantId, createdAt])
+  @@index([billingAccountId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([actorTenantId, createdAt])
+  @@index([stepUpGrantId])
+  @@index([ledgerTransactionId])
+  @@index([correlationId])
 }

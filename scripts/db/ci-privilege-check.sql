@@ -215,4 +215,37 @@ BEGIN
 END
 $$;
 
+-- ---- FinancialAuditEvent runtime negatives (Phase 13-2B S2) --------------
+-- Owner decision F6: runtime holds SELECT + INSERT only (append-only audit).
+-- Every op below MUST fail with 42501 - never a missing-object or syntax error.
+DO $$
+DECLARE
+  stmt text;
+  forbidden text[] := ARRAY[
+    'UPDATE "FinancialAuditEvent" SET "reasonCode" = ''X_Y_Z'' WHERE false',
+    'UPDATE "FinancialAuditEvent" SET "tenantId" = uuidv7() WHERE false',
+    'DELETE FROM "FinancialAuditEvent" WHERE false',
+    'TRUNCATE TABLE "FinancialAuditEvent"',
+    'ALTER TABLE "FinancialAuditEvent" DISABLE TRIGGER ALL',
+    'ALTER TABLE "FinancialAuditEvent" DROP CONSTRAINT "FinancialAuditEvent_reason_code_format_chk"',
+    'DROP FUNCTION billing.financial_audit_event_guard()',
+    'DROP FUNCTION billing.financial_audit_json_ok(jsonb)'
+  ];
+BEGIN
+  IF to_regclass('public."FinancialAuditEvent"') IS NULL THEN
+    RAISE EXCEPTION 'PRIV_FAIL: FinancialAuditEvent missing (S2 migration not applied)';
+  END IF;
+  FOREACH stmt IN ARRAY forbidden LOOP
+    BEGIN
+      EXECUTE stmt;
+      RAISE EXCEPTION 'PRIV_FAIL: runtime role unexpectedly ALLOWED on FinancialAuditEvent: %', stmt;
+    EXCEPTION
+      WHEN insufficient_privilege THEN NULL;  -- 42501: the expected denial
+      WHEN undefined_object OR undefined_table OR undefined_function OR syntax_error THEN
+        RAISE EXCEPTION 'PRIV_FAIL: FinancialAuditEvent op % errored with a NON-privilege class % (not a valid denial)', stmt, SQLSTATE;
+    END;
+  END LOOP;
+END
+$$;
+
 \echo 'PRIV_CHECK_OK: restricted runtime-role privilege verification passed.'

@@ -376,10 +376,10 @@ proposes no drops):
 ownership-transfer window is needed. Error mapping note: Tenant hard-delete against an owning account
 raises **23001** (`restrict_violation`, ON DELETE RESTRICT), not 23503.
 
-## Financial step-up + TOTP replay guard — IMPLEMENTED, NOT COMMITTED (Phase 13-2B S1, 2026-11-26, ADR-0022 Amendment 5)
+## Financial step-up + TOTP replay guard — EXISTING (Phase 13-2B S1, 2026-11-26, ADR-0022 Amendment 5)
 
 Additive migration `20261127090000_financial_authz_foundation` (BA-08, BA-15; owner decisions G1/G2).
-Verified on the isolated PG18 env (`telvyn_ledger_dev` + `telvyn_ledger_e2e`); **not committed; NOT deployed**.
+Merged to `main` (PR #28, merge `032ee95`); **NOT deployed**.
 
 - **`User.mfaLastTotpStep`** (`INTEGER`, nullable) — the last accepted absolute TOTP time step. A code is
   accepted only for a strictly greater step, recorded by one conditional `UPDATE` (concurrency-safe), on
@@ -400,3 +400,45 @@ Verified on the isolated PG18 env (`telvyn_ledger_dev` + `telvyn_ledger_e2e`); *
 - **Privileges (G2):** `telvyn_app` holds SELECT, INSERT and column-level UPDATE(`consumedAt`) on
   `StepUpGrant` — no table UPDATE, no DELETE/TRUNCATE. Both grant scripts handle it explicitly
   (`step_up_tables`); `ci-privilege-check.sql` asserts 42501 for 8 forbidden operations.
+
+## Financial audit event — IMPLEMENTED, INERT (Phase 13-2B S2, 2026-11-27, ADR-0022 Amendment 5)
+
+Additive migration `20261127120000_financial_audit_foundation` (BA-14; owner decisions F1–F7). Verified on the
+isolated PG18 env (`telvyn_ledger_dev` + `telvyn_ledger_e2e`), then re-verified after reconciliation on the
+disposable `local-verify` database (`telvyn_safety_verify`) and by CI's clean replay; **NOT deployed**.
+
+- **`FinancialAuditEvent`** (UUIDv7, `timestamptz`, append-only evidence — no `updatedAt`/`deletedAt`):
+
+  | Column | Type / null | Purpose and rules |
+  |---|---|---|
+  | `operation` | text NOT NULL | Catalog identifier (F1); CHECK `^[a-z][a-z0-9_.]{2,63}$` |
+  | `decision` | enum `FinancialAuditDecision` NOT NULL | `ALLOWED` (S2 writer) / `DENIED` (reserved, S5 — F2) |
+  | `actorUserId` | uuid NOT NULL, FK `User` RESTRICT | Human actor from the server-derived context (F3) |
+  | `actorTenantId` | uuid NOT NULL, FK `Tenant` RESTRICT | The session's tenant — keeps a platform actor distinct from the owner (F3/F4) |
+  | `tenantId` | uuid NOT NULL, FK `Tenant` RESTRICT | Owner of the affected financial object (F4) |
+  | `billingAccountId` | uuid NULL, composite FK `(billingAccountId, tenantId)` → `BillingAccount(id, tenantId)` RESTRICT | Cross-tenant account reference not representable (F4) |
+  | `permission` | text NULL | Key that authorized the operation; same identifier CHECK |
+  | `stepUpGrantId` | uuid NULL, FK `StepUpGrant` RESTRICT | Must belong to the actor and actor tenant (FA005) |
+  | `reasonCode` | text NOT NULL | CHECK `^[A-Z][A-Z0-9_]{2,63}$`; no free text (F5) |
+  | `before` / `after` / `details` | jsonb NULL | Plain object, ≤ 4096 bytes (jsonb text) and ≤ 50 top-level keys — CHECK via `billing.financial_audit_json_ok` (F5) |
+  | `idempotencyKey` | text NULL | Reference only — never unique, never deduplicated (F7) |
+  | `ledgerTransactionId` | uuid NULL, FK `LedgerTransaction` RESTRICT | Link to the posted ledger transaction (F7) |
+  | `correlationId` | text NULL | CHECK length 1–128 (F7) |
+  | `ipAddress` / `userAgent` | text NULL | As `AuditLog` (user agent ≤ 512); personal data — retention policy open (F6) |
+  | `createdAt` | timestamptz NOT NULL | Stamped from the DB clock by the guard (client value ignored) |
+
+  All six FKs are ON DELETE RESTRICT **and** ON UPDATE RESTRICT. Indexes: `(tenantId, createdAt)`,
+  `(billingAccountId, createdAt)`, `(actorUserId, createdAt)`, `(actorTenantId, createdAt)`, `stepUpGrantId`,
+  `ledgerTransactionId`, `correlationId`. Not in `TENANT_SCOPED_MODELS`: attribution is explicit (a platform
+  actor may audit another tenant's object), and the table is written only by `FinancialAuditWriter`.
+- **Raw SQL** (drift authority: `ledger-drift-check.sql` `FINANCIAL_AUDIT_DRIFT_OK`): 7 CHECKs; triggers
+  `financial_audit_event_guard` (row, BEFORE INSERT/UPDATE/DELETE) and `financial_audit_event_no_truncate`
+  (statement, BEFORE TRUNCATE) → `billing.financial_audit_event_guard()` (SECURITY INVOKER, hardened
+  `search_path`): **FA001** UPDATE refused, **FA002** DELETE refused, **FA003** TRUNCATE refused, **FA004**
+  actor tenant ≠ owner tenant and not PLATFORM, **FA005** step-up grant not the actor's. The triggers fire
+  for the table owner too; a superuser/owner disabling triggers is the documented limit.
+- **Privileges (F6):** `telvyn_app` holds SELECT + INSERT only — no UPDATE/DELETE/TRUNCATE/REFERENCES/
+  TRIGGER, no column grants; PUBLIC nothing. Both grant scripts handle it explicitly
+  (`financial_audit_tables`); `ci-privilege-check.sql` asserts 42501 for 8 forbidden operations. Inserting a
+  row that references `LedgerTransaction` needs no ledger privilege (FK checks run as the table owner);
+  the runtime still has no ledger SELECT.

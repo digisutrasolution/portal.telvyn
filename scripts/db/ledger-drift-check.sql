@@ -298,3 +298,80 @@ END
 $$;
 
 \echo 'FINANCIAL_AUTHZ_DRIFT_OK: StepUpGrant constraints, guard trigger, runtime grant and wallet.credit retirement verified.'
+
+-- =============================================================================
+-- Financial audit foundation (Phase 13-2B S2; ADR-0022 Amendment 5 BA-14; owner
+-- decisions F1-F7). FinancialAuditEvent CHECKs, guard triggers and the
+-- append-only runtime grant are raw SQL - this block is their drift authority.
+-- =============================================================================
+DO $$
+DECLARE
+  v int; v_txt text;
+BEGIN
+  IF to_regclass('public."FinancialAuditEvent"') IS NULL THEN
+    RAISE EXCEPTION 'DRIFT: table public.FinancialAuditEvent missing';
+  END IF;
+
+  -- Evidence: no soft delete/updatedAt; all 6 FKs ON DELETE RESTRICT + ON UPDATE RESTRICT.
+  SELECT count(*) INTO v FROM information_schema.columns
+   WHERE table_schema='public' AND table_name='FinancialAuditEvent' AND column_name IN ('deletedAt','updatedAt');
+  IF v <> 0 THEN RAISE EXCEPTION 'DRIFT: FinancialAuditEvent must not have deletedAt/updatedAt'; END IF;
+  SELECT count(*) INTO v FROM pg_constraint
+   WHERE contype='f' AND conrelid='public."FinancialAuditEvent"'::regclass
+     AND confdeltype='r' AND confupdtype='r';
+  IF v <> 6 THEN RAISE EXCEPTION 'DRIFT: FinancialAuditEvent must have 6 RESTRICT/RESTRICT FKs (found %)', v; END IF;
+  -- Same-tenant account attribution (F4): composite FK (billingAccountId, tenantId).
+  SELECT count(*) INTO v FROM pg_constraint
+   WHERE conname='FinancialAuditEvent_billingAccountId_tenantId_fkey' AND contype='f'
+     AND confrelid='public."BillingAccount"'::regclass AND array_length(conkey,1)=2;
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: composite BillingAccount FK (billingAccountId, tenantId) missing'; END IF;
+
+  -- CHECKs: identifier formats, correlation length, metadata shape (F1/F5/F7).
+  SELECT count(*) INTO v FROM pg_constraint
+   WHERE conrelid='public."FinancialAuditEvent"'::regclass AND contype='c'
+     AND conname IN ('FinancialAuditEvent_operation_format_chk','FinancialAuditEvent_permission_format_chk',
+                     'FinancialAuditEvent_reason_code_format_chk','FinancialAuditEvent_correlation_id_len_chk',
+                     'FinancialAuditEvent_before_shape_chk','FinancialAuditEvent_after_shape_chk',
+                     'FinancialAuditEvent_details_shape_chk');
+  IF v <> 7 THEN RAISE EXCEPTION 'DRIFT: FinancialAuditEvent CHECK constraints missing (found % of 7)', v; END IF;
+  SELECT prosrc INTO v_txt FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+   WHERE n.nspname='billing' AND p.proname='financial_audit_json_ok' AND p.provolatile='i';
+  IF v_txt IS NULL OR v_txt NOT LIKE '%4096%' OR v_txt NOT LIKE '%<= 50%' THEN
+    RAISE EXCEPTION 'DRIFT: billing.financial_audit_json_ok missing, not IMMUTABLE, or bounds changed';
+  END IF;
+
+  -- Guard triggers: row BEFORE INSERT/UPDATE/DELETE + statement BEFORE TRUNCATE, enabled.
+  SELECT count(*) INTO v FROM pg_trigger
+   WHERE tgname='financial_audit_event_guard' AND tgrelid='public."FinancialAuditEvent"'::regclass
+     AND tgenabled='O' AND (tgtype & 1)=1 AND (tgtype & 2)=2 AND (tgtype & 4)=4 AND (tgtype & 8)=8 AND (tgtype & 16)=16;
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: financial_audit_event_guard trigger missing, disabled or wrong timing/events'; END IF;
+  SELECT count(*) INTO v FROM pg_trigger
+   WHERE tgname='financial_audit_event_no_truncate' AND tgrelid='public."FinancialAuditEvent"'::regclass
+     AND tgenabled='O' AND (tgtype & 1)=0 AND (tgtype & 2)=2 AND (tgtype & 32)=32;
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: financial_audit_event_no_truncate trigger missing, disabled or wrong timing'; END IF;
+  SELECT count(*) INTO v FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+   WHERE n.nspname='billing' AND p.proname IN ('financial_audit_event_guard','financial_audit_json_ok')
+     AND NOT p.prosecdef AND 'search_path=pg_catalog, pg_temp' = ANY(p.proconfig);
+  IF v <> 2 THEN RAISE EXCEPTION 'DRIFT: financial audit functions must be SECURITY INVOKER with hardened search_path'; END IF;
+
+  -- Runtime: SELECT + INSERT only (F6); no column grants; PUBLIC nothing.
+  IF NOT has_table_privilege('telvyn_app','public."FinancialAuditEvent"','SELECT')
+     OR NOT has_table_privilege('telvyn_app','public."FinancialAuditEvent"','INSERT') THEN
+    RAISE EXCEPTION 'DRIFT: telvyn_app must have SELECT and INSERT on FinancialAuditEvent';
+  END IF;
+  FOR v_txt IN SELECT unnest(ARRAY['UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) LOOP
+    IF has_table_privilege('telvyn_app','public."FinancialAuditEvent"',v_txt) THEN
+      RAISE EXCEPTION 'DRIFT: telvyn_app must NOT have % on FinancialAuditEvent', v_txt;
+    END IF;
+  END LOOP;
+  SELECT count(*) INTO v FROM information_schema.column_privileges
+   WHERE table_schema='public' AND table_name='FinancialAuditEvent' AND grantee='telvyn_app'
+     AND privilege_type IN ('UPDATE','REFERENCES');
+  IF v <> 0 THEN RAISE EXCEPTION 'DRIFT: telvyn_app must have no column-level UPDATE/REFERENCES on FinancialAuditEvent'; END IF;
+  SELECT count(*) INTO v FROM information_schema.table_privileges
+   WHERE table_schema='public' AND table_name='FinancialAuditEvent' AND grantee='PUBLIC';
+  IF v <> 0 THEN RAISE EXCEPTION 'DRIFT: PUBLIC must have no privilege on FinancialAuditEvent'; END IF;
+END
+$$;
+
+\echo 'FINANCIAL_AUDIT_DRIFT_OK: FinancialAuditEvent constraints, guard triggers and append-only runtime grant verified.'
