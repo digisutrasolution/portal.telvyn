@@ -68,6 +68,16 @@ export class RolesService {
     const role = await this.prisma.role.findFirst({ where: { id: roleId, tenantId: ctx.tenantId, deletedAt: null } });
     if (!role) throw new NotFoundException("Role not found");
     if (role.isSystem) throw new ForbiddenException("System roles cannot be deleted");
+    // P1: deleting a role strips its permissions from every holder, so it is a
+    // role change on their behalf — only allowed when the actor holds everything
+    // the role confers (an actor cannot strip authority it does not itself hold).
+    const keys = await this.prisma.rolePermission.findMany({
+      where: { roleId: role.id },
+      select: { permission: { select: { key: true } } },
+    });
+    if (expandGrants(keys.map((k) => k.permission.key)).some((k) => !ctx.permissions.has(k))) {
+      throw new ForbiddenException("Cannot delete a role that grants permissions you do not hold");
+    }
     await this.prisma.role.update({ where: { id: role.id }, data: { deletedAt: new Date() } });
   }
 }

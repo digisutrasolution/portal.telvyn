@@ -97,7 +97,7 @@ overwritten; every item of each maps below. Nothing here closes an outstanding f
 | X-R07 fresh migration replay | M-R10 | **CLOSED** — CI replays every migration into an empty database (S2: 20; S4: 21) | — |
 | X-R08 actual skipped-test reasons | — (reported "not confirmed" in S2) | **CLOSED** (SOURCE-INSPECTED 2026-11-28): `e2e-lease-drill` runs only with `TELVYN_E2E_LEASE_DRILL=loss\|setup-fail` on `local-verify`; `telecom-engine-live` and `telecom-engine-apply-live` run only with `ENGINE_LIVE_MTLS_DIR` (live Kamailio + mTLS). 3 files / 3 tests skipped by design | — |
 | X-R09 recovery-code policy | (S1 carried gate) | OPEN — S1 excludes recovery codes from financial step-up; **owner ratification pending** | before S5 |
-| X-R10 role escalation | (S1 carried gate) | OPEN — `setMemberRoles` lets any `member.manage` holder assign `owner`; **blocks S5 and any financial permission grant** | before S5 |
+| X-R10 role escalation | (S1 carried gate) | RESOLVED by P1 (2026-11-28) — `setMemberRoles` locked, authority re-derived, no delegation beyond held permissions, protected/last owner, self-change refused (`docs/SECURITY.md`) | before S5 |
 | — | M-R01 `idempotencyKey` format/length | OPEN (F7) | S5 |
 | — | M-R02 IP / user-agent retention | OPEN — owner decision | owner |
 | — | M-R05 denied-attempt writer | OPEN (F2) | S5 |
