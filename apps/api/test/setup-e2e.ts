@@ -1,52 +1,24 @@
 /**
- * Fail-closed E2E target guard (Slice 13-1A.4b).
+ * E2E per-file setup (Slice 13-1A.4b; replaced by the two-stage guard in
+ * INC-DB-001B). Runs before each E2E file is imported: re-validates Gate A on
+ * the worker environment and requires the global setup's Gate B verification
+ * of the same targets (see test/e2e-target-guard.ts).
  *
- * The E2E suite must connect ONLY to an isolated, disposable, non-production
- * data plane. This runs before any E2E file and throws — aborting the suite —
- * unless the targets are explicitly set and isolated. It neutralizes the legacy
- * `process.env.X ??= "...shared dev..."` fallbacks (ports 5432/5433, Redis
- * 6379/6380) by requiring the vars to be set and refusing shared targets.
- *
- * Local (default): DATABASE_URL must be the disposable telvyn_ledger_e2e on
- * 127.0.0.1:5434, REDIS_URL the isolated Redis on 127.0.0.1:6381.
- * CI: set TELVYN_E2E_ALLOW_TARGET=1 to use a CI-managed isolated data plane;
- * both URLs are still required, and the shared dev ports remain refused.
+ * INC-DB-001B-PRE2 (N2): registers the worker execution fence as the FIRST
+ * beforeAll and the LAST afterAll of every file (setup-file hooks are registered
+ * before the file's own; Vitest's default "stack" order runs after-hooks in
+ * reverse). The fence terminates this worker if the exclusive run lease is lost
+ * (see test/e2e-worker-fence.ts); if it cannot be joined, the worker exits
+ * before any of the file's own hooks run.
  */
-const DB = process.env.DATABASE_URL;
-const REDIS = process.env.REDIS_URL;
+import { afterAll, beforeAll } from "vitest";
+import "./e2e-guard";
+import { startWorkerFence } from "./e2e-worker-fence";
 
-function fail(msg: string): never {
-  throw new Error(`[e2e-target-guard] ${msg}`);
-}
-
-if (!DB) fail("DATABASE_URL must be explicitly set for E2E — no shared-DB fallback is permitted.");
-if (!REDIS) fail("REDIS_URL must be explicitly set for E2E — no shared-Redis fallback is permitted.");
-
-// Shared dev/other-project ports are refused in every mode.
-if (/:5432(\/|\b)/.test(DB) || /:5433(\/|\b)/.test(DB)) {
-  fail(`DATABASE_URL targets a shared dev PostgreSQL port (5432/5433); refusing.`);
-}
-if (/:6379(\/|\b)/.test(REDIS) || /:6380(\/|\b)/.test(REDIS)) {
-  fail(`REDIS_URL targets a shared Redis port (6379/6380); refusing.`);
-}
-
-const ciAllowed = process.env.TELVYN_E2E_ALLOW_TARGET === "1";
-if (!ciAllowed) {
-  if (!/@127\.0\.0\.1:5434\//.test(DB) || !/\/telvyn_ledger_e2e(\?|$)/.test(DB)) {
-    fail("DATABASE_URL must target the disposable telvyn_ledger_e2e database on 127.0.0.1:5434 (or set TELVYN_E2E_ALLOW_TARGET=1 for a CI-isolated instance).");
-  }
-  if (!/@?127\.0\.0\.1:6381(\/|\b)/.test(REDIS)) {
-    fail("REDIS_URL must target the isolated Redis on 127.0.0.1:6381 (or set TELVYN_E2E_ALLOW_TARGET=1 for a CI-isolated instance).");
-  }
-}
-
-// The privileged fixture connection (setup/teardown) must also be isolated.
-const FIX = process.env.E2E_FIXTURE_DATABASE_URL;
-if (FIX) {
-  if (/:5432(\/|\b)/.test(FIX) || /:5433(\/|\b)/.test(FIX)) {
-    fail("E2E_FIXTURE_DATABASE_URL targets a shared dev PostgreSQL port (5432/5433); refusing.");
-  }
-  if (!ciAllowed && (!/@127\.0\.0\.1:5434\//.test(FIX) || !/\/telvyn_ledger_e2e(\?|$)/.test(FIX))) {
-    fail("E2E_FIXTURE_DATABASE_URL must target the disposable telvyn_ledger_e2e database on 127.0.0.1:5434.");
-  }
-}
+let fence: { stop(): Promise<void> } | undefined;
+beforeAll(async () => {
+  fence = await startWorkerFence();
+});
+afterAll(async () => {
+  await fence?.stop();
+});

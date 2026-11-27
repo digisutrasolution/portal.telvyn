@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_EMAIL_SUFFIX, ownedTenantWhere, ownedUserWhere, resetRunRateLimits, runPrefix } from "./e2e-run";
 import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12L — engine runtime foundation e2e (real Postgres + Redis). Proves the
@@ -14,13 +16,14 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { TenantType } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
-process.env.REDIS_URL ??= "redis://localhost:6379";
 process.env.JWT_ACCESS_SECRET ??= "test-secret-test-secret-test-secret-42";
 process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 
 import { createApp } from "../src/main";
 import { ARGON2_OPTIONS } from "../src/auth/account-flows.service";
+
+/** Run-scoped name prefix (INC-DB-001B): only this run's rows match cleanup. */
+const TST = runPrefix("tstl");
 
 const prisma = fixturePrisma;
 const redis = new Redis(process.env.REDIS_URL!);
@@ -29,14 +32,13 @@ let http: ReturnType<NestExpressApplication["getHttpServer"]>;
 const PASSWORD = "correct-horse-battery-staple-9";
 const TRANSPORT = { "x-token-transport": "body" } as const;
 let seq = 0;
-const ename = () => `tstl-${Date.now()}-${seq++}`;
+const ename = () => `${TST}${Date.now()}-${seq++}`;
 
 async function flushRateLimits(): Promise<void> {
-  const keys = await redis.keys("rl:*");
-  if (keys.length) await redis.del(keys);
+  await resetRunRateLimits(redis);
 }
 async function provision(type: TenantType, roleKey: string): Promise<{ token: string }> {
-  const email = `engl.${Date.now()}.${Math.round(performance.now())}@telvyn.test`;
+  const email = `engl.${Date.now()}.${Math.round(performance.now())}${RUN_EMAIL_SUFFIX}`;
   const user = await prisma.user.create({ data: { email, passwordHash: await argon2.hash(PASSWORD, ARGON2_OPTIONS), status: "ACTIVE" } });
   const tenant = await prisma.tenant.create({ data: { slug: `engl-${user.id}`, name: type === TenantType.PLATFORM ? "englplat" : "englcust", type } });
   const m = await prisma.membership.create({ data: { userId: user.id, tenantId: tenant.id, status: "ACTIVE" } });
@@ -58,15 +60,17 @@ beforeAll(async () => {
 });
 beforeEach(flushRateLimits);
 afterAll(async () => {
-  const engines = await prisma.telecomEngine.findMany({ where: { name: { startsWith: "tstl-" } }, select: { id: true } });
+  // Resolve run-owned tenants BEFORE their owning users are deleted.
+  const ownedTenants = await ownedTenantWhere(prisma, ["englplat", "englcust"]);
+  const engines = await prisma.telecomEngine.findMany({ where: { name: { startsWith: TST } }, select: { id: true } });
   const ids = engines.map((e) => e.id);
   if (ids.length) {
     await prisma.telecomConfigVersion.deleteMany({ where: { entityType: "engine", entityId: { in: ids } } });
     await prisma.healthEvent.deleteMany({ where: { entityType: "ENGINE", entityId: { in: ids } } });
   }
-  await prisma.telecomEngine.deleteMany({ where: { name: { startsWith: "tstl-" } } });
-  await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
-  await prisma.tenant.deleteMany({ where: { name: { in: ["englplat", "englcust"] } } });
+  await prisma.telecomEngine.deleteMany({ where: { name: { startsWith: TST } } });
+  await prisma.user.deleteMany({ where: ownedUserWhere() });
+  await prisma.tenant.deleteMany({ where: ownedTenants });
   await prisma.$disconnect();
   await redis.quit();
   await app.close();

@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_ID } from "./e2e-run";
 import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12M-1 — Engine credential reference (additive schema) integration test.
@@ -15,10 +17,9 @@ import { afterAll, describe, expect, it } from "vitest";
 import { TelecomCredentialType, TelecomEngineType } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
 
 const prisma = fixturePrisma;
-const TAG = `tmc1-${Date.now()}`;
+const TAG = `tmc1-${RUN_ID}`;
 
 afterAll(async () => {
   await prisma.telecomEngine.deleteMany({ where: { name: { startsWith: TAG } } });

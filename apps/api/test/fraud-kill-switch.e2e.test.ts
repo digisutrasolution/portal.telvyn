@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_EMAIL_SUFFIX, deleteRunGlobalKillSwitches, ownedTenantWhere, ownedUserWhere, resetRunRateLimits } from "./e2e-run";
 import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12R-3 — Kill-switch e2e (real Postgres + Redis). Proves: RBAC (read vs
@@ -13,8 +15,6 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { TenantType } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
-process.env.REDIS_URL ??= "redis://localhost:6379";
 process.env.JWT_ACCESS_SECRET ??= "test-secret-test-secret-test-secret-42";
 process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 
@@ -31,14 +31,13 @@ const BASE = "/v1/fraud/kill-switch";
 const NAMES = ["ksa", "ksb", "ksplat", "ksaud"];
 
 async function flushRateLimits(): Promise<void> {
-  const keys = await redis.keys("rl:*");
-  if (keys.length) await redis.del(keys);
+  await resetRunRateLimits(redis);
 }
 async function systemRole(key: string): Promise<string> {
   return (await prisma.role.findFirstOrThrow({ where: { tenantId: null, key } })).id;
 }
 async function provision(tag: string, type: TenantType, roleKey: string): Promise<{ token: string; tenantId: string }> {
-  const email = `${tag}.${Date.now()}.${Math.round(performance.now())}@telvyn.test`;
+  const email = `${tag}.${Date.now()}.${Math.round(performance.now())}${RUN_EMAIL_SUFFIX}`;
   const user = await prisma.user.create({ data: { email, passwordHash: await argon2.hash(PASSWORD, ARGON2_OPTIONS), status: "ACTIVE" } });
   const tenant = await prisma.tenant.create({ data: { slug: `${tag}-${user.id}`, name: tag, type } });
   const membership = await prisma.membership.create({ data: { userId: user.id, tenantId: tenant.id, status: "ACTIVE" } });
@@ -49,17 +48,25 @@ async function provision(tag: string, type: TenantType, roleKey: string): Promis
 }
 const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
 
+/** GLOBAL kill-switch rows that existed before this run — never deleted by it. */
+let preexistingGlobal: string[] = [];
+
 beforeAll(async () => {
+  preexistingGlobal = (await prisma.killSwitch.findMany({ where: { scope: "GLOBAL" }, select: { id: true } })).map((k) => k.id);
   app = await createApp();
   await app.init();
   http = app.getHttpServer();
 });
 beforeEach(flushRateLimits);
 afterAll(async () => {
-  // GLOBAL switch has null tenantId — clean it explicitly; tenant switches cascade.
-  await prisma.killSwitch.deleteMany({ where: { scope: "GLOBAL" } });
-  await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
-  await prisma.tenant.deleteMany({ where: { name: { in: NAMES } } });
+  // Resolve run-owned tenants BEFORE their owning users are deleted.
+  const ownedTenants = await ownedTenantWhere(prisma, NAMES);
+  // GLOBAL switch has null tenantId — tenant switches cascade, GLOBAL does not.
+  // INC-DB-001B: delete only a GLOBAL row created during this run and toggled by
+  // a run-owned user; a pre-existing GLOBAL row is never deleted.
+  await deleteRunGlobalKillSwitches(prisma, preexistingGlobal);
+  await prisma.user.deleteMany({ where: ownedUserWhere() });
+  await prisma.tenant.deleteMany({ where: ownedTenants });
   await prisma.$disconnect();
   await redis.quit();
   await app.close();

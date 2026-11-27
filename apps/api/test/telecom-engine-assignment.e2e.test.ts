@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_ID } from "./e2e-run";
 import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12N-1 — Engine↔resource assignment (additive schema) integration test.
@@ -12,10 +14,9 @@ import { afterAll, describe, expect, it } from "vitest";
 import { EngineResourceKind, TelecomEngineType } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
 
 const prisma = fixturePrisma;
-const TAG = `tnra-${Date.now()}`;
+const TAG = `tnra-${RUN_ID}`;
 let seq = 0;
 
 async function fixtures() {

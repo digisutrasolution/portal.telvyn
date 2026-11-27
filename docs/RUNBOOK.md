@@ -128,7 +128,9 @@ node -r @swc-node/register scripts/probe-live-engine.ts "<dir with client.crt/cl
 ```
 Or the opt-in integration test:
 ```bash
-ENGINE_LIVE_MTLS_DIR="<dir>" corepack pnpm exec vitest run test/telecom-engine-live.e2e.test.ts
+# INC-DB-001B: E2E files run only through the guarded lane. Set the isolated
+# local-isolated profile variables first (docs/DEVOPS.md, "Isolated E2E regression").
+ENGINE_LIVE_MTLS_DIR="<dir>" corepack pnpm test:e2e test/telecom-engine-live.e2e.test.ts
 ```
 To wire the running API to the live engine, set in `apps/api/.env`:
 `ENGINE_CONNECTOR=kamailio` and `ENGINE_MGMT_ALLOWLIST=10.9.0.1/32@8443`.
@@ -176,7 +178,7 @@ with explicit operator go-ahead:
 ENGINE_LIVE_MTLS_DIR="<dir with client.crt/client.key/ca.crt>" \
 ENGINE_LIVE_ENDPOINT=https://10.9.0.1:8443 \
 ENGINE_LIVE_ALLOWLIST=10.9.0.1/32@8443 \
-corepack pnpm exec vitest run test/telecom-engine-apply-live.e2e.test.ts
+corepack pnpm test:e2e test/telecom-engine-apply-live.e2e.test.ts   # guarded lane (INC-DB-001B)
 ```
 It applies a small set, verifies, re-applies (idempotent 0-op), then rolls back to
 empty. To wire the running API to real apply, set `ENGINE_CONNECTOR=kamailio` +

@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_EMAIL_SUFFIX, ownedTenantWhere, ownedUserWhere, resetRunRateLimits, runPrefix } from "./e2e-run";
 import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12D — platform telecom infrastructure (Region / Engine / Node) e2e.
@@ -13,8 +15,6 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { TenantType } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
-process.env.REDIS_URL ??= "redis://localhost:6379";
 process.env.JWT_ACCESS_SECRET ??= "test-secret-test-secret-test-secret-42";
 process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 
@@ -49,18 +49,19 @@ let app: NestExpressApplication;
 let http: ReturnType<NestExpressApplication["getHttpServer"]>;
 const PASSWORD = "correct-horse-battery-staple-9";
 const TRANSPORT = { "x-token-transport": "body" } as const;
-const CODE = `tst-${Date.now()}`; // unique region-code prefix for cleanup
+/** Run-scoped name/code prefix (INC-DB-001B): only this run's rows match cleanup. */
+const TST = runPrefix("tst");
+const CODE = `${TST}rg`; // unique region-code prefix for cleanup
 
 async function flushRateLimits(): Promise<void> {
-  const keys = await redis.keys("rl:*");
-  if (keys.length) await redis.del(keys);
+  await resetRunRateLimits(redis);
 }
 async function systemRole(key: string): Promise<string> {
   return (await prisma.role.findFirstOrThrow({ where: { tenantId: null, key } })).id;
 }
 /** Provision a user in a tenant of the given type with a system role → access token. */
 async function provision(tag: string, type: TenantType, roleKey: string): Promise<{ token: string }> {
-  const email = `${tag}.${Date.now()}.${Math.round(performance.now())}@telvyn.test`;
+  const email = `${tag}.${Date.now()}.${Math.round(performance.now())}${RUN_EMAIL_SUFFIX}`;
   const user = await prisma.user.create({ data: { email, passwordHash: await argon2.hash(PASSWORD, ARGON2_OPTIONS), status: "ACTIVE" } });
   const tenant = await prisma.tenant.create({ data: { slug: `${tag}-${user.id}`, name: tag, type } });
   const membership = await prisma.membership.create({ data: { userId: user.id, tenantId: tenant.id, status: "ACTIVE" } });
@@ -78,11 +79,13 @@ beforeAll(async () => {
 });
 beforeEach(flushRateLimits);
 afterAll(async () => {
-  await prisma.telecomNode.deleteMany({ where: { name: { startsWith: "tst-" } } });
-  await prisma.telecomEngine.deleteMany({ where: { name: { startsWith: "tst-" } } });
-  await prisma.region.deleteMany({ where: { code: { startsWith: "tst-" } } });
-  await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
-  await prisma.tenant.deleteMany({ where: { name: { in: ["plat", "cust", "plataudit"] } } });
+  // Resolve run-owned tenants BEFORE their owning users are deleted.
+  const ownedTenants = await ownedTenantWhere(prisma, ["plat", "cust", "plataudit"]);
+  await prisma.telecomNode.deleteMany({ where: { name: { startsWith: TST } } });
+  await prisma.telecomEngine.deleteMany({ where: { name: { startsWith: TST } } });
+  await prisma.region.deleteMany({ where: { code: { startsWith: TST } } });
+  await prisma.user.deleteMany({ where: ownedUserWhere() });
+  await prisma.tenant.deleteMany({ where: ownedTenants });
   await prisma.$disconnect();
   await redis.quit();
   await app.close();
@@ -121,7 +124,7 @@ describe("platform CRUD + integrity + honest health", () => {
     await request(http).post("/v1/telecom/regions").set(auth(plat.token)).send({ code: "UPPER_BAD", name: "", country: "usa", timezone: "" }).expect(400);
 
     // Engine referencing the region
-    const engine = await request(http).post("/v1/telecom/engines").set(auth(plat.token)).send({ name: `tst-kam`, type: "KAMAILIO", regionId });
+    const engine = await request(http).post("/v1/telecom/engines").set(auth(plat.token)).send({ name: `${TST}kam`, type: "KAMAILIO", regionId });
     expect(engine.status).toBe(201);
     const engineId = engine.body.id;
     // HONEST: stub adapter → not implemented, health UNKNOWN, software profile present (no RTP for Kamailio)
@@ -132,7 +135,7 @@ describe("platform CRUD + integrity + honest health", () => {
     expect(engine.body.capabilities).toEqual([]); // none configured yet
 
     // Bad region reference → 400
-    await request(http).post("/v1/telecom/engines").set(auth(plat.token)).send({ name: "tst-bad", type: "ASTERISK", regionId: "00000000-0000-7000-8000-000000000000" }).expect(400);
+    await request(http).post("/v1/telecom/engines").set(auth(plat.token)).send({ name: `${TST}bad`, type: "ASTERISK", regionId: "00000000-0000-7000-8000-000000000000" }).expect(400);
 
     // Configure enabled capabilities
     const caps = await request(http).put(`/v1/telecom/engines/${engineId}/capabilities`).set(auth(plat.token)).send({ capabilities: ["SIP", "REGISTRATION", "SIP"] });
@@ -140,13 +143,13 @@ describe("platform CRUD + integrity + honest health", () => {
     expect(caps.body.capabilities.sort()).toEqual(["REGISTRATION", "SIP"]);
 
     // Node referencing the engine → health snapshot starts UNKNOWN
-    const node = await request(http).post("/v1/telecom/nodes").set(auth(plat.token)).send({ name: `tst-node`, engineId, regionId, maxCps: 50, maxConcurrentCalls: 500 });
+    const node = await request(http).post("/v1/telecom/nodes").set(auth(plat.token)).send({ name: `${TST}node`, engineId, regionId, maxCps: 50, maxConcurrentCalls: 500 });
     expect(node.status).toBe(201);
     const nodeId = node.body.id;
     expect(node.body.health.status).toBe("UNKNOWN");
 
     // Bad engine reference → 400
-    await request(http).post("/v1/telecom/nodes").set(auth(plat.token)).send({ name: "tst-badnode", engineId: "00000000-0000-7000-8000-000000000000" }).expect(400);
+    await request(http).post("/v1/telecom/nodes").set(auth(plat.token)).send({ name: `${TST}badnode`, engineId: "00000000-0000-7000-8000-000000000000" }).expect(400);
 
     // Health endpoint (telecom.health.read) → UNKNOWN
     const health = await request(http).get(`/v1/telecom/nodes/${nodeId}/health`).set(auth(plat.token));

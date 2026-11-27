@@ -1,3 +1,4 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
 /**
  * Phase 12N-4b — LIVE Kamailio htable apply (OPT-IN, MUTATES the engine).
  *
@@ -11,7 +12,7 @@
  *   ENGINE_LIVE_MTLS_DIR=/path/to/mtls \
  *   ENGINE_LIVE_ENDPOINT=https://10.9.0.1:8443 \
  *   ENGINE_LIVE_ALLOWLIST=10.9.0.1/32@8443 \
- *   corepack pnpm exec vitest run test/telecom-engine-apply-live.e2e.test.ts
+ *   corepack pnpm test:e2e test/telecom-engine-apply-live.e2e.test.ts   (guarded lane, INC-DB-001B)
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { TelecomCredentialType, TelecomEngineType } from "@prisma/client";

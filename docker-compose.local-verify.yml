@@ -1,0 +1,65 @@
+# Telvyn — DISPOSABLE safety-verification data plane (INC-DB-001B-PRE2, E2E profile `local-verify`).
+#
+# DEDICATED, NON-PRODUCTION, loopback-only. Separate from every other environment:
+# its own Compose project, containers, network and named volume. It never touches the
+# native PostgreSQL/Redis (5432/6379), the FMC services (5433/6380) or the isolated
+# ledger environment telvyn-ledger-dev (5434/6381).
+#
+# Provision (from the repository root; the env file is gitignored and holds only
+# per-environment random secrets — see docs/DEVOPS.md "local-verify"):
+#   docker compose --env-file .env.inc-db-001b-verify -p telvyn-inc-db-001b-verify \
+#     -f docker-compose.local-verify.yml up -d
+#
+# Images match the approved isolated environment: postgres:18-alpine, redis:7-alpine.
+# PG18 declares VOLUME /var/lib/postgresql (PGDATA=/var/lib/postgresql/18/docker).
+name: telvyn-inc-db-001b-verify
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: telvyn-inc-db-001b-verify-pg
+    restart: "no"
+    environment:
+      # Fixed identity: the bootstrap superuser mirrors the CI service (`telvyn`), so the
+      # unmodified CI bootstrap / grant / privilege-check scripts apply as-is.
+      POSTGRES_USER: telvyn
+      POSTGRES_DB: telvyn_safety_verify
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.inc-db-001b-verify}
+    ports:
+      - "127.0.0.1:5435:5432"            # loopback only; never 0.0.0.0
+    volumes:
+      - telvyn_inc_db_001b_verify_pgdata:/var/lib/postgresql
+    networks:
+      - verify_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telvyn -d telvyn_safety_verify"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    # Hardening: no host networking, no privileged mode, no docker socket mount.
+
+  redis:
+    image: redis:7-alpine
+    container_name: telvyn-inc-db-001b-verify-redis
+    restart: "no"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6382:6379"            # loopback only; never 0.0.0.0
+    networks:
+      - verify_net
+    # No volume: disposable, intentionally non-persistent test state.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+networks:
+  verify_net:
+    name: telvyn-inc-db-001b-verify_net
+
+volumes:
+  telvyn_inc_db_001b_verify_pgdata:
+    name: telvyn_inc_db_001b_verify_pgdata

@@ -17,7 +17,11 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
-    include: ["src/**/*.test.ts", "test/**/*.e2e.test.ts"],
+    // INC-DB-001B: the DEFAULT lane is unit-only. E2E runs exclusively through
+    // vitest.e2e.config.ts (two-stage target guard). Never re-add e2e here.
+    include: ["src/**/*.test.ts", "test/**/*.unit.test.ts"],
+    exclude: ["**/node_modules/**", "**/*.e2e.test.ts"],
+    setupFiles: ["./test/setup-unit.ts"],
     hookTimeout: 60_000,
     testTimeout: 30_000,
     fileParallelism: false,
