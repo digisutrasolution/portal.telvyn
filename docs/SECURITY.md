@@ -755,11 +755,9 @@ ADR-0022 Amendment 5 BA-08/BA-15; owner decisions G1–G4. Merged to `main`; NOT
   operation requires it yet (first: S5 provisioning).
 - **Not in S1:** maker-checker (13-3/13-4 money operations), dual-control thresholds (open), the financial
   audit table and its write (S2), private ledger-context minting (S7), service identities for step-up-free
-  flows. **Pre-existing, out of scope:** `setMemberRoles` lets any `member.manage` holder assign any role
-  in the tenant, including `owner` (`*`); wildcard exclusion now keeps high-risk financial keys out of that
-  path, but general role-escalation hardening needs its own decision.
-  **This gap is a blocking security gate before S5 and before any financial permission grant** (recorded
-  2026-11-27, S2 review); it is not fixed in S2.
+  flows. **Pre-existing, out of scope at S1:** `setMemberRoles` let any `member.manage` holder assign any
+  role in the tenant, including `owner` (`*`). Recorded 2026-11-27 (S2 review) as a blocking gate before S5;
+  **resolved by P1 (2026-11-28)** — see "Role-assignment escalation correction (P1)" below.
 
 ## Financial audit foundation — MERGED, INERT (Phase 13-2B S2, 2026-11-27; PR #31)
 
@@ -809,6 +807,35 @@ ADR-0022 Amendment 5 BA-10; owner decisions D1–D6. NOT deployed and NOT active
   open sees a committed suspension (LA003) and concurrent duplicates yield exactly one account (LA005).
 - **Open before S5:** lock timeout/retry values (S6); the runtime EXECUTE grant, authorization, step-up and
   same-transaction financial audit of the opening (S5).
+
+## Role-assignment escalation correction (P1, 2026-11-28) — IMPLEMENTED
+
+Mandatory pre-S5 prerequisite (owner instruction P1). Possession of `member.manage` / `role.manage` no longer
+confers authority to delegate permissions the actor does not hold or to assign a protected role.
+
+- **`PUT /v1/members/:id/roles`** (`TenancyService.setMemberRoles`): one transaction, `SELECT … FOR UPDATE` on
+  the tenant row, so every role change of a tenant is serialized (no lost-update / mutual-demotion race). Under
+  the lock the actor's effective permissions are **re-derived from the database** (same derivation as
+  `TenantGuard`: active membership, active tenant, non-deleted roles, MFA-for-finance) — a demotion that
+  committed after the request context was built is honoured. Refused:
+  - self-modification (403) — no self-escalation, no self-lockout;
+  - a role set conferring any permission the actor does not hold (403) — `admin` cannot assign `owner`;
+  - modifying a member who holds any permission the actor does not hold (403) — protected roles: an `admin`
+    cannot demote or strip an `owner`;
+  - wildcard-excluded financial keys (403, G4/BA-08, unchanged);
+  - roles of another tenant or deleted roles (409, unchanged);
+  - removing the last ACTIVE `owner` (409).
+- **`DELETE /v1/roles/:id`**: deleting a custom role strips its permissions from every holder, so the actor
+  must hold everything the role confers (403 otherwise). Creating a custom role already required this.
+- **Indirect paths reviewed:** there is no invite / registration / membership-creation path in the API (memberships
+  and their roles are created only by `prisma/seed.ts` and operator tooling); custom roles cannot be modified after creation (no update route);
+  cross-tenant role ids and membership ids resolve to 409 / 404; system roles are read-only templates.
+- **Behaviour change:** the system `admin` role no longer assigns `operator` or `auditor` (they hold
+  `wallet.read` / `cdr.read`, which `admin` lacks). Owners can assign any role.
+- **Tests:** `test/role-escalation.e2e.test.ts` (10, real Postgres + Redis through HTTP, incl. a concurrent
+  mutual owner demotion and a demoted-actor re-derivation); `test/authz.e2e.test.ts` unchanged and green.
+- **Not in P1:** the governed assignment path for wildcard-excluded financial permissions (S5,
+  `billing.account.provision`).
 
 ## QA-LEASE-001 — E2E run-lease false detection (OPEN, reliability)
 

@@ -6,6 +6,14 @@ Format: Keep a Changelog; SemVer once releases begin.
 ## [Unreleased]
 
 ### Security
+- 2026-11-28 — **P1 — role-assignment escalation correction** (pre-S5 mandatory prerequisite; closes S2
+  review item X-R10):
+  - `setMemberRoles` now runs in one tenant-locked transaction. It re-derives the actor's authority
+    from the database and refuses: self-modification; conferring permissions the actor lacks;
+    modifying a member holding permissions the actor lacks; and removing the last active owner.
+  - Deleting a custom role now requires holding every permission it confers.
+  - Behaviour change: the `admin` system role can no longer assign `operator` / `auditor`.
+  - New `test/role-escalation.e2e.test.ts` (10 tests).
 - 2026-11-27 — **AUTO-001 — controlled autonomous development mode + project permission settings**:
   - New committed `.claude/settings.json`: narrow allow rules for read-only Git/GitHub checks,
     pinned pnpm typecheck/lint/test/build and read-only browser page reading; deny rules for

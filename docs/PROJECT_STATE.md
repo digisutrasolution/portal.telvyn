@@ -100,9 +100,16 @@ FA001–FA005, format/size CHECKs, runtime SELECT + INSERT only) and the interna
 (caller's transaction only, fail closed, no fallback client, no retry). **Inert:** the operation catalog is
 empty (F1). No endpoint, no caller, no financial grant, no money movement — a foundation, not active
 commercial billing.
-**Security gates carried forward (not S2):** the `setMemberRoles` escalation gap (any `member.manage`
-holder can assign `owner`) blocks S5 and any financial permission grant until resolved; the S1 choice to
-exclude recovery codes from financial step-up needs owner ratification before S5.
+**Security gates carried forward (not S2):** the `setMemberRoles` escalation gap — **RESOLVED by P1**
+(2026-11-28, see below); the S1 choice to exclude recovery codes from financial step-up — **ratified by the
+owner (O1, 2026-11-28)**.
+**P1 — role-escalation correction — IMPLEMENTED** (branch `fix/p1-role-escalation`, pre-S5 mandatory
+prerequisite): `setMemberRoles` runs in one transaction that locks the tenant row and re-derives the actor's
+authority from the database; refuses self-modification, assigning a role that confers any permission the actor
+lacks, modifying a member who holds any permission the actor lacks (an admin cannot demote/strip an owner) and
+removing the last active owner; wildcard-excluded keys stay unassignable (G4). Custom-role deletion requires the
+actor to hold every permission the role confers. Behaviour change: the system `admin` role can no longer assign
+`operator`/`auditor` (they carry `wallet.read`/`cdr.read`, which `admin` lacks); owners assign any role.
 **INC-DB-001B MERGED** (PR #29, merge `e7c1e39`; post-merge CI #62 green) and **AUTO-001 MERGED** (PR #30,
 merge `ac7d361`; post-merge CI #64 green) — see `docs/incidents/INC-DB-001.md`.
 **S4 — chart of accounts foundation — IMPLEMENTED + VERIFIED (disposable `local-verify` env + CI), released
