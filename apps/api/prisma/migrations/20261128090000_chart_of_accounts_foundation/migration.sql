@@ -246,15 +246,24 @@ GRANT UPDATE ("statusChangedAt") ON "BillingAccount" TO telvyn_ledger_fn;
 --     through the real definer path (E2E fixture). This is privilege-neutral:
 --     telvyn_migrator OWNS LedgerAccount and BillingAccount and can already write
 --     them directly; the function (running as telvyn_ledger_fn) can do strictly
---     less, and every trigger/constraint applies to the owner too. Without this
---     explicit grant the ownership transfer below would drop the migrator's
---     implicit owner privilege.
+--     less, and every trigger/constraint applies to the owner too. The grant is
+--     issued AFTER the ownership transfer (C4): granted while the migrator still
+--     owns the function it would merge into the owner's own ACL entry and be
+--     rewritten to the new owner by ALTER ... OWNER (observed in CI).
 REVOKE EXECUTE ON FUNCTION "billing"."ledger_account_open"(uuid, uuid, public."Currency", text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION "billing"."ledger_account_open"(uuid, uuid, public."Currency", text) FROM telvyn_app;
-GRANT EXECUTE ON FUNCTION "billing"."ledger_account_open"(uuid, uuid, public."Currency", text) TO telvyn_migrator;
 
 -- C3. Ownership transfer to the NOLOGIN function owner (same lifecycle as
 --     ledger_post): temporary CREATE on the schema, transfer, revoke CREATE.
 GRANT CREATE ON SCHEMA "billing" TO telvyn_ledger_fn;
 ALTER FUNCTION "billing"."ledger_account_open"(uuid, uuid, public."Currency", text) OWNER TO telvyn_ledger_fn;
 REVOKE CREATE ON SCHEMA "billing" FROM telvyn_ledger_fn;
+
+-- C4. The verification grant (C2), issued by the new owner. telvyn_migrator holds
+--     SET (not INHERIT) membership in telvyn_ledger_fn only during the migration
+--     window (scripts/db/ledger-migration-pre.sql); SET LOCAL ROLE lasts for this
+--     transaction only and is reset immediately. The resulting ACL is exactly
+--     {telvyn_ledger_fn (owner), telvyn_migrator} — drift-checked.
+SET LOCAL ROLE telvyn_ledger_fn;
+GRANT EXECUTE ON FUNCTION "billing"."ledger_account_open"(uuid, uuid, public."Currency", text) TO telvyn_migrator;
+RESET ROLE;
