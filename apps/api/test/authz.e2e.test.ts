@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_EMAIL_SUFFIX, ownedTenantWhere, ownedUserWhere, resetRunRateLimits } from "./e2e-run";
 import { fixturePrisma } from "./fixture-db";
 /**
  * Authorization integration suite (ADR-0004) — real Postgres + Redis.
@@ -12,8 +14,6 @@ import Redis from "ioredis";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:change_me_local_dev@localhost:5433/telvyn?schema=public";
-process.env.REDIS_URL ??= "redis://localhost:6380";
 process.env.JWT_ACCESS_SECRET ??= "test-secret-test-secret-test-secret-42";
 process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 
@@ -28,8 +28,7 @@ const PASSWORD = "correct-horse-battery-staple-9";
 const TRANSPORT = { "x-token-transport": "body" } as const;
 
 async function flushRateLimits(): Promise<void> {
-  const keys = await redis.keys("rl:*");
-  if (keys.length) await redis.del(keys);
+  await resetRunRateLimits(redis);
 }
 
 async function systemRole(key: string): Promise<string> {
@@ -38,7 +37,7 @@ async function systemRole(key: string): Promise<string> {
 
 /** Create a user + tenant + membership with a system role; return an access token. */
 async function provision(tag: string, roleKey: string): Promise<{ token: string; tenantId: string; membershipId: string; userId: string }> {
-  const email = `${tag}.${Date.now()}.${Math.round(performance.now())}@telvyn.test`;
+  const email = `${tag}.${Date.now()}.${Math.round(performance.now())}${RUN_EMAIL_SUFFIX}`;
   const user = await prisma.user.create({
     data: { email, passwordHash: await argon2.hash(PASSWORD, ARGON2_OPTIONS), status: "ACTIVE" },
   });
@@ -60,8 +59,10 @@ beforeAll(async () => {
 beforeEach(flushRateLimits);
 
 afterAll(async () => {
-  await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
-  await prisma.tenant.deleteMany({ where: { name: { in: ["alpha", "beta", "noperms"] } } });
+  // Resolve run-owned tenants BEFORE their owning users are deleted.
+  const ownedTenants = await ownedTenantWhere(prisma, ["alpha", "beta", "noperms"]);
+  await prisma.user.deleteMany({ where: ownedUserWhere() });
+  await prisma.tenant.deleteMany({ where: ownedTenants });
   await prisma.$disconnect();
   await redis.quit();
   await app.close();
@@ -155,7 +156,7 @@ describe("privilege escalation", () => {
   });
 
   it("a member with no roles is denied every guarded route (403)", async () => {
-    const email = `noperms.${Date.now()}@telvyn.test`;
+    const email = `noperms.${Date.now()}${RUN_EMAIL_SUFFIX}`;
     const user = await prisma.user.create({ data: { email, passwordHash: await argon2.hash(PASSWORD, ARGON2_OPTIONS), status: "ACTIVE" } });
     const tenant = await prisma.tenant.create({ data: { slug: `noperms-${user.id}`, name: "noperms", type: "CUSTOMER" } });
     await prisma.membership.create({ data: { userId: user.id, tenantId: tenant.id, status: "ACTIVE" } });

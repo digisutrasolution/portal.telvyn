@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_EMAIL_SUFFIX, ownedTenantWhere, ownedUserWhere, resetRunRateLimits, runPrefix } from "./e2e-run";
 import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12I — Routing policy + failover foundation e2e (real Postgres + Redis).
@@ -14,13 +16,14 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { TenantType } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
-process.env.REDIS_URL ??= "redis://localhost:6379";
 process.env.JWT_ACCESS_SECRET ??= "test-secret-test-secret-test-secret-42";
 process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 
 import { createApp } from "../src/main";
 import { ARGON2_OPTIONS } from "../src/auth/account-flows.service";
+
+/** Run-scoped name prefix (INC-DB-001B): only this run's rows match cleanup. */
+const TST = runPrefix("tstp");
 
 const prisma = fixturePrisma;
 const redis = new Redis(process.env.REDIS_URL!);
@@ -29,14 +32,13 @@ let http: ReturnType<NestExpressApplication["getHttpServer"]>;
 const PASSWORD = "correct-horse-battery-staple-9";
 const TRANSPORT = { "x-token-transport": "body" } as const;
 let seq = 0;
-const pname = (n: string) => `tstp-${n}-${Date.now()}-${seq++}`;
+const pname = (n: string) => `${TST}${n}-${Date.now()}-${seq++}`;
 
 async function flushRateLimits(): Promise<void> {
-  const keys = await redis.keys("rl:*");
-  if (keys.length) await redis.del(keys);
+  await resetRunRateLimits(redis);
 }
 async function provision(): Promise<{ token: string }> {
-  const email = `rpol.${Date.now()}.${Math.round(performance.now())}@telvyn.test`;
+  const email = `rpol.${Date.now()}.${Math.round(performance.now())}${RUN_EMAIL_SUFFIX}`;
   const user = await prisma.user.create({ data: { email, passwordHash: await argon2.hash(PASSWORD, ARGON2_OPTIONS), status: "ACTIVE" } });
   const tenant = await prisma.tenant.create({ data: { slug: `rpol-${user.id}`, name: "rpol", type: TenantType.CUSTOMER } });
   const m = await prisma.membership.create({ data: { userId: user.id, tenantId: tenant.id, status: "ACTIVE" } });
@@ -57,9 +59,11 @@ beforeAll(async () => {
 });
 beforeEach(flushRateLimits);
 afterAll(async () => {
-  await prisma.routingProfile.deleteMany({ where: { name: { startsWith: "tstp-" } } });
-  await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
-  await prisma.tenant.deleteMany({ where: { name: "rpol" } });
+  // Resolve run-owned tenants BEFORE their owning users are deleted.
+  const ownedTenants = await ownedTenantWhere(prisma, ["rpol"]);
+  await prisma.routingProfile.deleteMany({ where: { name: { startsWith: TST } } });
+  await prisma.user.deleteMany({ where: ownedUserWhere() });
+  await prisma.tenant.deleteMany({ where: ownedTenants });
   await prisma.$disconnect();
   await redis.quit();
   await app.close();

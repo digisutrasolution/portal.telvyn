@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_EMAIL_SUFFIX, clearFraudKeysFor, ownedTenantIds, ownedTenantWhere, ownedUserWhere, runPrefix } from "./e2e-run";
 import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12R-9 — Fraud maintenance sweep e2e (real Postgres + Redis). Proves the
@@ -13,8 +15,6 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { TenantType } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
-process.env.REDIS_URL ??= "redis://localhost:6379";
 process.env.JWT_ACCESS_SECRET ??= "test-secret-test-secret-test-secret-42";
 process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 
@@ -31,14 +31,16 @@ const SWEEP = "/v1/fraud/maintenance/sweep";
 const NAMES = ["swcust", "swplat"];
 
 async function flush(): Promise<void> {
-  const keys = await redis.keys("fraud:*");
-  if (keys.length) await redis.del(...keys);
+  // Fraud counters of run-owned tenants only (INC-DB-001B). SCAN, never KEYS.
+  await clearFraudKeysFor(redis, await ownedTenantIds(prisma, NAMES));
 }
+/** Run-scoped reservation idempotency-key prefix. */
+const SWEEP_KEY = runPrefix("sweep");
 async function systemRole(key: string): Promise<string> {
   return (await prisma.role.findFirstOrThrow({ where: { tenantId: null, key } })).id;
 }
 async function provision(tag: string, type: TenantType, roleKey: string): Promise<{ token: string; tenantId: string }> {
-  const email = `${tag}.${Date.now()}.${Math.round(performance.now())}@telvyn.test`;
+  const email = `${tag}.${Date.now()}.${Math.round(performance.now())}${RUN_EMAIL_SUFFIX}`;
   const user = await prisma.user.create({ data: { email, passwordHash: await argon2.hash(PASSWORD, ARGON2_OPTIONS), status: "ACTIVE" } });
   const tenant = await prisma.tenant.create({ data: { slug: `${tag}-${user.id}`, name: tag, type } });
   const membership = await prisma.membership.create({ data: { userId: user.id, tenantId: tenant.id, status: "ACTIVE" } });
@@ -56,10 +58,12 @@ beforeAll(async () => {
 });
 beforeEach(flush);
 afterAll(async () => {
+  // Resolve run-owned tenants BEFORE their owning users are deleted.
+  const ownedTenants = await ownedTenantWhere(prisma, NAMES);
   await flush();
-  await prisma.spendReservation.deleteMany({ where: { idempotencyKey: { startsWith: "sweep-" } } });
-  await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
-  await prisma.tenant.deleteMany({ where: { name: { in: NAMES } } });
+  await prisma.spendReservation.deleteMany({ where: { idempotencyKey: { startsWith: SWEEP_KEY } } });
+  await prisma.user.deleteMany({ where: ownedUserWhere() });
+  await prisma.tenant.deleteMany({ where: ownedTenants });
   await prisma.$disconnect();
   await redis.quit();
   await app.close();
@@ -82,7 +86,7 @@ it("expires an overdue hold and releases its leaked concurrent-gauge count", asy
   // Simulate a leaked authorization: an ACTIVE reservation past its TTL + a held
   // concurrent-gauge count that complete/abandon never returned.
   await prisma.spendReservation.create({
-    data: { tenantId: cust.tenantId, idempotencyKey: "sweep-leak-1", amountMicros: 0n, expiresAt: new Date(Date.now() - 60_000) },
+    data: { tenantId: cust.tenantId, idempotencyKey: `${SWEEP_KEY}leak-1`, amountMicros: 0n, expiresAt: new Date(Date.now() - 60_000) },
   });
   await redis.set(`fraud:conc:${cust.tenantId}`, "1");
 
@@ -90,7 +94,7 @@ it("expires an overdue hold and releases its leaked concurrent-gauge count", asy
   expect(r.body.expiredReservations).toBeGreaterThanOrEqual(1);
   expect(r.body.concurrentReleased).toBeGreaterThanOrEqual(1);
 
-  const row = await prisma.spendReservation.findFirst({ where: { tenantId: cust.tenantId, idempotencyKey: "sweep-leak-1" } });
+  const row = await prisma.spendReservation.findFirst({ where: { tenantId: cust.tenantId, idempotencyKey: `${SWEEP_KEY}leak-1` } });
   expect(row?.status).toBe("EXPIRED");
   expect(Number((await redis.get(`fraud:conc:${cust.tenantId}`)) ?? 0)).toBe(0); // gauge returned
 });

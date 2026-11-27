@@ -1,3 +1,4 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
 import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12M-4 — live Kamailio engine integration (OPT-IN).
@@ -12,7 +13,7 @@ import { fixturePrisma } from "./fixture-db";
  *   ENGINE_LIVE_MTLS_DIR=/path/to/mtls \
  *   ENGINE_LIVE_ENDPOINT=https://10.9.0.1:8443 \
  *   ENGINE_LIVE_ALLOWLIST=10.9.0.1/32@8443 \
- *   corepack pnpm exec vitest run test/telecom-engine-live.e2e.test.ts
+ *   corepack pnpm test:e2e test/telecom-engine-live.e2e.test.ts   (guarded lane, INC-DB-001B)
  */
 import { describe, it, expect } from "vitest";
 import { TelecomCredentialType, TelecomEngineType } from "@prisma/client";
@@ -20,7 +21,6 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
 process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 
 import { encryptSecret } from "../src/common/crypto.util";

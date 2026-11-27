@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_EMAIL_SUFFIX, ownedTenantWhere, ownedUserWhere, resetRunRateLimits, runPrefix } from "./e2e-run";
 import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12F — SIP trunk foundation e2e (real Postgres + Redis). Proves:
@@ -13,13 +15,14 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { TenantType } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
-process.env.REDIS_URL ??= "redis://localhost:6379";
 process.env.JWT_ACCESS_SECRET ??= "test-secret-test-secret-test-secret-42";
 process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 
 import { createApp } from "../src/main";
 import { ARGON2_OPTIONS } from "../src/auth/account-flows.service";
+
+/** Run-scoped name prefix (INC-DB-001B): only this run's rows match cleanup. */
+const TST = runPrefix("tstt");
 
 const prisma = fixturePrisma;
 const redis = new Redis(process.env.REDIS_URL!);
@@ -30,14 +33,13 @@ const TRANSPORT = { "x-token-transport": "body" } as const;
 const SECRET = "sip-trunk-secret-DO-NOT-LEAK-7k2x";
 
 async function flushRateLimits(): Promise<void> {
-  const keys = await redis.keys("rl:*");
-  if (keys.length) await redis.del(keys);
+  await resetRunRateLimits(redis);
 }
 async function systemRole(key: string): Promise<string> {
   return (await prisma.role.findFirstOrThrow({ where: { tenantId: null, key } })).id;
 }
 async function provision(tag: string, type: TenantType, roleKey: string): Promise<{ token: string }> {
-  const email = `${tag}.${Date.now()}.${Math.round(performance.now())}@telvyn.test`;
+  const email = `${tag}.${Date.now()}.${Math.round(performance.now())}${RUN_EMAIL_SUFFIX}`;
   const user = await prisma.user.create({ data: { email, passwordHash: await argon2.hash(PASSWORD, ARGON2_OPTIONS), status: "ACTIVE" } });
   const tenant = await prisma.tenant.create({ data: { slug: `${tag}-${user.id}`, name: tag, type } });
   const membership = await prisma.membership.create({ data: { userId: user.id, tenantId: tenant.id, status: "ACTIVE" } });
@@ -49,12 +51,12 @@ async function provision(tag: string, type: TenantType, roleKey: string): Promis
 const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
 
 async function makeCarrier(token: string, name: string, cred?: { type: string }): Promise<{ carrierId: string; credId: string | null }> {
-  const body: Record<string, unknown> = { name: `tstt-${name}` };
-  if (cred) body.credential = { type: cred.type, label: `tstt-${name}`, hint: "u", secret: SECRET };
+  const body: Record<string, unknown> = { name: `${TST}${name}` };
+  if (cred) body.credential = { type: cred.type, label: `${TST}${name}`, hint: "u", secret: SECRET };
   const res = await request(http).post("/v1/telecom/carriers").set(auth(token)).send(body);
   return { carrierId: res.body.id, credId: res.body.credential?.id ?? null };
 }
-const trunkBody = (name: string, carrierId: string, extra: Record<string, unknown> = {}) => ({ name: `tstt-${name}`, carrierId, ...extra });
+const trunkBody = (name: string, carrierId: string, extra: Record<string, unknown> = {}) => ({ name: `${TST}${name}`, carrierId, ...extra });
 
 beforeAll(async () => {
   app = await createApp();
@@ -63,11 +65,13 @@ beforeAll(async () => {
 });
 beforeEach(flushRateLimits);
 afterAll(async () => {
-  await prisma.sipTrunk.deleteMany({ where: { name: { startsWith: "tstt-" } } });
-  await prisma.carrier.deleteMany({ where: { name: { startsWith: "tstt-" } } });
-  await prisma.telecomCredential.deleteMany({ where: { label: { startsWith: "tstt-" } } });
-  await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
-  await prisma.tenant.deleteMany({ where: { name: { in: ["ta", "tb", "tplat", "top"] } } });
+  // Resolve run-owned tenants BEFORE their owning users are deleted.
+  const ownedTenants = await ownedTenantWhere(prisma, ["ta", "tb", "tplat", "top"]);
+  await prisma.sipTrunk.deleteMany({ where: { name: { startsWith: TST } } });
+  await prisma.carrier.deleteMany({ where: { name: { startsWith: TST } } });
+  await prisma.telecomCredential.deleteMany({ where: { label: { startsWith: TST } } });
+  await prisma.user.deleteMany({ where: ownedUserWhere() });
+  await prisma.tenant.deleteMany({ where: ownedTenants });
   await prisma.$disconnect();
   await redis.quit();
   await app.close();
@@ -90,7 +94,7 @@ describe("RBAC + CRUD", () => {
     const a = await provision("ta", TenantType.CUSTOMER, "owner");
     const { carrierId } = await makeCarrier(a.token, "crud");
     const created = await request(http).post("/v1/telecom/sip-trunks").set(auth(a.token)).send(
-      trunkBody("t1", carrierId, { host: "sip.example.com", port: 5060, transport: "TLS", direction: "OUTBOUND", credential: { label: "tstt-c", hint: "u1", secret: SECRET } }),
+      trunkBody("t1", carrierId, { host: "sip.example.com", port: 5060, transport: "TLS", direction: "OUTBOUND", credential: { label: `${TST}c`, hint: "u1", secret: SECRET } }),
     );
     expect(created.status).toBe(201);
     expect(created.body.credential.id).toBeTruthy();
@@ -145,7 +149,7 @@ describe("credential security", () => {
     const b = await provision("tb", TenantType.CUSTOMER, "owner");
     const carA = await makeCarrier(a.token, "cred");
     // Trunk with inline SIP credential → obtain a SIP_PASSWORD credentialId.
-    const t = await request(http).post("/v1/telecom/sip-trunks").set(auth(a.token)).send(trunkBody("wc", carA.carrierId, { credential: { label: "tstt-sip", hint: "u", secret: SECRET } }));
+    const t = await request(http).post("/v1/telecom/sip-trunks").set(auth(a.token)).send(trunkBody("wc", carA.carrierId, { credential: { label: `${TST}sip`, hint: "u", secret: SECRET } }));
     const sipCredId = t.body.credential.id;
     expect(JSON.stringify(t.body)).not.toContain(SECRET);
     expect(JSON.stringify((await request(http).get("/v1/telecom/sip-trunks").set(auth(a.token))).body)).not.toContain(SECRET);

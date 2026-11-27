@@ -758,3 +758,108 @@ ADR-0022 Amendment 5 BA-08/BA-15; owner decisions G1–G4. Verified on the isola
   flows. **Pre-existing, out of scope:** `setMemberRoles` lets any `member.manage` holder assign any role
   in the tenant, including `owner` (`*`); wildcard exclusion now keeps high-risk financial keys out of that
   path, but general role-escalation hardening needs its own decision.
+
+## E2E target safety — IMPLEMENTED, NOT COMMITTED (INC-DB-001B, 2026-11-27)
+
+Corrective controls for incident INC-DB-001 (`docs/incidents/INC-DB-001.md`). This is a
+safety interlock against configuration mistakes, **not** a security boundary against a
+privileged or malicious operator.
+
+- **Unit-only default lane:** `vitest.config.ts` includes only `src/**/*.test.ts` and
+  `test/**/*.unit.test.ts`, and excludes every `*.e2e.test.ts`. `test/setup-unit.ts`
+  pins `DATABASE_URL` / `REDIS_URL` to unresolvable `.invalid` sentinels, so neither
+  Prisma's `.env` auto-load nor `dotenv/config` can supply a real target. `pnpm test`
+  is this lane; `pnpm test:e2e` is the only E2E lane.
+- **Gate A (pre-connection, pure):** `test/e2e-target-guard.ts` `validateGateA`.
+  - Requires `TELVYN_E2E_PROFILE` (`local-isolated` | `local-verify` | `ci-ephemeral`;
+    no default, no automatic selection). Each profile pins fixed hosts, ports, database,
+    roles and Redis DB; there is no host/port/database override and no wildcard name.
+  - `local-verify` (INC-DB-001B-PRE2): `127.0.0.1:5435` / `telvyn_safety_verify`,
+    Redis `127.0.0.1:6382` DB 0, marker `telvyn-inc-db-001b-local-verify` — the
+    dedicated disposable verification environment (`docs/DEVOPS.md`).
+  - Validates `DATABASE_URL`, `E2E_FIXTURE_DATABASE_URL` and `REDIS_URL` for URL
+    syntax, protocol, host allowlist, explicit *published* port, database name,
+    expected role (`telvyn_app` / `telvyn_migrator`), Redis logical DB, and the
+    query parameters allowed. A URL fragment or a repeated query parameter is refused
+    (`BAD_QUERY`, review L1).
+  - Protected ports 5432/5433/6379/6380 are refused in **every** profile.
+  - The retired `TELVYN_E2E_ALLOW_TARGET` is refused outright.
+  - `ci-ephemeral` additionally requires `GITHUB_ACTIONS=true` and `CI=true`, and
+    still names no protected port.
+- **Gate B (post-connection identity, read-only):** `test/e2e-global-setup.ts` runs
+  once, before any test file is collected. It checks:
+  - `current_database()` and `current_user` on both connections;
+  - PostgreSQL ≥ 18;
+  - superuser refused;
+  - the runtime role has no CREATEROLE / CREATEDB / BYPASSRLS / database CREATE /
+    privileged-role membership;
+  - both connections reach the same server;
+  - every repository migration is applied and none is unfinished;
+  - the DB marker `telvyn.e2e_instance` equals the profile marker **as a
+    database-level setting** (`pg_db_role_setting`, `setrole = 0`, this database).
+    A copy at role, role-in-database or cluster level is refused
+    (`MARKER_OVERRIDE`), as is a session value that differs from the database-level
+    value, and a database owned by `telvyn_app` / `telvyn_migrator`
+    (`MARKER_WRITABLE_BY_TEST_ROLE`). So a test role cannot forge the marker with
+    `ALTER ROLE … SET` (review finding M2). A test role that is a **member** of the
+    database owner role (any membership, inherited or SET, via `pg_has_role(…, 'MEMBER')`)
+    is refused the same way (review N1);
+  - the Redis marker key `telvyn:e2e:instance-marker` and the logical DB match.
+
+  The server-side port (`inet_server_port()`, 5432 inside a container) is reported
+  but **not** required to equal the published host port. Probe errors are never
+  echoed, and no diagnostic prints a credential or raw URL.
+- **Exclusive run lease (review finding M1):** `test/e2e-run-lease.ts`. After Gate B
+  passes, global setup takes a PostgreSQL session advisory lock
+  (`pg_try_advisory_lock`) on a dedicated one-connection client in the verified E2E
+  database. A second run against the same instance is refused (`INSTANCE_BUSY`)
+  before any test file runs. That protects the state that cannot be run-owned: the
+  GLOBAL kill-switch singleton and the loopback rate-limit windows.
+  - A heartbeat (1 s, 3 s stall limit) exits the main process non-zero if the lock is
+    no longer held by the same backend, so no further test file is scheduled.
+  - **Worker execution fence (review N2, INC-DB-001B-PRE2):** every test-worker
+    process holds a SHARED advisory lock (class `TELV`, object 2) on its own pinned
+    session (`test/e2e-worker-fence.ts`, first `beforeAll` / last `afterAll`), and
+    verifies every 1 s that the lease is held by exactly the published lease session
+    (backend pid + `backend_start`). On loss, error or stall the worker SIGKILLs
+    itself — Vitest 3 replaces `process.exit` in workers with a throwing stub, so
+    `process.exit` cannot stop a worker. No test body, hook or cleanup of the
+    interrupted file runs afterwards. A worker also terminates if its IPC channel to
+    the main process closes. The lane is pinned to `pool: "forks"`.
+  - **Drain:** a new run takes the lease, then requires the worker fence to be free
+    (exclusive try-lock on object 2) twice, 5 s apart; a live worker of an earlier run
+    makes it `INSTANCE_BUSY`. The 5 s grace exceeds a worker's detection bound
+    (1 s heartbeat + 3 s stall), so no two runs mutate the instance at the same time.
+  - **Bounds (not instantaneous, not atomic across PostgreSQL and Redis):** a
+    statement or Redis command already sent may complete; detection is ≤ one
+    heartbeat plus one in-flight check; a worker whose event loop is blocked cannot
+    react until it yields. Live drills (local-verify) observed 1 write 136 ms after a
+    lease cut and 4 writes within 774 ms after a worker-fence cut, then none.
+  - Global teardown releases the lock, and PostgreSQL releases it if the run crashes.
+  - This is an interlock between cooperating runs, not a defence against an operator.
+- **Worker re-check:** every E2E file and `fixture-db.ts` import `test/e2e-guard.ts`
+  first. It re-runs Gate A and requires the credential-free fingerprint that Gate B
+  verified (Vitest `provide` / `inject`). A file run outside the guarded lane fails
+  before any client is constructed.
+- **No fallbacks:** all shared-target `??=` lines are removed. `fixture-db.ts` builds
+  its client only from the validated `E2E_FIXTURE_DATABASE_URL`, with no
+  `DATABASE_URL`, default-client or `.env` fallback.
+- **Scoped cleanup (`test/e2e-run.ts`):**
+  - Users carry a per-run email domain (`<runId>.e2e.telvyn.test`).
+  - Tenants are reached only through run users, or through run-scoped prefixes for
+    telecom, region and reservation names.
+  - Redis uses cursor `SCAN` only. Rate-limit keys are reset for loopback callers and
+    run emails only; fraud counters only for run-owned tenants.
+  - A GLOBAL kill switch is deleted only if it was absent before the run and toggled
+    by a run user.
+  - Never `FLUSHDB`, `FLUSHALL` or `KEYS`, and never disabling triggers.
+- **CI:** service ports are published on 55432/56379, and the `ci-ephemeral` markers
+  are applied by a dedicated step. The unit and E2E lanes run as separate steps.
+- **Tests:**
+  - `test/e2e-target-guard.unit.test.ts`: Gate A/B negatives and positives with
+    mocks, with no sockets.
+  - `test/e2e-run-lease.unit.test.ts`: lease acquire, busy, failure, loss and
+    release with a mocked driver.
+  - `test/e2e-safety-static.unit.test.ts`: config, scripts and source scan.
+  - `test/e2e-cleanup-scope.e2e.test.ts`: legacy-shaped sentinels survive the scoped
+    cleanup on the isolated instance.

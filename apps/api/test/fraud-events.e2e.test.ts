@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_EMAIL_SUFFIX, ownedTenantIds, ownedTenantWhere, ownedUserWhere, resetRunRateLimits } from "./e2e-run";
 import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12R-1 — Fraud-event foundation e2e (real Postgres + Redis). Proves:
@@ -15,8 +17,6 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { TenantType } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
-process.env.REDIS_URL ??= "redis://localhost:6379";
 process.env.JWT_ACCESS_SECRET ??= "test-secret-test-secret-test-secret-42";
 process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 
@@ -32,14 +32,13 @@ const TRANSPORT = { "x-token-transport": "body" } as const;
 const CODE = "TST_FRAUD"; // all seeded events use this code → easy, targeted cleanup
 
 async function flushRateLimits(): Promise<void> {
-  const keys = await redis.keys("rl:*");
-  if (keys.length) await redis.del(keys);
+  await resetRunRateLimits(redis);
 }
 async function systemRole(key: string): Promise<string> {
   return (await prisma.role.findFirstOrThrow({ where: { tenantId: null, key } })).id;
 }
 async function provision(tag: string, roleKey: string): Promise<{ token: string; tenantId: string }> {
-  const email = `${tag}.${Date.now()}.${Math.round(performance.now())}@telvyn.test`;
+  const email = `${tag}.${Date.now()}.${Math.round(performance.now())}${RUN_EMAIL_SUFFIX}`;
   const user = await prisma.user.create({ data: { email, passwordHash: await argon2.hash(PASSWORD, ARGON2_OPTIONS), status: "ACTIVE" } });
   const tenant = await prisma.tenant.create({ data: { slug: `${tag}-${user.id}`, name: tag, type: TenantType.CUSTOMER } });
   const membership = await prisma.membership.create({ data: { userId: user.id, tenantId: tenant.id, status: "ACTIVE" } });
@@ -64,9 +63,11 @@ beforeAll(async () => {
 });
 beforeEach(flushRateLimits);
 afterAll(async () => {
-  await prisma.fraudEvent.deleteMany({ where: { code: CODE } });
-  await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
-  await prisma.tenant.deleteMany({ where: { name: { in: ["fa", "fb", "fop"] } } });
+  // Resolve run-owned tenants BEFORE their owning users are deleted.
+  const ownedTenants = await ownedTenantWhere(prisma, ["fa", "fb", "fop"]);
+  await prisma.fraudEvent.deleteMany({ where: { code: CODE, tenantId: { in: await ownedTenantIds(prisma, ["fa", "fb", "fop"]) } } });
+  await prisma.user.deleteMany({ where: ownedUserWhere() });
+  await prisma.tenant.deleteMany({ where: ownedTenants });
   await prisma.$disconnect();
   await redis.quit();
   await app.close();

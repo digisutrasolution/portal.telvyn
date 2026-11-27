@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_EMAIL_SUFFIX } from "./e2e-run";
 /**
  * Security-header regression suite (pre-Phase-12 hardening). Asserts the JSON
  * API emits the hardened header set on normal, auth, and error responses, and
@@ -8,8 +10,6 @@ import request from "supertest";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
-process.env.REDIS_URL ??= "redis://localhost:6379";
 process.env.JWT_ACCESS_SECRET ??= "test-secret-test-secret-test-secret-42";
 process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 
@@ -50,7 +50,7 @@ describe("API security headers", () => {
   it("sets hardened headers on an auth 401 error response", async () => {
     const res = await request(http)
       .post("/v1/auth/login")
-      .send({ email: "nobody@telvyn.test", password: "definitely-wrong-1" });
+      .send({ email: `nobody${RUN_EMAIL_SUFFIX}`, password: "definitely-wrong-1" });
     expect(res.status).toBe(401);
     assertHardened(res.headers);
   });

@@ -5,6 +5,44 @@ Format: Keep a Changelog; SemVer once releases begin.
 
 ## [Unreleased]
 
+### Security
+- 2026-11-27 — **INC-DB-001B — fail-closed E2E test-environment safety** (incident INC-DB-001, see
+  `docs/incidents/INC-DB-001.md`):
+  - The default Vitest lane is now unit-only and pins `.invalid` data-plane sentinels. The package
+    scripts are `test` (unit) and `test:e2e` (guarded).
+  - New two-stage guard. Gate A (pre-connection): profile/URL allowlist, protected ports
+    5432/5433/6379/6380 refused in every profile. Gate B (post-connection, read-only): database,
+    role, server, migrations, DB marker `telvyn.e2e_instance`, Redis marker + DB.
+  - Review fixes (INC-DB-001B-R):
+    - **M2:** the DB marker must be a database-level setting only. Role-level or
+      cluster-level copies, session overrides and test-role database ownership are
+      refused.
+    - **M1:** an exclusive run lease (PostgreSQL session advisory lock) refuses a second
+      concurrent run on the same instance (`INSTANCE_BUSY`).
+    - `scripts/test/e2e-local.ps1` now propagates the lane's exit code (a refused run
+      used to exit 0), and `-Files` forwards file filters correctly.
+  - Verification hardening (INC-DB-001B-PRE2):
+    - **N2:** lease loss now stops the workers. Every test worker holds a shared
+      worker-fence advisory lock and re-verifies the lease session each second; on
+      loss it SIGKILLs itself (Vitest stubs `process.exit` in workers). A new run is
+      refused (`INSTANCE_BUSY`) while any worker of an earlier run is still connected.
+      The lane is pinned to `pool: "forks"`. Gated live drill
+      `test/e2e-lease-drill.e2e.test.ts` (local-verify only).
+    - **N1:** Gate B refuses a test role that is a member of the database owner role.
+    - **L1:** Gate A refuses URL fragments and repeated query parameters.
+    - New explicit profile `local-verify` (`127.0.0.1:5435` / `telvyn_safety_verify`,
+      Redis `127.0.0.1:6382`), `docker-compose.local-verify.yml`, a third approved
+      marker pair, and `e2e-local.ps1 -Profile`.
+  - Retired the `TELVYN_E2E_ALLOW_TARGET` bypass. Removed every shared-target `??=` fallback.
+    `fixture-db` is built only after the guard, from the fixture URL.
+  - Run-scoped ownership and cleanup: run email domain, tenants via run users, run name prefixes,
+    `SCAN`-only Redis cleanup of run-owned keys, GLOBAL kill switch deleted only if created by the run.
+  - CI: services published on 55432/56379, a marker step, separate unit and E2E steps. New
+    `scripts/db/e2e-instance-marker.sql`, `apps/api/scripts/mark-e2e-redis-instance.ts`,
+    `scripts/test/e2e-local.ps1`.
+  - No production code, schema or migration change. The 13 test tenants left in the legacy
+    database by the incident are intentionally untouched (owner decision).
+
 ### Added
 - 2026-11-26 — **Phase 13-2B S1 — financial authorization foundation** (ADR-0022 Amendment 5 BA-08,
   BA-15; owner decisions G1–G4). Permission catalog gains the `wildcardExcluded` flag: such keys are never

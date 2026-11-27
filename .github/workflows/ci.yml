@@ -34,8 +34,10 @@ jobs:
           POSTGRES_USER: telvyn
           POSTGRES_PASSWORD: telvyn_dev
           POSTGRES_DB: telvyn
+        # INC-DB-001B: published on 55432 (container port stays 5432) so the CI
+        # E2E profile never names a protected native port (5432/5433).
         ports:
-          - 5432:5432
+          - 55432:5432
         options: >-
           --health-cmd "pg_isready -U telvyn -d telvyn"
           --health-interval 10s
@@ -43,8 +45,9 @@ jobs:
           --health-retries 10
       redis:
         image: redis:7-alpine
+        # INC-DB-001B: published on 56379 (container port stays 6379).
         ports:
-          - 6379:6379
+          - 56379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -63,8 +66,8 @@ jobs:
       # already resolves to `public`, so both tools behave identically without it.
       # Do NOT re-add `?schema=public` here or on the exported role URLs below —
       # it breaks every `psql` step (verify / bootstrap / grants / privilege-check).
-      CI_PG_ADMIN_URL: postgresql://telvyn:telvyn_dev@localhost:5432/telvyn
-      REDIS_URL: redis://localhost:6379
+      CI_PG_ADMIN_URL: postgresql://telvyn:telvyn_dev@localhost:55432/telvyn
+      REDIS_URL: redis://localhost:56379
       JWT_ACCESS_SECRET: ci-secret-ci-secret-ci-secret-ci-secret-01
       APP_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       COOKIE_SECURE: "false"
@@ -129,8 +132,8 @@ jobs:
           # consumed by BOTH psql (privilege-check) and Prisma (test runtime),
           # so it must be libpq-valid; Prisma defaults to the public schema.
           {
-            echo "MIGRATOR_DATABASE_URL=postgresql://telvyn_migrator:$MIG_PW@localhost:5432/telvyn"
-            echo "APP_DATABASE_URL=postgresql://telvyn_app:$APP_PW@localhost:5432/telvyn"
+            echo "MIGRATOR_DATABASE_URL=postgresql://telvyn_migrator:$MIG_PW@localhost:55432/telvyn"
+            echo "APP_DATABASE_URL=postgresql://telvyn_app:$APP_PW@localhost:55432/telvyn"
           } >> "$GITHUB_ENV"
 
       - name: Typecheck
@@ -186,15 +189,36 @@ jobs:
           set -euo pipefail
           psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/db/ci-privilege-check.sql
 
-      - name: Test (unit + restricted-role e2e against live Postgres + Redis)
+      - name: Mark ephemeral E2E instance (DB + Redis markers)
+        # INC-DB-001B: E2E Gate B refuses any database/Redis without the
+        # ci-ephemeral instance markers. Only this fresh CI service is marked.
         env:
+          TELVYN_E2E_PROFILE: ci-ephemeral
+          DATABASE_URL: ${{ env.APP_DATABASE_URL }}
+          E2E_FIXTURE_DATABASE_URL: ${{ env.MIGRATOR_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          psql "$CI_PG_ADMIN_URL" -v ON_ERROR_STOP=1 -v db_name=telvyn             -v marker=telvyn-e2e/ci-ephemeral -v ci_ephemeral=1 -f scripts/db/e2e-instance-marker.sql
+          pnpm --filter @telvyn/api e2e:mark-redis
+
+      - name: Test (unit — no data plane)
+        # The default lane is unit-only (vitest.config.ts); its setup pins
+        # unresolvable data-plane sentinels, so no database variable is passed.
+        run: pnpm -r test
+
+      - name: Test (restricted-role e2e against the marked ephemeral Postgres + Redis)
+        env:
+          # Two-stage guard: Gate A (profile/URL allowlist, pre-connection) then
+          # Gate B (current_database/current_user/markers/migrations/role
+          # attributes, post-connection) before any E2E file runs.
           # Application runtime = restricted telvyn_app; privileged e2e fixtures
           # (setup/teardown) = telvyn_migrator. Fixture creds are NOT injected
           # into the application runtime configuration. No admin fallback: if
           # bootstrap did not export these, they are empty and the lane fails.
+          TELVYN_E2E_PROFILE: ci-ephemeral
           DATABASE_URL: ${{ env.APP_DATABASE_URL }}
           E2E_FIXTURE_DATABASE_URL: ${{ env.MIGRATOR_DATABASE_URL }}
-        run: pnpm -r test
+        run: pnpm --filter @telvyn/api test:e2e
 
       - name: Web production build
         run: pnpm --filter @telvyn/web build

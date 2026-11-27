@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_EMAIL_SUFFIX, ownedUserWhere, resetRunRateLimits } from "./e2e-run";
 import { fixturePrisma } from "./fixture-db";
 /**
  * Auth integration suite — runs against the REAL Postgres + Redis from
@@ -14,8 +16,6 @@ import Redis from "ioredis";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:change_me_local_dev@localhost:5433/telvyn?schema=public";
-process.env.REDIS_URL ??= "redis://localhost:6380";
 process.env.JWT_ACCESS_SECRET ??= "test-secret-test-secret-test-secret-42";
 process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 process.env.COOKIE_SECURE ??= "false";
@@ -30,11 +30,10 @@ let http: ReturnType<NestExpressApplication["getHttpServer"]>;
 
 /** Clear rate-limit buckets so one test's login volume can't throttle the next. */
 async function flushRateLimits(): Promise<void> {
-  const keys = await redis.keys("rl:*");
-  if (keys.length) await redis.del(keys);
+  await resetRunRateLimits(redis);
 }
 
-const EMAIL = `op.${Date.now()}@telvyn.test`;
+const EMAIL = `op.${Date.now()}${RUN_EMAIL_SUFFIX}`;
 const PASSWORD = "correct-horse-battery-staple-9";
 const TRANSPORT = { "x-token-transport": "body" } as const;
 
@@ -54,7 +53,7 @@ beforeAll(async () => {
 beforeEach(flushRateLimits);
 
 afterAll(async () => {
-  await prisma.user.deleteMany({ where: { email: { endsWith: "@telvyn.test" } } });
+  await prisma.user.deleteMany({ where: ownedUserWhere() });
   await prisma.$disconnect();
   await redis.quit();
   await app.close();
@@ -71,7 +70,7 @@ describe("login", () => {
   it("rejects an unknown email with the SAME generic message (no enumeration)", async () => {
     const res = await request(http)
       .post("/v1/auth/login")
-      .send({ email: "nobody@telvyn.test", password: "whatever-password-1" });
+      .send({ email: `nobody${RUN_EMAIL_SUFFIX}`, password: "whatever-password-1" });
     expect(res.status).toBe(401);
     expect(res.body.title).toBe("Invalid email or password");
   });
@@ -165,7 +164,7 @@ describe("sessions, devices, revocation, logout", () => {
 
 describe("brute force lockout", () => {
   it("locks the account after repeated failures (423)", async () => {
-    const email = `lockme.${Date.now()}@telvyn.test`;
+    const email = `lockme.${Date.now()}${RUN_EMAIL_SUFFIX}`;
     await createUser(email, PASSWORD);
     for (let i = 0; i < 5; i++) {
       await request(http).post("/v1/auth/login").send({ email, password: "definitely-wrong-1" });
@@ -177,7 +176,7 @@ describe("brute force lockout", () => {
 
 describe("MFA", () => {
   it("enrolls, enables, requires MFA at login, accepts TOTP, and disables with step-up", async () => {
-    const email = `mfa.${Date.now()}@telvyn.test`;
+    const email = `mfa.${Date.now()}${RUN_EMAIL_SUFFIX}`;
     await createUser(email, PASSWORD);
     const login = await request(http).post("/v1/auth/login").set(TRANSPORT).send({ email, password: PASSWORD });
     const bearer = `Bearer ${login.body.accessToken}`;
@@ -255,13 +254,13 @@ describe("MFA", () => {
 
 describe("password reset + email verification", () => {
   it("resets the password via a hashed single-use token and revokes sessions", async () => {
-    const email = `reset.${Date.now()}@telvyn.test`;
+    const email = `reset.${Date.now()}${RUN_EMAIL_SUFFIX}`;
     await createUser(email, PASSWORD);
     const login = await request(http).post("/v1/auth/login").set(TRANSPORT).send({ email, password: PASSWORD });
 
     await request(http).post("/v1/auth/password-reset/request").send({ email }).expect(202);
     // Unknown email gets the identical 202 (no enumeration).
-    await request(http).post("/v1/auth/password-reset/request").send({ email: "ghost@telvyn.test" }).expect(202);
+    await request(http).post("/v1/auth/password-reset/request").send({ email: `ghost${RUN_EMAIL_SUFFIX}` }).expect(202);
 
     const outbox = await prisma.emailOutbox.findFirst({
       where: { toEmail: email, purpose: "password_reset" },
@@ -281,7 +280,7 @@ describe("password reset + email verification", () => {
   });
 
   it("verifies email ownership via a hashed single-use token", async () => {
-    const email = `verify.${Date.now()}@telvyn.test`;
+    const email = `verify.${Date.now()}${RUN_EMAIL_SUFFIX}`;
     await createUser(email, PASSWORD);
     const login = await request(http).post("/v1/auth/login").set(TRANSPORT).send({ email, password: PASSWORD });
     const bearer = `Bearer ${login.body.accessToken}`;

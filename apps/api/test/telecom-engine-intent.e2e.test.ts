@@ -1,3 +1,5 @@
+import "./e2e-guard"; // INC-DB-001B: two-stage target guard — must stay the FIRST import
+import { RUN_EMAIL_SUFFIX, RUN_ID, ownedUserWhere, resetRunRateLimits } from "./e2e-run";
 import { fixturePrisma } from "./fixture-db";
 /**
  * Phase 12N-3 — desired config intent from assignments (real Postgres + Redis).
@@ -13,8 +15,6 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { TenantType, TelecomEngineType, EngineResourceKind } from "@prisma/client";
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://telvyn:telvyn_dev@localhost:5432/telvyn?schema=public";
-process.env.REDIS_URL ??= "redis://localhost:6379";
 process.env.JWT_ACCESS_SECRET ??= "test-secret-test-secret-test-secret-42";
 process.env.APP_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString("base64");
 
@@ -27,15 +27,14 @@ let app: NestExpressApplication;
 let http: ReturnType<NestExpressApplication["getHttpServer"]>;
 const PASSWORD = "correct-horse-battery-staple-9";
 const TRANSPORT = { "x-token-transport": "body" } as const;
-const TAG = `tnra3-${Date.now()}`;
+const TAG = `tnra3-${RUN_ID}`;
 let seq = 0;
 
 async function flushRateLimits(): Promise<void> {
-  const keys = await redis.keys("rl:*");
-  if (keys.length) await redis.del(keys);
+  await resetRunRateLimits(redis);
 }
 async function platformToken(): Promise<string> {
-  const email = `int.${Date.now()}.${seq++}@telvyn.test`;
+  const email = `int.${Date.now()}.${seq++}${RUN_EMAIL_SUFFIX}`;
   const user = await prisma.user.create({ data: { email, passwordHash: await argon2.hash(PASSWORD, ARGON2_OPTIONS), status: "ACTIVE" } });
   const tenant = await prisma.tenant.create({ data: { slug: `${TAG}-${seq++}`, name: `${TAG}`, type: TenantType.PLATFORM } });
   const m = await prisma.membership.create({ data: { userId: user.id, tenantId: tenant.id, status: "ACTIVE" } });
@@ -81,7 +80,7 @@ afterAll(async () => {
   await prisma.carrier.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.membershipRole.deleteMany({ where: { membership: { tenant: { name: { startsWith: TAG } } } } });
   await prisma.membership.deleteMany({ where: { tenant: { name: { startsWith: TAG } } } });
-  await prisma.user.deleteMany({ where: { email: { startsWith: "int." } } });
+  await prisma.user.deleteMany({ where: ownedUserWhere() });
   await prisma.tenant.deleteMany({ where: { name: { startsWith: TAG } } });
   await app.close();
   await prisma.$disconnect();
