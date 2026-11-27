@@ -9,6 +9,10 @@
     local-verify              Compose project telvyn-inc-db-001b-verify (docker-compose.local-verify.yml):
                               PostgreSQL 127.0.0.1:5435 / telvyn_safety_verify, Redis 127.0.0.1:6382 db 0.
                               Credentials + test-only app secrets: gitignored .env.inc-db-001b-verify.
+    verify-clean              Compose project telvyn-verify-clean (docker-compose.verify-clean.yml), migrated
+                              from an empty database (Phase 13-2B S5):
+                              PostgreSQL 127.0.0.1:5436 / telvyn_clean_verify, Redis 127.0.0.1:6383 db 0.
+                              Credentials + test-only app secrets: gitignored .env.verify-clean.
 
   Credentials are read from the profile's gitignored file and never printed. The wrapper
   sets TELVYN_E2E_PROFILE and the three target URLs, then runs
@@ -22,7 +26,7 @@
     powershell -File scripts/test/e2e-local.ps1 [-Profile local-verify] -Files test/auth.e2e.test.ts,test/authz.e2e.test.ts
 #>
 param(
-  [ValidateSet('local-isolated', 'local-verify')][string]$Profile = 'local-isolated',
+  [ValidateSet('local-isolated', 'local-verify', 'verify-clean')][string]$Profile = 'local-isolated',
   [switch]$Mark,
   [string[]]$Files = @()
 )
@@ -46,20 +50,28 @@ if ($Profile -eq 'local-isolated') {
   $container = 'telvyn-ledger-dev-pg'; $admin = 'telvyn_ledger_admin'
   $dbName = 'telvyn_ledger_e2e'; $marker = 'telvyn-e2e/local-isolated'
 } else {
-  $kv = Read-KeyValueFile '.env.inc-db-001b-verify'
-  foreach ($k in 'MIGRATOR_PASSWORD', 'APP_PASSWORD') {
-    if ($kv[$k] -notmatch '^[0-9a-f]{32,}$') { throw "ABORT: $k in .env.inc-db-001b-verify must be a hex secret of at least 32 characters" }
+  # Two disposable verification environments with fixed, non-overridable targets.
+  if ($Profile -eq 'local-verify') {
+    $envFile = '.env.inc-db-001b-verify'; $port = 5435; $dbName = 'telvyn_safety_verify'
+    $redisUrl = 'redis://127.0.0.1:6382/0'; $container = 'telvyn-inc-db-001b-verify-pg'
+    $marker = 'telvyn-inc-db-001b-local-verify'
+  } else {
+    $envFile = '.env.verify-clean'; $port = 5436; $dbName = 'telvyn_clean_verify'
+    $redisUrl = 'redis://127.0.0.1:6383/0'; $container = 'telvyn-verify-clean-pg'
+    $marker = 'telvyn-verify-clean'
   }
-  $app = "postgresql://telvyn_app:$($kv.APP_PASSWORD)@127.0.0.1:5435/telvyn_safety_verify"
-  $fix = "postgresql://telvyn_migrator:$($kv.MIGRATOR_PASSWORD)@127.0.0.1:5435/telvyn_safety_verify"
-  $pattern = '@127\.0\.0\.1:5435/telvyn_safety_verify$'
-  $redisUrl = 'redis://127.0.0.1:6382/0'
-  $container = 'telvyn-inc-db-001b-verify-pg'; $admin = 'telvyn'
-  $dbName = 'telvyn_safety_verify'; $marker = 'telvyn-inc-db-001b-local-verify'
+  $admin = 'telvyn'
+  $kv = Read-KeyValueFile $envFile
+  foreach ($k in 'MIGRATOR_PASSWORD', 'APP_PASSWORD') {
+    if ($kv[$k] -notmatch '^[0-9a-f]{32,}$') { throw "ABORT: $k in $envFile must be a hex secret of at least 32 characters" }
+  }
+  $app = "postgresql://telvyn_app:$($kv.APP_PASSWORD)@127.0.0.1:$port/$dbName"
+  $fix = "postgresql://telvyn_migrator:$($kv.MIGRATOR_PASSWORD)@127.0.0.1:$port/$dbName"
+  $pattern = "@127\.0\.0\.1:$port/$dbName`$"
   # Test-only application secrets for the app under test (the worktree has no apps/api/.env;
   # CI sets fixed test values at job level). Random per environment; never printed.
-  if ($kv.JWT_ACCESS_SECRET -notmatch '^[0-9a-f]{32,}$') { throw 'ABORT: JWT_ACCESS_SECRET in .env.inc-db-001b-verify must be a hex secret of at least 32 characters' }
-  if ($kv.APP_ENCRYPTION_KEY -notmatch '^[A-Za-z0-9+/]{43}=$') { throw 'ABORT: APP_ENCRYPTION_KEY in .env.inc-db-001b-verify must be 32 bytes base64' }
+  if ($kv.JWT_ACCESS_SECRET -notmatch '^[0-9a-f]{32,}$') { throw "ABORT: JWT_ACCESS_SECRET in $envFile must be a hex secret of at least 32 characters" }
+  if ($kv.APP_ENCRYPTION_KEY -notmatch '^[A-Za-z0-9+/]{43}=$') { throw "ABORT: APP_ENCRYPTION_KEY in $envFile must be 32 bytes base64" }
   $env:JWT_ACCESS_SECRET = $kv.JWT_ACCESS_SECRET; $env:APP_ENCRYPTION_KEY = $kv.APP_ENCRYPTION_KEY; $env:COOKIE_SECURE = 'false'
 }
 foreach ($u in $app, $fix) {

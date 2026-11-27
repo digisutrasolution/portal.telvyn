@@ -1,0 +1,68 @@
+# Telvyn — CLEAN DISPOSABLE verification data plane (E2E profile `verify-clean`,
+# Phase 13-2B S5 database-integrity requirement).
+#
+# Built because the retained `local-verify` database carries a recorded S4 migration
+# checksum that differs from the committed file (preserved, never edited). This
+# environment is migrated from an EMPTY database with the committed migrations only,
+# so every checksum, role, marker, drift and privilege check runs against a clean
+# history. DEDICATED, NON-PRODUCTION, loopback-only: its own Compose project,
+# containers, network and named volume; never the native PostgreSQL/Redis
+# (5432/6379), FMC (5433/6380), telvyn-ledger-dev (5434/6381) or local-verify
+# (5435/6382).
+#
+# Provision (from the repository root; the env file is gitignored and holds only
+# per-environment random secrets — see docs/DEVOPS.md "verify-clean"):
+#   docker compose --env-file .env.verify-clean -p telvyn-verify-clean #     -f docker-compose.verify-clean.yml up -d
+#
+# Images match the approved isolated environment: postgres:18-alpine, redis:7-alpine.
+name: telvyn-verify-clean
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: telvyn-verify-clean-pg
+    restart: "no"
+    environment:
+      # Fixed identity: the bootstrap superuser mirrors the CI service (`telvyn`), so the
+      # unmodified CI bootstrap / grant / privilege-check scripts apply as-is.
+      POSTGRES_USER: telvyn
+      POSTGRES_DB: telvyn_clean_verify
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.verify-clean}
+    ports:
+      - "127.0.0.1:5436:5432"            # loopback only; never 0.0.0.0
+    volumes:
+      - telvyn_verify_clean_pgdata:/var/lib/postgresql
+    networks:
+      - verify_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telvyn -d telvyn_clean_verify"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    # Hardening: no host networking, no privileged mode, no docker socket mount.
+
+  redis:
+    image: redis:7-alpine
+    container_name: telvyn-verify-clean-redis
+    restart: "no"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6383:6379"            # loopback only; never 0.0.0.0
+    networks:
+      - verify_net
+    # No volume: disposable, intentionally non-persistent test state.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+networks:
+  verify_net:
+    name: telvyn-verify-clean_net
+
+volumes:
+  telvyn_verify_clean_pgdata:
+    name: telvyn_verify_clean_pgdata

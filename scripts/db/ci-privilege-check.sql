@@ -216,7 +216,7 @@ END
 $$;
 
 -- ---- FinancialAuditEvent runtime negatives (Phase 13-2B S2) --------------
--- Owner decision F6: runtime holds SELECT + INSERT only (append-only audit).
+-- Owner decision F6 / S5 O7: runtime holds INSERT only (append-only audit).
 -- Every op below MUST fail with 42501 - never a missing-object or syntax error.
 DO $$
 DECLARE
@@ -276,6 +276,51 @@ BEGIN
       WHEN insufficient_privilege THEN NULL;  -- 42501: the expected denial
       WHEN undefined_object OR undefined_table OR undefined_function OR syntax_error THEN
         RAISE EXCEPTION 'PRIV_FAIL: chart-of-accounts op % errored with a NON-privilege class % (not a valid denial)', stmt, SQLSTATE;
+    END;
+  END LOOP;
+END
+$$;
+
+-- ---- BillingAccount provisioning runtime negatives (Phase 13-2B S5) ------
+-- O7: runtime has NO SELECT on FinancialAuditEvent (INSERT only). The runtime
+-- role still has NO direct BillingAccount privilege and may NOT execute the
+-- completeness/guard functions or ledger_account_open: the only provisioning
+-- path is billing.billing_account_provision, which re-checks platform, MFA,
+-- explicit permission and a step-up grant consumed in the same transaction.
+DO $$
+DECLARE
+  stmt text;
+  forbidden text[] := ARRAY[
+    'SELECT 1 FROM "FinancialAuditEvent" LIMIT 1',
+    'SELECT "id" FROM "FinancialAuditEvent" LIMIT 1',
+    'SELECT 1 FROM "BillingAccount" LIMIT 1',
+    'INSERT INTO "BillingAccount"("tenantId","accountNumber","currency","mode","label","provisioningKey","provisioningFingerprint","updatedAt") VALUES (uuidv7(),''BA-2026-222222222222'',''USD'',''PREPAID'',''x'',''aaaaaaaaaaaaaaaa'',''v1:'' || repeat(''0'',64),now())',
+    'UPDATE "BillingAccount" SET "label" = ''x'' WHERE false',
+    'DELETE FROM "BillingAccount" WHERE false',
+    'ALTER TABLE "BillingAccount" DISABLE TRIGGER billing_account_provision_complete',
+    'DROP FUNCTION billing.billing_account_provision_complete()',
+    'DROP FUNCTION billing.billing_account_provisioning_guard()'
+  ];
+BEGIN
+  IF to_regprocedure('billing.billing_account_provision(uuid,uuid,uuid,uuid,"Currency",text,boolean,text,text,text)') IS NULL THEN
+    RAISE EXCEPTION 'PRIV_FAIL: billing.billing_account_provision missing (S5 migration not applied)';
+  END IF;
+  IF NOT has_function_privilege(current_user, 'billing.billing_account_provision(uuid,uuid,uuid,uuid,"Currency",text,boolean,text,text,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'PRIV_FAIL: runtime role must EXECUTE billing.billing_account_provision';
+  END IF;
+  IF has_function_privilege(current_user, 'billing.billing_account_provision_complete()', 'EXECUTE')
+     OR has_function_privilege(current_user, 'billing.billing_account_provisioning_guard()', 'EXECUTE')
+     OR has_function_privilege(current_user, 'billing.ledger_account_open(uuid,uuid,"Currency",text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'PRIV_FAIL: runtime role must not execute provisioning internals or ledger_account_open';
+  END IF;
+  FOREACH stmt IN ARRAY forbidden LOOP
+    BEGIN
+      EXECUTE stmt;
+      RAISE EXCEPTION 'PRIV_FAIL: runtime role unexpectedly ALLOWED on provisioning surface: %', stmt;
+    EXCEPTION
+      WHEN insufficient_privilege THEN NULL;  -- 42501: the expected denial
+      WHEN undefined_object OR undefined_table OR undefined_function OR undefined_column OR syntax_error THEN
+        RAISE EXCEPTION 'PRIV_FAIL: provisioning op % errored with a NON-privilege class % (not a valid denial)', stmt, SQLSTATE;
     END;
   END LOOP;
 END

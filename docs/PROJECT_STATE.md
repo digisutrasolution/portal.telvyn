@@ -103,7 +103,7 @@ commercial billing.
 **Security gates carried forward (not S2):** the `setMemberRoles` escalation gap — **RESOLVED by P1**
 (2026-11-28, see below); the S1 choice to exclude recovery codes from financial step-up — **ratified by the
 owner (O1, 2026-11-28)**.
-**P1 — role-escalation correction — IMPLEMENTED** (branch `fix/p1-role-escalation`, pre-S5 mandatory
+**P1 — role-escalation correction — MERGED** (`main`, PR #33, merge `28179a4`; pre-S5 mandatory
 prerequisite): `setMemberRoles` runs in one transaction that locks the tenant row and re-derives the actor's
 authority from the database; refuses self-modification, assigning a role that confers any permission the actor
 lacks, modifying a member who holds any permission the actor lacks (an admin cannot demote/strip an owner) and
@@ -112,8 +112,8 @@ actor to hold every permission the role confers. Behaviour change: the system `a
 `operator`/`auditor` (they carry `wallet.read`/`cdr.read`, which `admin` lacks); owners assign any role.
 **INC-DB-001B MERGED** (PR #29, merge `e7c1e39`; post-merge CI #62 green) and **AUTO-001 MERGED** (PR #30,
 merge `ac7d361`; post-merge CI #64 green) — see `docs/incidents/INC-DB-001.md`.
-**S4 — chart of accounts foundation — IMPLEMENTED + VERIFIED (disposable `local-verify` env + CI), released
-through the S4 PR (branch `feat/phase-13-2b-s4-chart-of-accounts`); INERT; NOT deployed.** Owner decisions
+**S4 — chart of accounts foundation — MERGED (`main`, PR #32, merge `cf62d55`); NOT deployed.** (Inert in
+S4; S5 below is now its only caller.) Owner decisions
 D1–D6 (2026-11-28). Migration `20261128090000_chart_of_accounts_foundation`: immutable nullable
 `LedgerAccount.billingAccountId` (composite FK `(billingAccountId, tenantId, currency)` → `BillingAccount`,
 RESTRICT/RESTRICT), link guard (LA001–LA007), one account per (BillingAccount, taxonomy), and the restricted
@@ -126,8 +126,26 @@ their S5/S7/S8 gates).
 **QA-LEASE-001 (OPEN, reliability):** 5 full E2E attempts on `local-verify` around the S2 release gave 3
 passes and 2 lease aborts ("lock not held by this run"); read-only sampling saw no missing lock on the
 single lease session. Evidence points to a false detection, root cause unconfirmed — see `SECURITY.md`.
-**NEXT (owner-gated):** S5 atomic idempotent platform provisioning (separate authorization; blocked by the
-role-escalation gate and the recovery-code ratification).
+**S5 — atomic idempotent platform BillingAccount provisioning — IMPLEMENTED + VERIFIED (clean isolated
+`verify-clean` env), released through the S5 PR (branch `feat/phase-13-2b-s5-billing-account-provisioning`);
+NOT deployed; commercial billing NOT activated.** Owner decisions O1–O7 (2026-11-28). Migration
+`20261128150000_billing_account_provisioning`. New endpoints `POST /v1/auth/step-up` (TOTP-only, 300 s,
+single-use grant bound to user/session/tenant/purpose) and `POST /v1/platform/billing-accounts`
+(platform-only, explicit wildcard-excluded `billing.account.provision` + MFA + fresh step-up grant, mandatory
+Idempotency-Key). One transaction creates the PREPAID BillingAccount (`BA-YYYY-XXXXXXXXXXXX`), its
+`customer_funds` ledger account and the ALLOWED financial audit event; the step-up grant is consumed in that
+transaction. Authority is re-verified in the database by the SECURITY DEFINER
+`billing.billing_account_provision`; a deferred constraint (BP010) refuses COMMIT of an account lacking
+its ledger account or ALLOWED audit event. The proposed direct `BillingAccount` INSERT grant for
+`telvyn_app` was **rejected** (it would bypass every provisioning invariant): the runtime still holds no
+BillingAccount privilege. Runtime SELECT on `FinancialAuditEvent` is **revoked** (O7, INSERT only); no IP or
+user agent in financial audit (O6). Denied attempts are recorded in their own transaction. No money
+movement, no opening balance, no wallet, no UI. **Open owner decision before any activation:** the governed
+mechanism (and who holds delegation authority) for assigning `billing.account.provision` — S5 has no runtime
+assignment path; G4 keeps every API path fail-closed. Details: `BILLING.md`, `DATABASE.md`, `SECURITY.md`,
+`API.md`.
+**NEXT (owner-gated, not started):** S6 ordered account locking + lifecycle transitions (separate
+authorization; needs the lock timeout / retry values).
 **SEC-DEP-001 (mandatory before commercial Beta):** CI dependency audit reports 44 advisories (4 critical,
 18 high); unresolved exploitable critical/high production vulnerabilities block commercial deployment.
 **CI maintenance (separate, not S1):** CI #58 shows a GitHub Actions Node.js 20 deprecation warning
@@ -1110,3 +1128,4 @@ no migrations, no tests, no CI, no Dockerfiles, no git repository initialized.
 | 2026-11-27 | **INC-DB-001B-PRE2 — independent safety-only verification (worktree `fix/inc-db-001b-test-environment-safety`, base `032ee95`; not committed).** Owner authorized a strict `local-verify` profile, one disposable environment and the N2/L1/N1/L11 corrections. N2: worker execution fence (shared advisory lock + per-second lease-session check; SIGKILL on loss because Vitest stubs `process.exit` in workers) and drain refusal of a new run while an earlier run's workers are connected; `pool: "forks"` pinned. N1: Gate B refuses test-role membership in the DB owner role. L1: Gate A refuses URL fragments and repeated query parameters. L11: incident wording corrected. Disposable Compose project `telvyn-inc-db-001b-verify` (PG18 `127.0.0.1:5435` `telvyn_safety_verify`, Redis `127.0.0.1:6382`). EXECUTED locally: clean replay from empty (19 migrations applied, 0 failed, no S2 migration or FinancialAuditEvent), LEDGER/BILLING_ACCOUNT/FINANCIAL_AUTHZ drift OK, PRIV_CHECK_OK, `prisma migrate diff` DB→schema no difference; guarded E2E 30 files passed / 3 skipped, 280 tests passed / 3 skipped; 11 live Gate B / lease negatives refused with unchanged row counts; lease drills A–I + worker-only fence loss passed (bounded post-loss writes: 1 within 136 ms, 4 within 774 ms). An operator error reset the disposable DB once (Prisma shadow-database option); it was recreated and replayed with owner approval. GitHub Actions NOT RUN (no push). Environment retained. |
 | 2026-11-27 | **Phase 13-2B S2 reconciled onto `main` (`ac7d361`) and released through PR.** The original S2 working tree (branch `feat/phase-13-2b-s2-financial-audit`, HEAD `032ee95`) was preserved unmodified and checkpointed as `refs/checkpoints/s2-pre-reconcile-20261127`; the S2-only files and documentation hunks were carried into a clean worktree on `feat/phase-13-2b-s2-financial-audit-release`, taking the merged INC-DB-001B (#29) and AUTO-001 (#30) versions of every shared file. Owner decisions F1–F7; open items recorded in `SECURITY.md` / `BILLING.md`. Local evidence (EXECUTED, `local-verify` 127.0.0.1:5435 / `telvyn_safety_verify`): additive migration applied (20 migrations), LEDGER / BILLING_ACCOUNT / FINANCIAL_AUTHZ / FINANCIAL_AUDIT drift OK, PRIV_CHECK_OK, DB→schema `migrate diff` empty (no shadow database); API unit 48 files / 572; web 39 / 257; guarded e2e 31 files passed / 3 skipped, 299 tests passed / 3 skipped (S2 suite 19/19); typecheck, lint, build clean. **Harness finding (follow-up, not S2):** the first full e2e run aborted with `run lease LOST (lock not held by this run)` after 30 of 34 files, with no server-side termination logged; the guard failed closed as designed and an immediate re-run passed. Root cause unconfirmed (suspected client-side reconnect of the pinned lease session). |
 | 2026-11-28 | **Phase 13-2B S4 — chart of accounts foundation** implemented on `feat/phase-13-2b-s4-chart-of-accounts` (worktree from `main` `fd0c3d1`) under owner decisions D1–D6 and AUTO-001; verified on the disposable `local-verify` environment and in CI; inert (no runtime EXECUTE). QA-LEASE-001 investigation recorded (false detection suspected, unconfirmed); S2 review registers reconciled. |
+| 2026-11-28 | **Phase 13-2B S5 — platform BillingAccount provisioning IMPLEMENTED + VERIFIED** (owner decisions O1–O7). P1 merged first (PR #33). New clean isolated verification profile `verify-clean` (PG 127.0.0.1:5436 / Redis 6383; the retained `local-verify` env with its S4 checksum mismatch left untouched). Migration `20261128150000_billing_account_provisioning`; SECURITY DEFINER `billing.billing_account_provision` with DB-side authority checks + deferred completeness BP010; direct BillingAccount INSERT grant rejected; runtime audit SELECT revoked. EXECUTED on verify-clean: 22/22 migration checksums, all drift blocks + PRIV_CHECK_OK, new S5 E2E 31/31, full E2E lane 34 files passed / 3 skipped, 369 tests passed / 3 skipped, API unit 49 files / 593, web 39 / 257, typecheck, lint, build. Not deployed. |

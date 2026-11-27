@@ -46,3 +46,12 @@ export type PasswordResetConfirmInput = z.infer<typeof PasswordResetConfirmDto>;
 export type EmailVerifyConfirmInput = z.infer<typeof EmailVerifyConfirmDto>;
 export type MfaEnableInput = z.infer<typeof MfaEnableDto>;
 export type MfaDisableInput = z.infer<typeof MfaDisableDto>;
+
+/** Financial step-up issuance (Phase 13-2B S5). Purpose is checked against STEP_UP_PURPOSES. */
+export const StepUpIssueDto = z
+  .object({
+    purpose: z.string().regex(/^[a-z][a-z0-9_.]{2,63}$/),
+    code: z.string().trim().regex(/^\d{6}$/),
+  })
+  .strict();
+export type StepUpIssueInput = z.infer<typeof StepUpIssueDto>;

@@ -114,7 +114,7 @@ work merged with 13-2A (PR #26).
 | S1 | Financial authorization foundations: wildcard exclusion, MFA-for-finance, StepUpGrant, TOTP replay guard, retire `wallet.credit` | — | **MERGED** (PR #28, `032ee95`; post-merge CI green); NOT deployed |
 | S2 | Financial audit writer (dedicated append-only table, same transaction, fail closed) | — | **MERGED** (PR #31, `fd0c3d1`; post-merge CI #66 green); **inert** (empty operation catalog); NOT deployed |
 | S4 | Chart-of-accounts foundation: `LedgerAccount.billingAccountId` + `billing.ledger_account_open` | S3 | **IMPLEMENTED + VERIFIED** (disposable `local-verify` env + CI); released through the S4 PR; **inert** (no runtime EXECUTE); NOT deployed |
-| S5 | Atomic idempotent platform provisioning (grants `telvyn_app` SELECT+INSERT on BillingAccount) | S1, S2, S3, S4; account-number format + step-up TTLs | Not started |
+| S5 | Atomic idempotent platform provisioning (via SECURITY DEFINER `billing.billing_account_provision`; the proposed direct BillingAccount grant was rejected) | S1, S2, S3, S4; account-number format + step-up TTLs (O1–O7) | Implemented + verified (S5 PR); not deployed |
 | S6 | Ordered account locking + full lifecycle transition matrix (column-level UPDATE grant) | S5; lock timeout/retry values | Not started |
 | S8 | Restricted metadata reads (SECURITY DEFINER read functions, masked projections) | S5 | Not started |
 | S7 | Private ledger-context minting boundary (`FinancialAuthorizationService`) | S1, S6 | Not started |

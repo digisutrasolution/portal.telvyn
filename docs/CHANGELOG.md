@@ -5,7 +5,35 @@ Format: Keep a Changelog; SemVer once releases begin.
 
 ## [Unreleased]
 
+### Added
+- 2026-11-28 — **Phase 13-2B S5 — platform BillingAccount provisioning** (owner decisions O1–O7; NOT
+  deployed; commercial billing not activated; no money movement):
+  - `POST /v1/auth/step-up` — TOTP-only, single-use, 300 s step-up grant bound to user, session, tenant
+    and purpose (recovery codes refused; rate-limited; security events on issue/failure).
+  - `POST /v1/platform/billing-accounts` — platform-only, explicit `billing.account.provision` (first
+    wildcard-excluded key; MFA-only; no auto-grant, no runtime assignment path), fresh step-up grant,
+    mandatory Idempotency-Key (16–128 chars, versioned fingerprint, replay 200 / conflict 409, no expiry).
+    One transaction: PREPAID BillingAccount (`BA-YYYY-XXXXXXXXXXXX`, random, unique, immutable) +
+    `customer_funds` ledger account + ALLOWED financial audit event; grant consumed in that transaction.
+  - Migration `20261128150000_billing_account_provisioning`: `provisionedByUserId`, format CHECKs,
+    SECURITY DEFINER `billing.billing_account_provision` (DB re-checks platform, MFA, explicit permission,
+    same-transaction grant consumption, target eligibility), deferred completeness constraint BP010,
+    attribution guard, no-network-data CHECK on the financial audit.
+  - Financial audit: typed per-operation schemas (O6), DENIED attempts in their own transaction, inserts
+    without RETURNING; tracked-transaction provenance (`runInTrackedTransaction` + live-transaction probe).
+  - New clean isolated E2E profile `verify-clean` (PG 127.0.0.1:5436 / Redis 6383).
+  - Tests: `test/billing-account-provisioning.e2e.test.ts` (31), provisioning contract unit tests (8),
+    writer unit tests extended (25 total); S2/S3/S4 suites adapted to the new formats.
+  - Evidence (EXECUTED on `verify-clean`, 2026-11-28): 22/22 migration checksums match; every drift block
+    incl. `BILLING_ACCOUNT_PROVISIONING_DRIFT_OK` and `PRIV_CHECK_OK`; full E2E lane 34 files passed /
+    3 skipped, 369 tests passed / 3 skipped; API unit 49 files / 593 passed; web 39 / 257 passed;
+    typecheck, lint and production build green. CI evidence is recorded on the PR.
+
 ### Security
+- 2026-11-28 — **S5 privilege changes:** runtime `SELECT` on `FinancialAuditEvent` revoked (INSERT only,
+  O7); the planned direct `BillingAccount` INSERT/SELECT grant for `telvyn_app` was **rejected** as a
+  material authorization weakness — the runtime still holds no BillingAccount privilege and provisions only
+  through the definer function. IP address / user agent are no longer stored in the financial audit (O6).
 - 2026-11-28 — **P1 — role-assignment escalation correction** (pre-S5 mandatory prerequisite; closes S2
   review item X-R10):
   - `setMemberRoles` now runs in one tenant-locked transaction. It re-derives the actor's authority

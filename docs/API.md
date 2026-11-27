@@ -580,3 +580,14 @@ populate the role picker. **Role assignment is the ONLY member mutation the API
 exposes — there is no invite, suspend/activate, or remove endpoint**, so the UI
 offers none. The aliased client type is `TenantRole` (the existing `Role` alias is
 the session's own role shape from `MeContext`).
+
+## Financial step-up + platform BillingAccount provisioning — IMPLEMENTED (Phase 13-2B S5, 2026-11-28)
+
+Contract: `packages/contracts/openapi/telvyn.v1.yaml` (`stepUpIssue`, `provisionBillingAccount`).
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| POST | `/v1/auth/step-up` | Bearer + active tenant | `{purpose: "billing_account.provision", code: "<6-digit TOTP>"}` → 201 `{grantId, purpose, expiresAt}`; 400 malformed (a recovery code is malformed here); 403 generic failure; 429 rate limit |
+| POST | `/v1/platform/billing-accounts` | Bearer + PLATFORM tenant + `billing.account.provision` + MFA + step-up grant | Headers `Idempotency-Key` (required, 16–128 of `[A-Za-z0-9-_.:]`), `X-Correlation-Id` (optional). Body `{targetTenantId, currency, label, isDefault?, mode?: "PREPAID", stepUpGrantId}` (strict). 201 new / 200 replay; 400 invalid; 401; 403 platform / permission / step-up; 409 idempotency or label/default conflict; 422 ineligible target; 500 number allocation exhausted or audit failure |
+
+No read, list, update or close endpoint exists yet (S6/S8).

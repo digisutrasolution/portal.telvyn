@@ -31,6 +31,10 @@
  *   local-verify    the dedicated disposable safety-verification environment,
  *                   Compose project `telvyn-inc-db-001b-verify` (PG 127.0.0.1:5435,
  *                   DB telvyn_safety_verify; Redis 127.0.0.1:6382 db 0).
+ *   verify-clean    the clean disposable verification environment migrated from an
+ *                   empty database (Phase 13-2B S5), Compose project
+ *                   `telvyn-verify-clean` (PG 127.0.0.1:5436, DB telvyn_clean_verify;
+ *                   Redis 127.0.0.1:6383 db 0).
  *   ci-ephemeral    the GitHub Actions service containers (PG published on
  *                   55432, DB telvyn; Redis published on 56379 db 0). Requires
  *                   the GitHub Actions runtime variables AND the CI-bootstrap
@@ -45,7 +49,7 @@
  */
 import { createHash } from "node:crypto";
 
-export type E2eProfileName = "local-isolated" | "local-verify" | "ci-ephemeral";
+export type E2eProfileName = "local-isolated" | "local-verify" | "verify-clean" | "ci-ephemeral";
 
 interface PgExpectation {
   hosts: readonly string[];
@@ -98,6 +102,17 @@ export const E2E_PROFILES: Readonly<Record<E2eProfileName, E2eProfile>> = {
     redis: { hosts: ["127.0.0.1"], port: 6382, db: 0 },
     dbMarker: "telvyn-inc-db-001b-local-verify",
     redisMarker: "telvyn-inc-db-001b-local-verify",
+    requireEnv: {},
+  },
+  // Phase 13-2B S5: the CLEAN disposable verification environment (Compose project
+  // `telvyn-verify-clean`, docker-compose.verify-clean.yml), migrated from an empty
+  // database. Exact targets only — no host/port/database override exists.
+  "verify-clean": {
+    name: "verify-clean",
+    pg: { hosts: ["127.0.0.1"], port: 5436, database: "telvyn_clean_verify", appUser: "telvyn_app", fixtureUser: "telvyn_migrator" },
+    redis: { hosts: ["127.0.0.1"], port: 6383, db: 0 },
+    dbMarker: "telvyn-verify-clean",
+    redisMarker: "telvyn-verify-clean",
     requireEnv: {},
   },
   "ci-ephemeral": {

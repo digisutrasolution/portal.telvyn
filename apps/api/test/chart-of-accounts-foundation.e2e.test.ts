@@ -19,6 +19,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { fixturePrisma } from "./fixture-db";
+import { testAccountNumber, testFingerprint, testProvisioningKey } from "./billing-fixtures";
 
 const fix = fixturePrisma;
 const app = new PrismaClient();
@@ -57,18 +58,19 @@ async function newBillingAccount(
   tenantId: string,
   o: { currency?: Cur; mode?: "PREPAID" | "POSTPAID" } = {},
 ): Promise<{ id: string; num: string }> {
-  const num = uniq("ACCT");
+  const num = testAccountNumber();
   const r = await fix.$queryRawUnsafe<Array<{ id: string }>>(
     `INSERT INTO "BillingAccount"
        ("tenantId","accountNumber","label","currency","mode","provisioningKey","provisioningFingerprint","updatedAt")
-     VALUES ($1::uuid, $2, $3, $4::"Currency", $5::"BillingMode", $6, 'fp-v1', now())
+     VALUES ($1::uuid, $2, $3, $4::"Currency", $5::"BillingMode", $6, $7, now())
      RETURNING "id"`,
     tenantId,
     num,
     uniq("label"),
     o.currency ?? "USD",
     o.mode ?? "PREPAID",
-    uniq("pk"),
+    testProvisioningKey(uniq("pk")),
+    testFingerprint("s4-fixture"),
   );
   return { id: r[0].id, num };
 }

@@ -1,37 +1,85 @@
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
+import type { ZodTypeAny } from "zod";
 import type { RequestContext } from "@/common/request-context";
 import type { TenantContext } from "@/authz/tenant-context";
+import { PrismaService } from "@/infra/prisma.service";
+import { assertLiveTransaction, isTrackedTransaction, runInTrackedTransaction } from "@/infra/tracked-transaction";
+import {
+  BILLING_ACCOUNT_PROVISION_OPERATION,
+  BILLING_ACCOUNT_PROVISION_PERMISSION,
+  PROVISION_ALLOWED_REASON_CODES,
+  PROVISION_DENIED_REASON_CODES,
+  ProvisionAuditAfterSchema,
+  ProvisionAuditDetailsSchema,
+  ProvisionDeniedDetailsSchema,
+} from "./billing-account-provisioning.contract";
 
 /**
  * Financial audit writer — ADR-0022 Amendment 5 BA-14, Phase 13-2B S2 (owner
- * decisions F1–F7, 2026-11-27).
+ * decisions F1–F7, 2026-11-27), extended in S5 (owner decisions O6/O7, P5).
  *
- * Appends one FinancialAuditEvent IN THE CALLER'S TRANSACTION, so the audit row
- * and the financial change commit or roll back together (fail closed): an audit
- * failure throws and rolls the change back; a later failure rolls the audit row
- * back. The writer:
- *   - holds NO database client of its own — it can only write through the
- *     interactive transaction client it is handed, and refuses a base client
- *     (anything exposing `$transaction`), so it can never fall back to an
- *     independent write, open a nested transaction or commit separately;
+ * ALLOWED events (`FinancialAuditWriter.record`) are appended IN THE CALLER'S
+ * TRANSACTION, so the audit row and the financial change commit or roll back
+ * together (fail closed). The writer:
+ *   - holds NO database client of its own for ALLOWED events and accepts only a
+ *     transaction client opened by runInTrackedTransaction (in-process
+ *     provenance), then proves on the database that the client is an open
+ *     transaction block (P5) — no fallback, no nested transaction;
  *   - never retries and never swallows an error;
  *   - takes the actor ONLY from the server-derived TenantContext (ADR-0004) —
  *     there is no actor field in the event input (F3);
- *   - records decision ALLOWED only. The denied-attempt writer (own transaction,
- *     so it survives the rejected operation's rollback) is S5 work (F2).
+ *   - validates before/after/details against the operation's STRICT typed
+ *     schema and approved reason codes (O6), on top of the F5 size and
+ *     sensitive-key rules;
+ *   - stores NO client IP address or user agent (O6): request network data is
+ *     security telemetry (AuditLog / SecurityEvent), not immutable financial
+ *     evidence;
+ *   - inserts without RETURNING (the id comes from uuidv7() first), so the
+ *     runtime role needs INSERT only — no SELECT on the table (O7).
  *
- * INERT in S2: FINANCIAL_AUDIT_OPERATIONS is empty (F1 — the first operation is
- * named in S5), so every production call is refused as unknown_operation.
+ * DENIED events (`FinancialAuditDenialRecorder.recordDenied`) are written in
+ * their OWN tracked transaction (F2), so the record survives the rejected
+ * operation's rollback. A denial is always attributed to the actor's own
+ * tenant (the target may not exist); the target appears only as typed details.
+ *
  * The audit record is attribution evidence, never commercial authorization, and
  * never a substitute for a ledger entry.
  */
 
-/** The approved financial operation catalog (F1). Empty until S5 names the first. */
-export const FINANCIAL_AUDIT_OPERATIONS: ReadonlySet<string> = new Set<string>([]);
+/** Strict typed metadata for one operation (O6). `null` means "must be absent". */
+export interface FinancialAuditOperationSpec {
+  /** The permission an ALLOWED event must record. */
+  permission: string;
+  allowed: { before: ZodTypeAny | null; after: ZodTypeAny | null; details: ZodTypeAny | null; reasonCodes: readonly string[] };
+  denied: { details: ZodTypeAny | null; reasonCodes: readonly string[] };
+}
 
-/** DI token used ONLY by tests to inject a test catalog; production uses the constant. */
+/** The approved financial operation catalog (F1; first operation named in S5). */
+export const FINANCIAL_AUDIT_OPERATIONS: ReadonlyMap<string, FinancialAuditOperationSpec> = new Map([
+  [
+    BILLING_ACCOUNT_PROVISION_OPERATION,
+    {
+      permission: BILLING_ACCOUNT_PROVISION_PERMISSION,
+      allowed: {
+        before: null,
+        after: ProvisionAuditAfterSchema,
+        details: ProvisionAuditDetailsSchema,
+        reasonCodes: PROVISION_ALLOWED_REASON_CODES,
+      },
+      denied: { details: ProvisionDeniedDetailsSchema, reasonCodes: PROVISION_DENIED_REASON_CODES },
+    },
+  ],
+]);
+
+/**
+ * DI token used ONLY by tests to inject a test catalog. A plain Set of names is
+ * accepted for tests and maps to an untyped spec (F5 rules only, any reason
+ * code); production always uses the typed constant above.
+ */
 export const FINANCIAL_AUDIT_OPERATION_CATALOG = Symbol("FINANCIAL_AUDIT_OPERATION_CATALOG");
+export type FinancialAuditCatalogInput = ReadonlySet<string> | ReadonlyMap<string, FinancialAuditOperationSpec>;
+type CatalogEntry = FinancialAuditOperationSpec | "untyped";
 
 /** Mirrors the database CHECKs (migration 20261127120000). */
 export const FINANCIAL_AUDIT_IDENTIFIER_PATTERN = /^[a-z][a-z0-9_.]{2,63}$/;
@@ -39,7 +87,6 @@ export const FINANCIAL_AUDIT_REASON_CODE_PATTERN = /^[A-Z][A-Z0-9_]{2,63}$/;
 export const FINANCIAL_AUDIT_MAX_METADATA_BYTES = 4096;
 export const FINANCIAL_AUDIT_MAX_METADATA_KEYS = 50;
 export const FINANCIAL_AUDIT_MAX_CORRELATION_ID = 128;
-const MAX_USER_AGENT = 512; // same bound as requestContext()
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -76,6 +123,7 @@ export class FinancialAuditError extends Error {
 /** Server-derived actor: the authenticated TenantContext plus request metadata. */
 export interface FinancialAuditActor {
   ctx: TenantContext;
+  /** Request metadata — NOT stored in the financial audit (O6); for callers' telemetry. */
   req: RequestContext;
 }
 
@@ -99,31 +147,114 @@ export interface FinancialAuditEventInput {
   correlationId?: string | null;
 }
 
+/** The validated insert row (no IP / user agent — O6). */
+export interface FinancialAuditRow {
+  operation: string;
+  decision: "ALLOWED" | "DENIED";
+  actorUserId: string;
+  actorTenantId: string;
+  tenantId: string;
+  billingAccountId: string | null;
+  permission: string | null;
+  stepUpGrantId: string | null;
+  reasonCode: string;
+  before?: Prisma.InputJsonObject;
+  after?: Prisma.InputJsonObject;
+  details?: Prisma.InputJsonObject;
+  idempotencyKey: string | null;
+  ledgerTransactionId: string | null;
+  correlationId: string | null;
+}
+
+export type DeniedEventInput = Pick<
+  FinancialAuditEventInput,
+  "operation" | "permission" | "reasonCode" | "details" | "idempotencyKey" | "correlationId"
+>;
+
+/** Normalize a catalog input; a Set (tests only) maps every name to "untyped". */
+export function financialAuditCatalog(input?: FinancialAuditCatalogInput): ReadonlyMap<string, CatalogEntry> {
+  const src = input ?? FINANCIAL_AUDIT_OPERATIONS;
+  const out = new Map<string, CatalogEntry>();
+  if (src instanceof Map) for (const [k, v] of src as ReadonlyMap<string, FinancialAuditOperationSpec>) out.set(k, v);
+  else for (const k of src as ReadonlySet<string>) out.set(k, "untyped");
+  for (const op of out.keys()) {
+    if (!FINANCIAL_AUDIT_IDENTIFIER_PATTERN.test(op)) throw new Error("invalid financial audit operation catalog entry");
+  }
+  return out;
+}
+
 @Injectable()
 export class FinancialAuditWriter {
-  private readonly operations: ReadonlySet<string>;
+  private readonly catalog: ReadonlyMap<string, CatalogEntry>;
 
-  constructor(@Optional() @Inject(FINANCIAL_AUDIT_OPERATION_CATALOG) operations?: ReadonlySet<string>) {
-    this.operations = operations ?? FINANCIAL_AUDIT_OPERATIONS;
-    for (const op of this.operations) {
-      if (!FINANCIAL_AUDIT_IDENTIFIER_PATTERN.test(op)) throw new Error("invalid financial audit operation catalog entry");
-    }
+  constructor(@Optional() @Inject(FINANCIAL_AUDIT_OPERATION_CATALOG) operations?: FinancialAuditCatalogInput) {
+    this.catalog = financialAuditCatalog(operations);
   }
 
   /**
-   * Validate and append one ALLOWED event using the caller's transaction client.
-   * Throws FinancialAuditError on any validation failure; database errors
+   * Validate and append one ALLOWED event using the caller's tracked transaction
+   * client. Throws FinancialAuditError on any validation failure; database errors
    * propagate unchanged (the caller's transaction then rolls back).
    */
   async record(tx: Prisma.TransactionClient, actor: FinancialAuditActor, event: FinancialAuditEventInput): Promise<{ id: string }> {
     assertTransactionClient(tx);
-    const data = buildFinancialAuditRow(actor, event, this.operations);
-    const row = await tx.financialAuditEvent.create({ data, select: { id: true } });
-    return { id: row.id };
+    const row = buildFinancialAuditRow(actor, event, this.catalog, "ALLOWED");
+    try {
+      await assertLiveTransaction(tx);
+    } catch {
+      throw new FinancialAuditError("not_in_transaction", "the client is not an open transaction");
+    }
+    return insertFinancialAuditRow(tx, row);
   }
 }
 
-/** Refuse anything that is not an interactive-transaction client (no fallback path). */
+/**
+ * DENIED-attempt recorder (F2, S5). Owns its client and writes each denial in
+ * its OWN tracked transaction, independent of the rejected operation.
+ */
+@Injectable()
+export class FinancialAuditDenialRecorder {
+  private readonly catalog: ReadonlyMap<string, CatalogEntry>;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() @Inject(FINANCIAL_AUDIT_OPERATION_CATALOG) operations?: FinancialAuditCatalogInput,
+  ) {
+    this.catalog = financialAuditCatalog(operations);
+  }
+
+  async recordDenied(actor: FinancialAuditActor, event: DeniedEventInput): Promise<{ id: string }> {
+    // A denial is attributed to the actor's own tenant (the target may not exist
+    // or may be foreign); the target is carried only in the typed details.
+    const row = buildFinancialAuditRow(actor, { ...event, tenantId: actor?.ctx?.tenantId }, this.catalog, "DENIED");
+    return runInTrackedTransaction(this.prisma, async (tx) => {
+      await assertLiveTransaction(tx);
+      return insertFinancialAuditRow(tx, row);
+    });
+  }
+}
+
+/** One INSERT, no RETURNING (O7): the id is allocated first with uuidv7(). */
+async function insertFinancialAuditRow(tx: Prisma.TransactionClient, r: FinancialAuditRow): Promise<{ id: string }> {
+  const ids = await tx.$queryRaw<Array<{ id: string }>>`SELECT uuidv7()::text AS id`;
+  const id = ids[0]?.id;
+  if (!id) throw new FinancialAuditError("invalid_event", "could not allocate an id");
+  const json = (v: Prisma.InputJsonObject | undefined) => (v === undefined ? null : JSON.stringify(v));
+  await tx.$executeRaw`
+    INSERT INTO "FinancialAuditEvent"
+      ("id", "operation", "decision", "actorUserId", "actorTenantId", "tenantId", "billingAccountId",
+       "permission", "stepUpGrantId", "reasonCode", "before", "after", "details",
+       "idempotencyKey", "ledgerTransactionId", "correlationId")
+    VALUES
+      (${id}::uuid, ${r.operation}, ${r.decision}::"FinancialAuditDecision", ${r.actorUserId}::uuid,
+       ${r.actorTenantId}::uuid, ${r.tenantId}::uuid, ${r.billingAccountId}::uuid,
+       ${r.permission}, ${r.stepUpGrantId}::uuid, ${r.reasonCode}, ${json(r.before)}::jsonb,
+       ${json(r.after)}::jsonb, ${json(r.details)}::jsonb,
+       ${r.idempotencyKey}, ${r.ledgerTransactionId}::uuid, ${r.correlationId})`;
+  return { id };
+}
+
+/** Refuse anything that is not a tracked interactive-transaction client (no fallback path). */
 export function assertTransactionClient(tx: unknown): asserts tx is Prisma.TransactionClient {
   if (!tx || typeof tx !== "object") {
     throw new FinancialAuditError("not_in_transaction", "a transaction client is required");
@@ -131,17 +262,19 @@ export function assertTransactionClient(tx: unknown): asserts tx is Prisma.Trans
   if (typeof (tx as { $transaction?: unknown }).$transaction === "function") {
     throw new FinancialAuditError("not_in_transaction", "a base client cannot write financial audit; pass the caller's transaction client");
   }
-  if (typeof (tx as { financialAuditEvent?: { create?: unknown } }).financialAuditEvent?.create !== "function") {
-    throw new FinancialAuditError("not_in_transaction", "a transaction client is required");
+  if (!isTrackedTransaction(tx)) {
+    throw new FinancialAuditError("not_in_transaction", "the transaction was not opened by runInTrackedTransaction");
   }
 }
 
 /** Pure validation + mapping to the insert row (exported for unit tests). */
 export function buildFinancialAuditRow(
   actor: FinancialAuditActor | null | undefined,
-  event: FinancialAuditEventInput | null | undefined,
-  operations: ReadonlySet<string>,
-): Prisma.FinancialAuditEventUncheckedCreateInput {
+  event: (Omit<FinancialAuditEventInput, "tenantId"> & { tenantId: string | undefined }) | null | undefined,
+  operations: FinancialAuditCatalogInput | ReadonlyMap<string, CatalogEntry>,
+  decision: "ALLOWED" | "DENIED" = "ALLOWED",
+): FinancialAuditRow {
+  const catalog = isNormalizedCatalog(operations) ? operations : financialAuditCatalog(operations as FinancialAuditCatalogInput);
   const ctx = actor?.ctx;
   if (!ctx || !isUuid(ctx.userId) || !isUuid(ctx.tenantId) || !ctx.tenantType) {
     throw new FinancialAuditError("missing_context", "an authenticated tenant context is required");
@@ -150,12 +283,12 @@ export function buildFinancialAuditRow(
   if (typeof event.operation !== "string" || !FINANCIAL_AUDIT_IDENTIFIER_PATTERN.test(event.operation)) {
     throw new FinancialAuditError("invalid_event", "operation is malformed");
   }
-  if (!operations.has(event.operation)) {
-    throw new FinancialAuditError("unknown_operation", "operation is not in the approved catalog");
-  }
+  const spec = catalog.get(event.operation);
+  if (!spec) throw new FinancialAuditError("unknown_operation", "operation is not in the approved catalog");
   if (!isUuid(event.tenantId)) throw new FinancialAuditError("invalid_event", "tenantId is required");
+  const tenantId = event.tenantId;
   // F4: a non-platform actor can only be attributed to its own tenant (DB FA004 too).
-  if (event.tenantId !== ctx.tenantId && ctx.tenantType !== "PLATFORM") {
+  if (tenantId !== ctx.tenantId && ctx.tenantType !== "PLATFORM") {
     throw new FinancialAuditError("attribution_mismatch", "actor tenant does not own the audited object");
   }
   if (typeof event.reasonCode !== "string" || !FINANCIAL_AUDIT_REASON_CODE_PATTERN.test(event.reasonCode)) {
@@ -176,13 +309,36 @@ export function buildFinancialAuditRow(
   const after = normalizeFinancialAuditMetadata(event.after, "after");
   const details = normalizeFinancialAuditMetadata(event.details, "details");
 
-  const req = actor?.req;
+  if (spec !== "untyped") {
+    // O6: strict operation-specific schemas and approved reason codes.
+    if (decision === "ALLOWED") {
+      if (permission !== spec.permission) throw new FinancialAuditError("invalid_event", "permission does not match the operation");
+      if (!spec.allowed.reasonCodes.includes(event.reasonCode)) {
+        throw new FinancialAuditError("invalid_event", "reasonCode is not approved for the operation");
+      }
+      checkSchema(spec.allowed.before, before, "before");
+      checkSchema(spec.allowed.after, after, "after");
+      checkSchema(spec.allowed.details, details, "details");
+    } else {
+      if (permission !== null && permission !== spec.permission) {
+        throw new FinancialAuditError("invalid_event", "permission does not match the operation");
+      }
+      if (!spec.denied.reasonCodes.includes(event.reasonCode)) {
+        throw new FinancialAuditError("invalid_event", "reasonCode is not approved for the operation");
+      }
+      if (before !== undefined || after !== undefined || billingAccountId !== null || stepUpGrantId !== null || ledgerTransactionId !== null) {
+        throw new FinancialAuditError("invalid_event", "a denial carries no state, account, grant or ledger reference");
+      }
+      checkSchema(spec.denied.details, details, "details");
+    }
+  }
+
   return {
     operation: event.operation,
-    decision: "ALLOWED",
+    decision,
     actorUserId: ctx.userId,
     actorTenantId: ctx.tenantId,
-    tenantId: event.tenantId,
+    tenantId,
     billingAccountId,
     permission,
     stepUpGrantId,
@@ -193,9 +349,21 @@ export function buildFinancialAuditRow(
     idempotencyKey,
     ledgerTransactionId,
     correlationId,
-    ipAddress: req?.ipAddress ?? null,
-    userAgent: req?.userAgent ? req.userAgent.slice(0, MAX_USER_AGENT) : null,
   };
+}
+
+function isNormalizedCatalog(v: unknown): v is ReadonlyMap<string, CatalogEntry> {
+  return v instanceof Map && [...v.values()].every((e) => e === "untyped" || (typeof e === "object" && e !== null && "allowed" in e));
+}
+
+function checkSchema(schema: ZodTypeAny | null, value: Prisma.InputJsonObject | undefined, field: string): void {
+  if (schema === null) {
+    if (value !== undefined) throw new FinancialAuditError("invalid_event", `${field} must be absent for this operation`);
+    return;
+  }
+  if (value === undefined || !schema.safeParse(value).success) {
+    throw new FinancialAuditError("invalid_event", `${field} does not match the operation schema`);
+  }
 }
 
 /**

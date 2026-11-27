@@ -354,10 +354,13 @@ BEGIN
      AND NOT p.prosecdef AND 'search_path=pg_catalog, pg_temp' = ANY(p.proconfig);
   IF v <> 2 THEN RAISE EXCEPTION 'DRIFT: financial audit functions must be SECURITY INVOKER with hardened search_path'; END IF;
 
-  -- Runtime: SELECT + INSERT only (F6); no column grants; PUBLIC nothing.
-  IF NOT has_table_privilege('telvyn_app','public."FinancialAuditEvent"','SELECT')
-     OR NOT has_table_privilege('telvyn_app','public."FinancialAuditEvent"','INSERT') THEN
-    RAISE EXCEPTION 'DRIFT: telvyn_app must have SELECT and INSERT on FinancialAuditEvent';
+  -- Runtime: INSERT only (F6; S5 O7 revoked SELECT — no table or column SELECT);
+  -- no column grants; PUBLIC nothing.
+  IF NOT has_table_privilege('telvyn_app','public."FinancialAuditEvent"','INSERT') THEN
+    RAISE EXCEPTION 'DRIFT: telvyn_app must have INSERT on FinancialAuditEvent';
+  END IF;
+  IF has_any_column_privilege('telvyn_app','public."FinancialAuditEvent"','SELECT') THEN
+    RAISE EXCEPTION 'DRIFT: telvyn_app must have NO SELECT (table or column) on FinancialAuditEvent (S5 O7)';
   END IF;
   FOR v_txt IN SELECT unnest(ARRAY['UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) LOOP
     IF has_table_privilege('telvyn_app','public."FinancialAuditEvent"',v_txt) THEN
@@ -491,10 +494,128 @@ BEGIN
   SELECT string_agg(privilege_type::text||':'||column_name::text, ',' ORDER BY privilege_type::text, column_name::text) INTO v_txt
     FROM information_schema.column_privileges
    WHERE table_schema='public' AND table_name='BillingAccount' AND grantee='telvyn_ledger_fn';
-  IF v_txt IS DISTINCT FROM 'SELECT:accountNumber,SELECT:currency,SELECT:id,SELECT:mode,SELECT:status,SELECT:tenantId,UPDATE:statusChangedAt' THEN
+  -- S4 set, extended by S5 (provisioning INSERT columns + replay/conflict reads).
+  IF v_txt IS DISTINCT FROM 'INSERT:accountNumber,INSERT:currency,INSERT:isDefault,INSERT:label,INSERT:mode,INSERT:provisionedByUserId,INSERT:provisioningFingerprint,INSERT:provisioningKey,INSERT:tenantId,INSERT:updatedAt,SELECT:accountNumber,SELECT:createdAt,SELECT:currency,SELECT:id,SELECT:isDefault,SELECT:label,SELECT:mode,SELECT:provisionedByUserId,SELECT:provisioningFingerprint,SELECT:provisioningKey,SELECT:status,SELECT:tenantId,UPDATE:statusChangedAt' THEN
     RAISE EXCEPTION 'DRIFT: telvyn_ledger_fn BillingAccount column privileges changed: %', coalesce(v_txt,'<none>');
   END IF;
 END
 $$;
 
 \echo 'CHART_OF_ACCOUNTS_DRIFT_OK: LedgerAccount link, constraints, link guard, opening function and privileges verified.'
+
+-- =============================================================================
+-- BillingAccount provisioning (Phase 13-2B S5; ADR-0022 Amendment 5 BA-03/08/14/15;
+-- owner decisions O1-O7). Format CHECKs, the provisioning + completeness
+-- functions and triggers, function ACLs and the function-owner column grants are
+-- raw SQL - this block is their drift authority.
+-- =============================================================================
+DO $$
+DECLARE
+  v int; v_txt text; v_sig text;
+BEGIN
+  v_sig := 'billing.billing_account_provision(uuid,uuid,uuid,uuid,"Currency",text,boolean,text,text,text)';
+  IF to_regprocedure(v_sig) IS NULL THEN
+    RAISE EXCEPTION 'DRIFT: billing.billing_account_provision missing';
+  END IF;
+
+  -- provisionedByUserId: nullable uuid, FK RESTRICT/RESTRICT to User.
+  SELECT count(*) INTO v FROM pg_constraint
+   WHERE conname='BillingAccount_provisionedByUserId_fkey' AND contype='f'
+     AND conrelid='public."BillingAccount"'::regclass AND confrelid='public."User"'::regclass
+     AND confdeltype='r' AND confupdtype='r';
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: BillingAccount.provisionedByUserId FK (RESTRICT/RESTRICT) missing'; END IF;
+
+  -- Format CHECKs (O3/O5): present with the exact patterns (NOT VALID is expected).
+  FOR v_txt IN SELECT unnest(ARRAY[
+      'BillingAccount_account_number_format_chk|^BA-[0-9]{4}-[23456789ABCDEFGHJKMNPQRSTVWXYZ]{12}$',
+      'BillingAccount_provisioning_key_format_chk|^[A-Za-z0-9._:-]{16,128}$',
+      'BillingAccount_provisioning_fingerprint_format_chk|^v1:[0-9a-f]{64}$']) LOOP
+    SELECT count(*) INTO v FROM pg_constraint
+     WHERE conrelid='public."BillingAccount"'::regclass AND contype='c'
+       AND conname=split_part(v_txt,'|',1)
+       AND strpos(pg_get_constraintdef(oid), split_part(v_txt,'|',2)) > 0;
+    IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: CHECK % missing or pattern changed', split_part(v_txt,'|',1); END IF;
+  END LOOP;
+
+  -- Attribution guard: BEFORE UPDATE row trigger, enabled; INVOKER, hardened.
+  SELECT count(*) INTO v FROM pg_trigger
+   WHERE tgname='billing_account_provisioning_guard' AND tgrelid='public."BillingAccount"'::regclass
+     AND tgenabled='O' AND (tgtype & 1)=1 AND (tgtype & 2)=2 AND (tgtype & 16)=16;
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: billing_account_provisioning_guard trigger missing, disabled or wrong timing'; END IF;
+  SELECT count(*) INTO v FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+   WHERE n.nspname='billing' AND p.proname='billing_account_provisioning_guard'
+     AND NOT p.prosecdef AND 'search_path=pg_catalog, pg_temp' = ANY(p.proconfig);
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: billing_account_provisioning_guard must be SECURITY INVOKER with hardened search_path'; END IF;
+
+  -- Completeness: DEFERRABLE INITIALLY DEFERRED AFTER INSERT constraint trigger, enabled.
+  SELECT count(*) INTO v FROM pg_trigger t
+   WHERE t.tgname='billing_account_provision_complete' AND t.tgrelid='public."BillingAccount"'::regclass
+     AND t.tgenabled='O' AND t.tgconstraint <> 0 AND t.tgdeferrable AND t.tginitdeferred
+     AND (t.tgtype & 1)=1 AND (t.tgtype & 2)=0 AND (t.tgtype & 4)=4;
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: billing_account_provision_complete deferred constraint trigger missing or changed'; END IF;
+
+  -- Both SECURITY DEFINER functions: owner telvyn_ledger_fn, hardened search_path.
+  SELECT count(*) INTO v FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+   WHERE n.nspname='billing' AND p.proname IN ('billing_account_provision','billing_account_provision_complete')
+     AND p.prosecdef AND pg_get_userbyid(p.proowner)='telvyn_ledger_fn'
+     AND 'search_path=pg_catalog, pg_temp' = ANY(p.proconfig);
+  IF v <> 2 THEN RAISE EXCEPTION 'DRIFT: provisioning functions must be SECURITY DEFINER, owned by telvyn_ledger_fn, hardened'; END IF;
+  SELECT prosrc INTO v_txt FROM pg_proc WHERE oid = to_regprocedure(v_sig);
+  IF v_txt NOT LIKE '%BP001%' OR v_txt NOT LIKE '%BP002%' OR v_txt NOT LIKE '%BP003%'
+     OR v_txt NOT LIKE '%consumedAt" = transaction_timestamp()%' OR v_txt NOT LIKE '%billing.account.provision%'
+     OR v_txt NOT LIKE '%''PLATFORM''%' OR v_txt NOT LIKE '%ON CONFLICT DO NOTHING%' OR v_txt NOT LIKE '%''PREPAID''%'
+     OR v_txt ILIKE '%EXECUTE %' THEN
+    RAISE EXCEPTION 'DRIFT: billing_account_provision body lost an authority check or gained dynamic SQL';
+  END IF;
+
+  -- Function ACLs: provision = {telvyn_ledger_fn owner, telvyn_app}; complete = owner only;
+  -- no PUBLIC; ledger_account_open still has NO runtime EXECUTE.
+  SELECT string_agg(DISTINCT pg_get_userbyid(a.grantee), ',' ORDER BY pg_get_userbyid(a.grantee)) INTO v_txt
+    FROM pg_proc p, aclexplode(p.proacl) a
+   WHERE p.oid = to_regprocedure(v_sig) AND a.privilege_type='EXECUTE';
+  IF v_txt IS DISTINCT FROM 'telvyn_app,telvyn_ledger_fn' THEN
+    RAISE EXCEPTION 'DRIFT: billing_account_provision EXECUTE grantees changed: %', coalesce(v_txt,'<none>');
+  END IF;
+  SELECT string_agg(DISTINCT pg_get_userbyid(a.grantee), ',') INTO v_txt
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace, aclexplode(p.proacl) a
+   WHERE n.nspname='billing' AND p.proname='billing_account_provision_complete' AND a.privilege_type='EXECUTE';
+  IF v_txt IS DISTINCT FROM 'telvyn_ledger_fn' THEN
+    RAISE EXCEPTION 'DRIFT: billing_account_provision_complete EXECUTE grantees changed: %', coalesce(v_txt,'<none>');
+  END IF;
+  IF has_function_privilege('telvyn_app', 'billing.ledger_account_open(uuid,uuid,"Currency",text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'DRIFT: telvyn_app must NOT execute billing.ledger_account_open (reachable only via provisioning)';
+  END IF;
+
+  -- Function-owner privileges are column-scoped reads plus the exact BillingAccount insert columns.
+  SELECT count(*) INTO v FROM information_schema.column_privileges
+   WHERE table_schema='public' AND table_name='BillingAccount' AND grantee='telvyn_ledger_fn' AND privilege_type='INSERT';
+  IF v <> 10 THEN RAISE EXCEPTION 'DRIFT: telvyn_ledger_fn must have INSERT on exactly 10 BillingAccount columns (found %)', v; END IF;
+  FOR v_txt IN SELECT unnest(ARRAY['Tenant','Membership','User','MembershipRole','Role','RolePermission','Permission','StepUpGrant','FinancialAuditEvent']) LOOP
+    IF has_table_privilege('telvyn_ledger_fn', format('public.%I', v_txt), 'SELECT')
+       OR has_table_privilege('telvyn_ledger_fn', format('public.%I', v_txt), 'INSERT')
+       OR has_table_privilege('telvyn_ledger_fn', format('public.%I', v_txt), 'UPDATE')
+       OR has_table_privilege('telvyn_ledger_fn', format('public.%I', v_txt), 'DELETE') THEN
+      RAISE EXCEPTION 'DRIFT: telvyn_ledger_fn must hold only column-level SELECT on %', v_txt;
+    END IF;
+  END LOOP;
+  IF has_column_privilege('telvyn_ledger_fn','public."User"','passwordHash','SELECT')
+     OR has_column_privilege('telvyn_ledger_fn','public."User"','mfaSecretEnc','SELECT') THEN
+    RAISE EXCEPTION 'DRIFT: telvyn_ledger_fn must not read credential columns of User';
+  END IF;
+
+  -- O6: no network data in new financial audit rows.
+  SELECT count(*) INTO v FROM pg_constraint
+   WHERE conname='FinancialAuditEvent_no_network_data_chk' AND contype='c'
+     AND conrelid='public."FinancialAuditEvent"'::regclass;
+  IF v <> 1 THEN RAISE EXCEPTION 'DRIFT: FinancialAuditEvent_no_network_data_chk missing'; END IF;
+
+  -- Runtime still holds NO privilege on BillingAccount (provisioning is via the function only).
+  IF has_any_column_privilege('telvyn_app','public."BillingAccount"','SELECT')
+     OR has_any_column_privilege('telvyn_app','public."BillingAccount"','INSERT')
+     OR has_any_column_privilege('telvyn_app','public."BillingAccount"','UPDATE') THEN
+    RAISE EXCEPTION 'DRIFT: telvyn_app must hold no privilege on BillingAccount (S5 provisions via the function only)';
+  END IF;
+END
+$$;
+
+\echo 'BILLING_ACCOUNT_PROVISIONING_DRIFT_OK: provisioning function, completeness trigger, formats, ACLs and owner privileges verified.'

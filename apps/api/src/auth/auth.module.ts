@@ -12,6 +12,7 @@ import { SecurityEventsService } from "./security-events.service";
 import { RateLimitService } from "./rate-limit.service";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { StepUpService } from "./step-up.service";
+import { StepUpController } from "./step-up.controller";
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { StepUpService } from "./step-up.service";
       verifyOptions: { issuer: "telvyn-api", audience: "telvyn-portal" },
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, StepUpController],
   providers: [
     PrismaService,
     RedisService,
@@ -32,7 +33,7 @@ import { StepUpService } from "./step-up.service";
     SecurityEventsService,
     RateLimitService,
     JwtAuthGuard,
-    // Financial step-up (Phase 13-2B S1, BA-15) — inert: no controller uses it yet.
+    // Financial step-up (Phase 13-2B S1, BA-15); issued via StepUpController (S5).
     StepUpService,
   ],
   exports: [JwtAuthGuard, AuthService, TokenService, StepUpService],
